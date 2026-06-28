@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>天鷹 AI 小助手 · 小天鷹</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons@latest/tabler-icons.css">
+<style>
+  /* ── 天鷹色系 ── */
+  :root{
+    --bg:#0A0C10; --bg2:#0D0F14;
+    --gold:#D4A800; --gold2:#FFD700; --gold3:#F0C040;
+    --indigo:#818CF8; --indigo2:#6366F1;
+    --green:#4ADE80; --red:#F87171;
+    --txt:#F5F5F5; --muted:#9AA3B2;
+    --fz-base:18px;          /* 人性化大字體基準 */
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:radial-gradient(circle at 50% 38%, #12151c 0%, var(--bg) 70%);
+    color:var(--txt);
+    font-family:'Microsoft JhengHei','Noto Sans TC',sans-serif;
+    font-size:var(--fz-base);
+    overflow:hidden;
+    display:flex;flex-direction:column;
+    position:relative;
+  }
+
+  /* ── Header ── */
+  header{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px;flex-shrink:0;
+    background:rgba(10,12,16,.6);backdrop-filter:blur(8px);
+    border-bottom:1px solid rgba(212,168,0,.18);
+    z-index:30;
+  }
+  header .back{
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;color:var(--txt);padding:8px 14px;cursor:pointer;
+    font-size:16px;font-family:inherit;font-weight:700;
+  }
+  header .title{flex:1;font-size:18px;font-weight:900;
+    background:linear-gradient(135deg,var(--gold3),var(--gold2));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  header .emp{font-size:14px;color:var(--muted);font-weight:700;}
+  header .gear{
+    background:rgba(212,168,0,.12);border:1px solid rgba(212,168,0,.35);
+    border-radius:10px;color:var(--gold3);padding:8px 12px;cursor:pointer;font-size:18px;
+    display:none;  /* 只有 admin 顯示 */
+  }
+
+  /* ── 主視覺：LOGO + 光環 ── */
+  #ai-core{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;gap:0;min-height:0;
+  }
+  .core-stage{position:relative;width:min(70vw,300px);aspect-ratio:1;
+    display:flex;align-items:center;justify-content:center;}
+  .ring{position:absolute;border-radius:50%;inset:0;border:2px solid transparent;}
+  .ring-1{border-top-color:var(--gold);border-right-color:rgba(212,168,0,.35);}
+  .ring-2{inset:13%;border-bottom-color:var(--gold3);border-left-color:rgba(240,192,64,.35);}
+  .ring-3{inset:26%;border-top-color:var(--gold2);border-left-color:rgba(255,215,0,.3);}
+  #logo{
+    width:42%;height:42%;object-fit:contain;border-radius:24%;
+    filter:drop-shadow(0 0 14px rgba(212,168,0,.5));
+    z-index:2;transition:filter .4s;
+  }
+  /* 光暈 */
+  .glow{position:absolute;inset:18%;border-radius:50%;
+    background:radial-gradient(circle, rgba(212,168,0,.28) 0%, transparent 65%);
+    filter:blur(6px);z-index:1;}
+  #status-text{
+    margin-top:26px;font-size:17px;color:var(--gold3);font-weight:700;
+    letter-spacing:1px;min-height:24px;text-align:center;
+  }
+  #hint-text{margin-top:6px;font-size:14px;color:var(--muted);text-align:center;padding:0 24px;}
+
+  /* ── 動畫 keyframes ── */
+  @keyframes ring-cw  { to { transform: rotate(360deg);  } }
+  @keyframes ring-ccw { to { transform: rotate(-360deg); } }
+  @keyframes idle-breathe { 0%,100%{opacity:.45;transform:scale(1)} 50%{opacity:.9;transform:scale(1.05)} }
+  @keyframes glow-pulse   { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+  /* 待機 IDLE：慢呼吸 + 緩慢轉 */
+  body[data-state="idle"] .ring-1{animation:ring-cw 14s linear infinite, idle-breathe 4s ease-in-out infinite;}
+  body[data-state="idle"] .ring-2{animation:ring-ccw 18s linear infinite, idle-breathe 4s ease-in-out infinite .6s;}
+  body[data-state="idle"] .ring-3{animation:ring-cw 11s linear infinite, idle-breathe 4s ease-in-out infinite 1.2s;}
+  body[data-state="idle"] .glow {animation:glow-pulse 4s ease-in-out infinite;}
+
+  /* 聆聽 LISTENING：轉靛藍 + 快脈衝 */
+  body[data-state="listening"] .ring-1{border-top-color:var(--indigo);border-right-color:rgba(129,140,248,.4);animation:ring-cw 3s linear infinite;}
+  body[data-state="listening"] .ring-2{border-bottom-color:var(--indigo);border-left-color:rgba(129,140,248,.4);animation:ring-ccw 2.4s linear infinite;}
+  body[data-state="listening"] .ring-3{border-top-color:var(--indigo2);border-left-color:rgba(99,102,241,.4);animation:ring-cw 2s linear infinite;}
+  body[data-state="listening"] .glow{background:radial-gradient(circle, rgba(129,140,248,.4) 0%, transparent 65%);animation:glow-pulse 1s ease-in-out infinite;}
+  body[data-state="listening"] #logo{filter:drop-shadow(0 0 18px rgba(129,140,248,.7));}
+
+  /* 思考 THINKING：金色全速旋轉 */
+  body[data-state="thinking"] .ring-1{animation:ring-cw 1.2s linear infinite;}
+  body[data-state="thinking"] .ring-2{animation:ring-ccw .9s linear infinite;}
+  body[data-state="thinking"] .ring-3{animation:ring-cw 1.5s linear infinite;}
+  body[data-state="thinking"] .glow{animation:glow-pulse .9s ease-in-out infinite;}
+  body[data-state="thinking"] #logo{filter:drop-shadow(0 0 20px rgba(255,215,0,.8));}
+
+  /* 回應 RESPONDING：中速旋轉 */
+  body[data-state="responding"] .ring-1{animation:ring-cw 2.4s linear infinite;}
+  body[data-state="responding"] .ring-2{animation:ring-ccw 1.8s linear infinite;}
+  body[data-state="responding"] .ring-3{animation:ring-cw 3s linear infinite;}
+  body[data-state="responding"] .glow{animation:glow-pulse 2s ease-in-out infinite;}
+
+  /* ── 底部輸入區（文字模式）── */
+  #input-area{
+    flex-shrink:0;display:flex;align-items:flex-end;gap:8px;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    background:rgba(10,12,16,.7);backdrop-filter:blur(10px);
+    border-top:1px solid rgba(255,255,255,.08);z-index:30;
+  }
+  #txt-input{
+    flex:1;resize:none;max-height:120px;min-height:48px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    border-radius:14px;color:var(--txt);padding:12px 14px;
+    font-size:17px;font-family:inherit;line-height:1.4;
+  }
+  #txt-input:focus{outline:none;border-color:rgba(212,168,0,.5);}
+  .icon-btn{
+    flex-shrink:0;width:48px;height:48px;border-radius:14px;cursor:pointer;
+    border:none;font-size:22px;display:flex;align-items:center;justify-content:center;
+    color:#0A0C10;font-family:inherit;
+  }
+  #send-btn{background:linear-gradient(135deg,var(--gold),var(--gold2));font-weight:900;font-size:16px;}
+  #voice-toggle{background:linear-gradient(135deg,var(--indigo),var(--indigo2));color:#fff;}
+  .icon-btn:active{transform:scale(.92);}
+  .icon-btn:disabled{opacity:.4;}
+
+  /* ── 語音模式覆蓋層 ── */
+  #voice-overlay{
+    position:fixed;left:0;right:0;bottom:0;
+    padding:18px 16px calc(24px + env(safe-area-inset-bottom));
+    background:rgba(10,12,16,.85);backdrop-filter:blur(10px);
+    border-top:1px solid rgba(129,140,248,.25);
+    display:flex;flex-direction:column;align-items:center;gap:14px;z-index:35;
+  }
+  #voice-overlay[hidden]{display:none;}
+  #waveform{width:100%;max-width:340px;height:56px;}
+  #voice-btn{
+    width:100%;max-width:340px;padding:18px;border-radius:18px;border:none;cursor:pointer;
+    font-size:20px;font-weight:900;font-family:inherit;color:#fff;
+    background:linear-gradient(135deg,var(--indigo),var(--indigo2));
+    box-shadow:0 6px 20px rgba(99,102,241,.4);transition:transform .1s;
+  }
+  #voice-btn.rec{background:linear-gradient(135deg,#F87171,#E53E3E);animation:rec-pulse 1s ease-in-out infinite;}
+  @keyframes rec-pulse{0%,100%{box-shadow:0 6px 20px rgba(248,113,113,.4)}50%{box-shadow:0 6px 30px rgba(248,113,113,.8)}}
+  #voice-btn:active{transform:scale(.97);}
+  #back-to-text{
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+    border-radius:12px;color:var(--txt);padding:10px 18px;cursor:pointer;
+    font-size:16px;font-family:inherit;font-weight:700;
+  }
+
+  /* ── AI 回應 Bottom Sheet ── */
+  #response-sheet{
+    position:fixed;left:0;right:0;bottom:0;
+    max-height:70vh;display:flex;flex-direction:column;
+    background:rgba(13,15,20,.98);backdrop-filter:blur(14px);
+    border:1px solid rgba(212,168,0,.4);border-bottom:none;
+    border-radius:22px 22px 0 0;
+    transform:translateY(110%);
+    transition:transform .42s cubic-bezier(.4,0,.2,1);
+    z-index:40;box-shadow:0 -10px 40px rgba(0,0,0,.6);
+    padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+  #response-sheet.open{transform:translateY(0);}
+  .sheet-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-shrink:0;}
+  .sheet-head .nm{flex:1;font-size:17px;font-weight:900;color:var(--gold3);}
+  #close-sheet{
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);
+    border-radius:50%;width:38px;height:38px;cursor:pointer;color:var(--txt);
+    font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  #response-content{
+    overflow-y:auto;font-size:20px;line-height:1.7;color:var(--txt);
+    white-space:pre-wrap;word-break:break-word;-webkit-overflow-scrolling:touch;
+  }
+  .sheet-foot{margin-top:12px;display:flex;gap:8px;flex-shrink:0;}
+  .sheet-foot button{
+    flex:1;padding:11px;border-radius:12px;cursor:pointer;font-family:inherit;
+    font-size:15px;font-weight:700;border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.06);color:var(--txt);
+  }
+  .sheet-foot .speak{background:rgba(129,140,248,.15);border-color:rgba(129,140,248,.35);color:var(--indigo);}
+
+  /* ── 用戶氣泡（文字模式，右下飄出）── */
+  #bubbles{position:fixed;right:14px;bottom:78px;display:flex;flex-direction:column;
+    align-items:flex-end;gap:8px;z-index:25;pointer-events:none;max-width:74vw;}
+  .user-bubble{
+    background:rgba(99,102,241,.22);border:1px solid rgba(129,140,248,.5);
+    border-radius:18px 18px 4px 18px;padding:11px 15px;color:var(--txt);
+    font-size:16px;line-height:1.4;animation:bubble-up .35s ease-out;
+    max-width:100%;word-break:break-word;
+  }
+  @keyframes bubble-up{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes bubble-out{to{transform:translateY(-10px);opacity:0}}
+  .user-bubble.out{animation:bubble-out .4s ease-in forwards;}
+
+  /* ── Toast ── */
+  #toast{
+    position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-20px);
+    background:rgba(13,15,20,.96);border:1px solid rgba(248,113,113,.5);
+    color:var(--red);padding:12px 18px;border-radius:12px;font-size:15px;font-weight:700;
+    z-index:60;opacity:0;transition:all .3s;pointer-events:none;max-width:88vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ── 管理員控制台（沿用 sheet 樣式）── */
+  #admin-sheet{
+    position:fixed;left:0;right:0;bottom:0;max-height:80vh;
+    display:flex;flex-direction:column;
+    background:rgba(13,15,20,.98);backdrop-filter:blur(14px);
+    border:1px solid rgba(248,113,113,.4);border-bottom:none;border-radius:22px 22px 0 0;
+    transform:translateY(110%);transition:transform .42s cubic-bezier(.4,0,.2,1);
+    z-index:45;padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+  #admin-sheet.open{transform:translateY(0);}
+  #admin-sheet h3{color:#F87171;font-size:18px;margin-bottom:4px;}
+  #admin-sheet label{display:block;font-size:15px;color:var(--muted);margin:14px 0 6px;font-weight:700;}
+  #admin-sheet textarea{
+    width:100%;min-height:90px;resize:vertical;background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14);border-radius:12px;color:var(--txt);
+    padding:11px 13px;font-size:16px;font-family:inherit;line-height:1.5;
+  }
+  #admin-sheet select{
+    width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    border-radius:12px;color:var(--txt);padding:12px 13px;font-size:16px;font-family:inherit;
+  }
+  #admin-sheet .row{display:flex;gap:8px;margin-top:16px;}
+  #admin-sheet .row button{flex:1;padding:13px;border-radius:12px;cursor:pointer;
+    font-size:16px;font-weight:800;font-family:inherit;border:none;}
+  #admin-save{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0A0C10;}
+  #admin-reset{background:rgba(248,113,113,.15);border:1px solid rgba(248,113,113,.4)!important;color:#F87171;}
+  #admin-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)!important;color:var(--txt);}
+
+  /* ── 遮罩 ── */
+  #scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:38;opacity:0;
+    pointer-events:none;transition:opacity .3s;}
+  #scrim.show{opacity:1;pointer-events:auto;}
+</style>
+</head>
+<body data-state="idle">
+
+  <header>
+    <button class="back" id="backBtn" type="button">← 返回</button>
+    <div class="title">天鷹 AI 小助手</div>
+    <span class="emp" id="empLabel"></span>
+    <button class="gear" id="gearBtn" type="button" title="小天鷹設定">⚙️</button>
+  </header>
+
+  <!-- 主視覺 -->
+  <div id="ai-core">
+    <div class="core-stage">
+      <div class="glow"></div>
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-3"></div>
+      <img id="logo" src="icon.png" alt="天鷹" onerror="this.style.display='none'">
+    </div>
+    <div id="status-text">待機中</div>
+    <div id="hint-text">嗨，我是小天鷹 🦅 有問題盡管問我</div>
+  </div>
+
+  <!-- 用戶氣泡容器 -->
+  <div id="bubbles"></div>
+
+  <!-- 底部輸入（文字模式）-->
+  <div id="input-area">
+    <textarea id="txt-input" rows="1" placeholder="輸入問題…例如：事故報告怎麼填？"></textarea>
+    <button class="icon-btn" id="voice-toggle" type="button" title="語音輸入">🎤</button>
+    <button class="icon-btn" id="send-btn" type="button" title="送出">➤</button>
+  </div>
+
+  <!-- 語音模式覆蓋層 -->
+  <div id="voice-overlay" hidden>
+    <canvas id="waveform" width="340" height="56"></canvas>
+    <button id="voice-btn" type="button">🎤 點一下開始說話</button>
+    <button id="back-to-text" type="button">⌨️ 改用打字</button>
+  </div>
+
+  <!-- 遮罩 -->
+  <div id="scrim"></div>
+
+  <!-- AI 回應 sheet -->
+  <div id="response-sheet">
+    <div class="sheet-head">
+      <span class="nm">🦅 小天鷹</span>
+      <button id="close-sheet" type="button">✕</button>
+    </div>
+    <div id="response-content"></div>
+    <div class="sheet-foot">
+      <button class="speak" id="replay-speak" type="button">🔊 唸給我聽</button>
+      <button id="continue-ask" type="button">繼續問</button>
+    </div>
+  </div>
+
+  <!-- 管理員控制台 -->
+  <div id="admin-sheet">
+    <div class="sheet-head">
+      <h3 style="flex:1">⚙️ 小天鷹設定（管理員）</h3>
+      <button id="close-sheet-admin" type="button" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:50%;width:38px;height:38px;cursor:pointer;color:#F5F5F5;font-size:18px;">✕</button>
+    </div>
+    <div style="overflow-y:auto;">
+      <label>🚫 不可以說的事 / 禁止話題（每行一條）</label>
+      <textarea id="admin-rules" placeholder="例如：&#10;不可以透露任何員工的薪水&#10;不可以討論公司內部人事異動"></textarea>
+      <label>🗣️ 強制表達層級</label>
+      <select id="admin-level">
+        <option value="auto">自動判斷（依每人習慣）</option>
+        <option value="simple">強制最簡單（小學生都懂）</option>
+        <option value="normal">強制標準口語</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="admin-reset" type="button">清空規則</button>
+      <button id="admin-save" type="button">儲存設定</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button id="admin-close" type="button">關閉</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ════════ 設定區 ════════ */
+  // 部署 GAS 後，把下面網址換成你的 /exec 網址
+  var GAS_URL = 'YOUR_GAS_URL_HERE';
+
+  /* ════════ 狀態機 ════════ */
+  var STATE = { IDLE:'idle', LISTENING:'listening', THINKING:'thinking', RESPONDING:'responding' };
+  var STATE_TEXT = { idle:'待機中', listening:'聆聽中…', thinking:'思考中…', responding:'回應完成' };
+  function setState(s){
+    document.body.dataset.state = s;
+    document.getElementById('status-text').textContent = STATE_TEXT[s] || '';
+  }
+
+  /* ════════ 取得登入者（empId / role）════════ */
+  var sessionUser = {};
+  try { sessionUser = JSON.parse(localStorage.getItem('hsh_session_user') || '{}') || {}; } catch(e){ sessionUser = {}; }
+  var empId = sessionUser.empId || sessionUser.id || '';
+  var role  = sessionUser.role  || 'fulltime';
+  var isAdmin = (role === 'admin');
+
+  // URLSearchParams 也支援（直接開工具時帶 ?empId= ）
+  try {
+    var qs = new URLSearchParams(location.search);
+    if (qs.get('empId')) empId = qs.get('empId');
+    if (qs.get('role'))  { role = qs.get('role'); isAdmin = (role==='admin'); }
+  } catch(e){}
+
+  if (empId) document.getElementById('empLabel').textContent = '工號 ' + empId;
+  if (isAdmin) document.getElementById('gearBtn').style.display = 'block';
+
+  /* ════════ 個人化習慣記憶 ════════ */
+  var PROFILE_KEY = 'hsh_ai_profile_' + (empId || 'guest');
+  var profile = loadProfile();
+  function loadProfile(){
+    try {
+      var p = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+      return { msgCount: p.msgCount||0, vocabLevel: p.vocabLevel||'simple',
+               lastTopics: p.lastTopics||[], lastUsed: p.lastUsed||'' };
+    } catch(e){ return { msgCount:0, vocabLevel:'simple', lastTopics:[], lastUsed:'' }; }
+  }
+  function saveProfile(){
+    profile.lastUsed = new Date().toISOString();
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch(e){}
+  }
+  // 依使用者輸入推測表達層級（簡單啟發式：訊息夠長＋用詞較進階→升級）
+  function updateVocabLevel(text){
+    profile.msgCount++;
+    if (profile.msgCount <= 10) { profile.vocabLevel = 'simple'; return; }
+    var len = text.length;
+    var advanced = /[，。；]/.test(text) && len >= 25;      // 會用標點、句子長 → 進階
+    var normal   = len >= 12;
+    if (advanced)      profile.vocabLevel = 'advanced';
+    else if (normal)   profile.vocabLevel = 'normal';
+    // 否則維持 simple
+  }
+
+  /* ════════ 對話歷史 ════════ */
+  var history = [];  // [{role:'user'|'model', text}]
+
+  /* ════════ DOM ════════ */
+  var $ = function(id){ return document.getElementById(id); };
+  var txtInput = $('txt-input'), sendBtn = $('send-btn');
+  var sheet = $('response-sheet'), sheetContent = $('response-content');
+  var adminSheet = $('admin-sheet'), scrim = $('scrim');
+  var voiceOverlay = $('voice-overlay'), voiceBtn = $('voice-btn');
+
+  var lastReply = '';
+
+  /* ════════ 送出訊息（核心）════════ */
+  function sendMessage(text, fromVoice){
+    text = (text||'').trim();
+    if (!text) return;
+    if (GAS_URL === 'YOUR_GAS_URL_HERE'){
+      toast('還沒設定 AI 服務網址，請管理員先部署 GAS');
+      return;
+    }
+
+    showBubble(text);
+    txtInput.value = '';
+    autoGrow();
+    updateVocabLevel(text);
+    history.push({ role:'user', text:text });
+    setState(STATE.THINKING);
+    sendBtn.disabled = true;
+
+    var payload = {
+      action:'chat', message:text, history:history.slice(0,-1),
+      empId:empId, role:role, vocabLevel:profile.vocabLevel
+    };
+
+    // 用 text/plain 避免 CORS preflight；GAS 端仍 JSON.parse
+    fetch(GAS_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      sendBtn.disabled = false;
+      if (data.status === 'ok' && data.reply){
+        lastReply = data.reply;
+        history.push({ role:'model', text:data.reply });
+        if (history.length > 24) history = history.slice(-24);
+        saveProfile();
+        showResponse(data.reply, fromVoice);
+      } else {
+        setState(STATE.IDLE);
+        toast(data.msg || '小天鷹累了，請稍後再試');
+      }
+    })
+    .catch(function(err){
+      sendBtn.disabled = false;
+      setState(STATE.IDLE);
+      toast('連線失敗，請檢查網路');
+    });
+  }
+
+  /* ════════ 顯示 AI 回應（bottom sheet）════════ */
+  function showResponse(text, speak){
+    setState(STATE.RESPONDING);
+    sheetContent.textContent = text;
+    sheetContent.scrollTop = 0;
+    sheet.classList.add('open');
+    scrim.classList.add('show');
+    if (speak) speakText(text);
+  }
+  function closeSheet(){
+    sheet.classList.remove('open');
+    scrim.classList.remove('show');
+    stopSpeak();
+    setState(STATE.IDLE);
+  }
+
+  /* ════════ 用戶氣泡 ════════ */
+  function showBubble(text){
+    var box = $('bubbles');
+    var b = document.createElement('div');
+    b.className = 'user-bubble';
+    b.textContent = text;
+    box.appendChild(b);
+    // 最多保留 3 顆，舊的淡出
+    while (box.children.length > 3){
+      var old = box.firstChild;
+      old.classList.add('out');
+      (function(o){ setTimeout(function(){ if(o.parentNode) o.parentNode.removeChild(o); }, 400); })(old);
+      if (box.children.length > 3) box.removeChild(box.firstChild);
+    }
+    // 5 秒後自動淡出最舊
+    setTimeout(function(){
+      if (b.parentNode){ b.classList.add('out'); setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); },400); }
+    }, 6000);
+  }
+
+  /* ════════ 語音輸出（TTS）════════ */
+  function speakText(text){
+    if (!('speechSynthesis' in window)) return;
+    stopSpeak();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-TW'; u.rate = 1.0; u.pitch = 1.0;
+    try { window.speechSynthesis.speak(u); } catch(e){}
+  }
+  function stopSpeak(){ try { window.speechSynthesis.cancel(); } catch(e){} }
+
+  /* ════════ 語音輸入（STT）════════ */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recog = null, recording = false;
+  function initRecog(){
+    if (!SR) return null;
+    var r = new SR();
+    r.lang = 'zh-TW'; r.interimResults = false; r.maxAlternatives = 1; r.continuous = false;
+    r.onresult = function(e){
+      var t = e.results[0][0].transcript;
+      stopWave();
+      recording = false; voiceBtn.classList.remove('rec');
+      voiceBtn.textContent = '🎤 點一下開始說話';
+      sendMessage(t, true);  // 語音輸入 → 語音回應
+    };
+    r.onerror = function(e){
+      recording = false; voiceBtn.classList.remove('rec');
+      voiceBtn.textContent = '🎤 點一下開始說話';
+      stopWave(); setState(STATE.IDLE);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed')
+        toast('請允許使用麥克風');
+      else if (e.error !== 'aborted' && e.error !== 'no-speech')
+        toast('沒聽清楚，再試一次');
+    };
+    r.onend = function(){
+      if (recording){ recording=false; voiceBtn.classList.remove('rec');
+        voiceBtn.textContent='🎤 點一下開始說話'; stopWave();
+        if (document.body.dataset.state==='listening') setState(STATE.IDLE); }
+    };
+    return r;
+  }
+  function toggleRecord(){
+    if (!SR){ toast('這支瀏覽器不支援語音，請改用打字'); return; }
+    if (!recog) recog = initRecog();
+    if (recording){
+      recording = false; try{ recog.stop(); }catch(e){}
+      voiceBtn.classList.remove('rec'); voiceBtn.textContent='🎤 點一下開始說話';
+      stopWave(); setState(STATE.IDLE);
+    } else {
+      try { recog.start(); } catch(e){ return; }
+      recording = true; voiceBtn.classList.add('rec');
+      voiceBtn.textContent='🔴 聆聽中…點一下結束';
+      setState(STATE.LISTENING); startWave();
+    }
+  }
+
+  /* ════════ 聲波動畫（麥克風音量）════════ */
+  var audioCtx=null, analyser=null, micStream=null, waveRAF=null;
+  var canvas=$('waveform'), cctx=canvas.getContext('2d');
+  function startWave(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ drawFakeWave(); return; }
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+      micStream = stream;
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      var src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+      src.connect(analyser);
+      drawWave();
+    }).catch(function(){ drawFakeWave(); });
+  }
+  function drawWave(){
+    var buf = new Uint8Array(analyser.frequencyBinCount);
+    function loop(){
+      waveRAF = requestAnimationFrame(loop);
+      analyser.getByteFrequencyData(buf);
+      cctx.clearRect(0,0,canvas.width,canvas.height);
+      var bars = 28, w = canvas.width/bars;
+      for (var i=0;i<bars;i++){
+        var v = buf[i*2]/255;
+        var h = Math.max(3, v*canvas.height);
+        cctx.fillStyle = 'rgba(129,140,248,'+(0.4+v*0.6)+')';
+        cctx.fillRect(i*w+1, (canvas.height-h)/2, w-2, h);
+      }
+    }
+    loop();
+  }
+  function drawFakeWave(){
+    var t=0;
+    function loop(){
+      waveRAF = requestAnimationFrame(loop);
+      t+=0.15; cctx.clearRect(0,0,canvas.width,canvas.height);
+      var bars=28, w=canvas.width/bars;
+      for (var i=0;i<bars;i++){
+        var v=(Math.sin(t+i*0.5)+1)/2*0.6+0.1;
+        var h=Math.max(3,v*canvas.height);
+        cctx.fillStyle='rgba(129,140,248,'+(0.4+v*0.5)+')';
+        cctx.fillRect(i*w+1,(canvas.height-h)/2,w-2,h);
+      }
+    }
+    loop();
+  }
+  function stopWave(){
+    if (waveRAF) cancelAnimationFrame(waveRAF), waveRAF=null;
+    if (cctx) cctx.clearRect(0,0,canvas.width,canvas.height);
+    if (micStream){ micStream.getTracks().forEach(function(t){t.stop();}); micStream=null; }
+    if (audioCtx){ try{audioCtx.close();}catch(e){} audioCtx=null; }
+  }
+
+  /* ════════ 模式切換 ════════ */
+  function toVoiceMode(){
+    $('input-area').style.display='none';
+    voiceOverlay.hidden=false;
+  }
+  function toTextMode(){
+    if (recording) toggleRecord();
+    voiceOverlay.hidden=true;
+    $('input-area').style.display='flex';
+    setState(STATE.IDLE);
+  }
+
+  /* ════════ 管理員控制台 ════════ */
+  function openAdmin(){
+    if (!isAdmin) return;
+    scrim.classList.add('show');
+    adminSheet.classList.add('open');
+    // 讀現有設定
+    fetch(GAS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'getConfig', role:role })
+    }).then(function(r){return r.json();}).then(function(d){
+      if (d.status==='ok'){
+        $('admin-rules').value = d.rules || '';
+        $('admin-level').value = d.forceLevel || 'auto';
+      }
+    }).catch(function(){});
+  }
+  function closeAdmin(){ adminSheet.classList.remove('open'); scrim.classList.remove('show'); }
+  function saveAdmin(){
+    fetch(GAS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'saveConfig', role:role,
+        rules:$('admin-rules').value, forceLevel:$('admin-level').value })
+    }).then(function(r){return r.json();}).then(function(d){
+      if (d.status==='ok'){ toast('✅ 已儲存', true); closeAdmin(); }
+      else toast(d.msg||'儲存失敗');
+    }).catch(function(){ toast('連線失敗'); });
+  }
+
+  /* ════════ Toast ════════ */
+  var toastTimer=null;
+  function toast(msg, ok){
+    var t=$('toast');
+    t.textContent=msg;
+    t.style.borderColor = ok ? 'rgba(74,222,128,.5)' : 'rgba(248,113,113,.5)';
+    t.style.color = ok ? '#4ADE80' : '#F87171';
+    t.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){ t.classList.remove('show'); }, 3000);
+  }
+
+  /* ════════ textarea 自動長高 ════════ */
+  function autoGrow(){
+    txtInput.style.height='auto';
+    txtInput.style.height=Math.min(txtInput.scrollHeight,120)+'px';
+  }
+
+  /* ════════ 返回主選單（保留 empId）════════ */
+  function goBack(){
+    if (window.self !== window.top){
+      // 在 APP iframe 內：通知父層關閉
+      try { window.parent.postMessage({ type:'closeTool' }, '*'); } catch(e){}
+    } else {
+      // 獨立開啟：回首頁帶 empId
+      var url = 'index.html' + (empId ? ('?empId='+encodeURIComponent(empId)) : '');
+      location.href = url;
+    }
+  }
+
+  /* ════════ 事件綁定 ════════ */
+  sendBtn.addEventListener('click', function(){ sendMessage(txtInput.value, false); });
+  txtInput.addEventListener('input', autoGrow);
+  txtInput.addEventListener('keydown', function(e){
+    if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(txtInput.value, false); }
+  });
+  $('voice-toggle').addEventListener('click', toVoiceMode);
+  $('back-to-text').addEventListener('click', toTextMode);
+  voiceBtn.addEventListener('click', toggleRecord);
+  $('close-sheet').addEventListener('click', closeSheet);
+  $('continue-ask').addEventListener('click', function(){ closeSheet(); txtInput.focus(); });
+  $('replay-speak').addEventListener('click', function(){ if(lastReply) speakText(lastReply); });
+  $('backBtn').addEventListener('click', goBack);
+  scrim.addEventListener('click', function(){
+    if (sheet.classList.contains('open')) closeSheet();
+    if (adminSheet.classList.contains('open')) closeAdmin();
+  });
+  // admin
+  $('gearBtn').addEventListener('click', openAdmin);
+  $('close-sheet-admin').addEventListener('click', closeAdmin);
+  $('admin-close').addEventListener('click', closeAdmin);
+  $('admin-save').addEventListener('click', saveAdmin);
+  $('admin-reset').addEventListener('click', function(){ $('admin-rules').value=''; $('admin-level').value='auto'; });
+
+  // 初始
+  setState(STATE.IDLE);
+})();
+</script>
+</body>
+</html>

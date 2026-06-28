@@ -187,7 +187,12 @@ const NODES = [
   // ── 待辦/規劃 ──
   { id: 26, title: 'TODO-11 角色 Agents',topic: 'todo',    pos: [-0.3,  1.1,  0.2], note: '5 角色落地成 .claude/agents/*.md' },
   { id: 27, title: 'TODO-12 哨表自動化', topic: 'todo',    pos: [ 0.3,  1.2,  0.0], note: '排班自動產表/輪值/衝突檢查' },
-  { id: 28, title: 'TODO-13 對話助手',   topic: 'todo',    pos: [ 0.0,  1.0, -0.3], note: 'APP 內可「用說的」AI 助手' },
+  { id: 28, title: 'TODO-13 對話助手',   topic: 'todo',    pos: [ 0.0,  1.0, -0.3], note: '✅ 已完成：天鷹 AI 小助手（小天鷹）J.A.R.V.I.S. 風格' },
+
+  // ── AI 小助手（小天鷹，2026-06-29）──
+  { id: 29, title: '天鷹 AI 小助手',     topic: 'tools',   pos: [ 0.7, -0.5,  0.05], note: 'tool_ai_chat.html；J.A.R.V.I.S. 風格 LOGO 光環＋語音輸入/輸出；個人化習慣記憶 hsh_ai_profile；admin 控制台調禁止規則' },
+  { id: 30, title: '小天鷹 GAS Proxy',   topic: 'backend', pos: [-1.0, -0.5,  0.05], note: '天鷹AI助手_GAS.gs；Gemini Proxy，藏 API Key；依 role/vocabLevel 組 system prompt；getConfig/saveConfig' },
+  { id: 31, title: 'Gemini 1.5 Flash',   topic: 'infra',   pos: [-1.35,-0.55,-0.45], note: '外部 AI 服務（免費額度）；API Key 存 GAS Script Properties' },
 ];
 
 const EDGES = [
@@ -207,6 +212,8 @@ const EDGES = [
   [23, 0], [24, 23], [25, 24],
   // 待辦關聯
   [26, 1], [27, 8], [28, 0],
+  // AI 小助手：主控台→工具→GAS→Gemini；工具讀本地個人化檔；TODO-13 對應
+  [0, 29], [29, 30], [30, 31], [29, 21], [28, 29],
 ];
 
 // === BRAIN_MAP_DATA_END ===
