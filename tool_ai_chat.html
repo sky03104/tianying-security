@@ -244,6 +244,16 @@
   #scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:38;opacity:0;
     pointer-events:none;transition:opacity .3s;}
   #scrim.show{opacity:1;pointer-events:auto;}
+
+  /* ── 浮動齒輪（APP 內嵌、管理員）── */
+  #gearFloat{
+    display:none;position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;
+    width:44px;height:44px;border-radius:12px;cursor:pointer;z-index:36;
+    background:rgba(212,168,0,.14);border:1px solid rgba(212,168,0,.4);
+    color:var(--gold3);font-size:20px;
+  }
+  /* APP 內嵌（iframe）時隱藏工具自己的 header，避免雙重返回 */
+  body.embedded > header{display:none;}
 </style>
 </head>
 <body data-state="idle">
@@ -254,6 +264,9 @@
     <span class="emp" id="empLabel"></span>
     <button class="gear" id="gearBtn" type="button" title="小天鷹設定">⚙️</button>
   </header>
+
+  <!-- 浮動齒輪（在 APP 內嵌時用，僅管理員）-->
+  <button id="gearFloat" type="button" title="小天鷹設定">⚙️</button>
 
   <!-- 主視覺 -->
   <div id="ai-core">
@@ -359,7 +372,14 @@
   } catch(e){}
 
   if (empId) document.getElementById('empLabel').textContent = '工號 ' + empId;
-  if (isAdmin) document.getElementById('gearBtn').style.display = 'block';
+
+  // 是否在 APP iframe 內：是→藏工具 header（避免雙重返回），管理員改用浮動齒輪
+  var embedded = (window.self !== window.top);
+  if (embedded) document.body.classList.add('embedded');
+  if (isAdmin){
+    if (embedded) document.getElementById('gearFloat').style.display = 'block';
+    else          document.getElementById('gearBtn').style.display = 'block';
+  }
 
   /* ════════ 個人化習慣記憶 ════════ */
   var PROFILE_KEY = 'hsh_ai_profile_' + (empId || 'guest');
@@ -680,6 +700,7 @@
   });
   // admin
   $('gearBtn').addEventListener('click', openAdmin);
+  $('gearFloat').addEventListener('click', openAdmin);
   $('close-sheet-admin').addEventListener('click', closeAdmin);
   $('admin-close').addEventListener('click', closeAdmin);
   $('admin-save').addEventListener('click', saveAdmin);
