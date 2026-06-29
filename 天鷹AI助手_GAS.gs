@@ -19,7 +19,8 @@
  * ───────────────────────────────────────────── */
 
 // ── 設定常數 ──────────────────────────────────
-var MODEL       = 'gemini-1.5-flash';
+// 依序嘗試（新金鑰 gemini-1.5 已停用，改用 2.x；前面失敗自動換下一個）
+var MODELS      = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
 var PROP_KEY    = 'GEMINI_API_KEY';   // API Key 屬性名
 var PROP_RULES  = 'AI_ADMIN_RULES';   // 管理員自訂禁止規則
 var PROP_LEVEL  = 'AI_FORCE_LEVEL';   // 強制表達層級：auto/simple/normal
@@ -80,22 +81,27 @@ function handleChat(p) {
     generationConfig: { maxOutputTokens: 600, temperature: 0.7 }
   };
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-            MODEL + ':generateContent?key=' + apiKey;
-
-  var resp = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(reqBody),
-    muteHttpExceptions: true
-  });
-
-  var code = resp.getResponseCode();
-  var data = JSON.parse(resp.getContentText());
+  // 依序嘗試模型清單，遇到「模型不存在(404)」就換下一個；其他錯誤直接回報
+  var data = null, code = 0, lastErr = '';
+  for (var mi = 0; mi < MODELS.length; mi++) {
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+              MODELS[mi] + ':generateContent?key=' + apiKey;
+    var resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(reqBody),
+      muteHttpExceptions: true
+    });
+    code = resp.getResponseCode();
+    data = JSON.parse(resp.getContentText());
+    if (code === 200) break;
+    lastErr = (data.error && data.error.message) ? data.error.message : ('HTTP ' + code);
+    // 404 = 該模型不存在，換下一個；其他錯誤（如金鑰無效）不必再試
+    if (code !== 404) break;
+  }
 
   if (code !== 200) {
-    var m = (data.error && data.error.message) ? data.error.message : ('HTTP ' + code);
-    return err('AI 服務忙線中，請稍後再試（' + m + '）');
+    return err('AI 服務暫時無法使用（' + lastErr + '）');
   }
 
   // 安全過濾被擋 / 無回應
