@@ -124,6 +124,9 @@ input[type=date]{color-scheme:dark}
 .fbtn{padding:.3rem .72rem;border-radius:16px;cursor:pointer;font-size:.82rem;font-weight:700;border:1px solid var(--bdr);background:var(--sur);color:var(--t2);transition:all .15s;user-select:none;flex-shrink:0}
 .fbtn:active{transform:scale(.95)}
 .fbtn.on{background:rgba(212,168,0,.14);border-color:var(--gld);color:var(--gld)}
+/* 非樓層分類（行政課等）用靛藍區分 */
+.fbtn-cat{border-color:rgba(129,140,248,.4);color:#A5B4FC}
+.fbtn-cat.on{background:rgba(129,140,248,.16);border-color:var(--ind);color:var(--ind)}
 .dinp:focus{border-color:var(--gld)}
 
 /* ── STATS ── */
@@ -671,28 +674,43 @@ function floorSortKey(f){
   if(isNaN(n)) return 999;
   return /^B/i.test(f) ? -n : n;
 }
-// 彙整一批記錄出現過的樓層，排序後回傳
-function floorList(rows){
-  var seen = {}, list = [];
-  rows.forEach(function(r){
-    extractFloors(r).forEach(function(f){ if(!seen[f]){ seen[f]=1; list.push(f); } });
-  });
-  return list.sort(function(a,b){ return floorSortKey(a)-floorSortKey(b); });
+// 一個字串本身是否就是純樓層（B1F / 1F / 4樓）
+function isFloorToken(s){ return /^B?\d{1,2}\s*(?:F|樓)$/i.test(String(s||'').trim()); }
+// 一筆記錄的快選標籤：樓層（含多樓層）＋ 申請單位若非純樓層（如「行政課」）也當分類
+function cardTags(rec){
+  var tags = extractFloors(rec);
+  var unit = String(rec['申請單位']||'').trim();
+  if(unit && !isFloorToken(unit) && tags.indexOf(unit)<0) tags.push(unit);
+  return tags;
 }
-// 渲染樓層按鈕列
-function renderFloorBar(floors){
+// 彙整一批記錄的標籤：樓層用 floorSortKey 排前面，非樓層分類接後面（出現序）
+function tagList(rows){
+  var seen = {}, floors = [], cats = [];
+  rows.forEach(function(r){
+    cardTags(r).forEach(function(t){
+      if(seen[t]) return;
+      seen[t]=1;
+      (isFloorToken(t) ? floors : cats).push(t);
+    });
+  });
+  floors.sort(function(a,b){ return floorSortKey(a)-floorSortKey(b); });
+  return floors.concat(cats);
+}
+// 渲染快選按鈕列（樓層金色、非樓層分類靛藍）
+function renderFloorBar(tags){
   var fbar = document.getElementById('fbar');
-  if(!floors.length){ fbar.style.display='none'; fbar.innerHTML=''; return; }
+  if(!tags.length){ fbar.style.display='none'; fbar.innerHTML=''; return; }
   fbar.style.display='flex';
-  var html = '<span class="flbl"><i class="ti ti-building"></i>樓層</span>'
+  var html = '<span class="flbl"><i class="ti ti-building"></i>樓層／單位</span>'
     + '<button class="fbtn'+(S.floor===''?' on':'')+'" onclick="clickFloor(\'\')">全部</button>';
-  floors.forEach(function(f){
-    html += '<button class="fbtn'+(S.floor===f?' on':'')+'" onclick="clickFloor(\''+f+'\')">'+esc(f)+'</button>';
+  tags.forEach(function(t){
+    var cat = isFloorToken(t) ? '' : ' fbtn-cat';
+    html += '<button class="fbtn'+cat+(S.floor===t?' on':'')+'" onclick="clickFloor(\''+t.replace(/'/g,"\\'")+'\')">'+esc(t)+'</button>';
   });
   fbar.innerHTML = html;
 }
 function clickFloor(f){
-  S.floor = (S.floor===f ? '' : f);   // 再點同樓層 = 取消
+  S.floor = (S.floor===f ? '' : f);   // 再點同一個 = 取消
   render();
 }
 
@@ -705,7 +723,7 @@ function render(){
   var isHot  = S.tab==='hot';
   var filteredNoFloor = filterRows(rows, S.view, S.search, S.histDate);
   var filtered = S.floor
-    ? filteredNoFloor.filter(function(r){ return extractFloors(r).indexOf(S.floor)>=0; })
+    ? filteredNoFloor.filter(function(r){ return cardTags(r).indexOf(S.floor)>=0; })
     : filteredNoFloor;
 
   // 儲存當前過濾結果供 checkIn 使用
@@ -739,8 +757,8 @@ function render(){
     return;
   }
 
-  // 樓層快選按鈕：依目前 view+搜尋結果動態產生（0 筆的樓層不出現）
-  renderFloorBar(floorList(filteredNoFloor));
+  // 快選按鈕（樓層＋非樓層分類）：依目前 view+搜尋結果動態產生（0 筆的不出現）
+  renderFloorBar(tagList(filteredNoFloor));
 
   stats.style.display='flex';
 
