@@ -18926,6 +18926,16 @@ function App() {
                 showToast('📅 班表已從資料上傳工具同步，正在開啟班表管理工具…');
                 setTimeout(() => setActiveToolId('schedule'), 800);
             }
+            // 小天鷹 AI 助手要求開啟對應工具畫面
+            if (e.data && e.data.type === 'openTool') {
+                const tid = e.data.toolId;
+                if (tid) {
+                    setActiveToolId(null);
+                    setTimeout(() => setActiveToolId(tid), 250);
+                } else if (e.data.externalUrl) {
+                    window.open(e.data.externalUrl, '_blank');
+                }
+            }
         };
         window.addEventListener('message', handler);
         return () => window.removeEventListener('message', handler);
@@ -19985,6 +19995,7 @@ function App() {
                     activeToolId === 'signin' && '🚗 過夜車輛登記',
                     activeToolId === 'post' && '📋 明日哨表',
                     activeToolId === 'aichat' && '🦅 天鷹 AI 小助手',
+                    activeToolId === 'aiwork' && '📋 施工單查詢',
                      activeToolId === 'car' && '🅿️ 停車場車位數計算')),
             activeToolId === 'schedule' && (React.createElement("div", { style: { flex: 1, overflow: 'auto' } },
                 React.createElement(ScheduleApp, { currentUser: currentUser, externalScheduleData: externalScheduleData, onExternalApplied: () => setExternalScheduleData(null) }))),
@@ -19995,6 +20006,7 @@ function App() {
             activeToolId === 'signin' && (React.createElement("iframe", { srcDoc: TOOL_SIGNIN_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u904E\u591C\u8ECA\u8F1B\u767B\u8A18" })),
             activeToolId === 'post' && (React.createElement("iframe", { src: POST_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u660E\u65E5\u54E8\u8868" })),
             activeToolId === 'aichat' && (React.createElement("iframe", { src: AI_CHAT_URL, allow: "microphone", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5929\u9DF9 AI \u5C0F\u52A9\u624B" })),
+            activeToolId === 'aiwork' && (React.createElement("iframe", { src: "https://sky03104.github.io/tianying-security/tool_work.html", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u65BD\u5DE5\u55AE\u67E5\u8A62" })),
             activeToolId === 'car' && (React.createElement("iframe", { srcDoc: TOOL_CAR_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u505C\u8ECA\u5834\u8ECA\u4F4D\u6578\u8A08\u7B97" })))),
         showLeave && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10',
                 display: 'flex', flexDirection: 'column', fontFamily: "'Microsoft JhengHei',sans-serif" } },

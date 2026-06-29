@@ -502,11 +502,12 @@
     .then(function(data){
       sendBtn.disabled = false;
       if (data.status === 'ok' && data.reply){
-        lastReply = data.reply;
-        history.push({ role:'model', text:data.reply });
+        var parsed = parseOpen(data.reply);
+        lastReply = parsed.clean;
+        history.push({ role:'model', text:parsed.clean });  // 存乾淨文字，指令不進對話紀錄
         if (history.length > 24) history = history.slice(-24);
         saveProfile();
-        showResponse(data.reply, fromVoice);
+        showResponse(parsed.clean, parsed.openCmd, fromVoice);
       } else {
         setState(STATE.IDLE);
         toast(data.msg || '小天鷹累了，請稍後再試');
@@ -520,13 +521,41 @@
   }
 
   /* ════════ 顯示 AI 回應（bottom sheet）════════ */
-  function showResponse(text, speak){
+  // 工具 token → APP 工具對應（明日哨表/班表/施工單）
+  var TOOL_MAP = {
+    post:     { toolId:'post',     name:'明日哨表' },
+    schedule: { toolId:'schedule', name:'班表查詢' },
+    work:     { toolId:'aiwork',   name:'施工單查詢' }
+  };
+  // 從 AI 回覆抽出 <<OPEN:xxx>> 指令，回傳乾淨文字 + 指令
+  function parseOpen(text){
+    var openCmd = null;
+    var clean = String(text||'').replace(/<<\s*OPEN\s*:\s*(post|schedule|work)\s*>>/i, function(_, k){
+      openCmd = k.toLowerCase(); return '';
+    }).trim();
+    if (!clean) clean = openCmd ? '好，幫你開出來囉 🦅' : text;
+    return { clean: clean, openCmd: openCmd };
+  }
+  function showResponse(clean, openCmd, speak){
     setState(STATE.RESPONDING);
-    sheetContent.textContent = text;
+    sheetContent.textContent = clean;
     sheetContent.scrollTop = 0;
     sheet.classList.add('open');
     scrim.classList.add('show');
-    if (speak) speakText(text);
+    if (speak) speakText(clean);
+
+    // 有開啟指令 → 通知父層(APP)彈出真實畫面；停留一下讓使用者看到/聽到回覆
+    if (openCmd && TOOL_MAP[openCmd]){
+      var target = TOOL_MAP[openCmd];
+      setTimeout(function(){
+        if (window.self !== window.top){
+          try { window.parent.postMessage({ type:'openTool',
+            toolId: target.toolId || null, externalUrl: target.externalUrl || null }, '*'); } catch(e){}
+        } else if (target.externalUrl){
+          window.open(target.externalUrl, '_blank');
+        }
+      }, speak ? 1500 : 900);
+    }
   }
   function closeSheet(){
     sheet.classList.remove('open');

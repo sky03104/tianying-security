@@ -19,17 +19,12 @@
  * ───────────────────────────────────────────── */
 
 // ── 設定常數 ──────────────────────────────────
-// 依序嘗試（前面額度爆/不存在自動換下一個）。免費額度大的排前面：
-//   2.0-flash 與 2.0-flash-lite 每日額度較高，2.5-flash 額度小放後面備援
-var MODELS      = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest'];
+// 依序嘗試（前面額度爆/不存在自動換下一個）。只用「不思考」的 2.0 系列：
+//   2.5-flash 會花 token 思考→常把回答吃掉切斷，且免費額度小，故不用
+var MODELS      = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 var PROP_KEY    = 'GEMINI_API_KEY';   // API Key 屬性名
 var PROP_RULES  = 'AI_ADMIN_RULES';   // 管理員自訂禁止規則
 var PROP_LEVEL  = 'AI_FORCE_LEVEL';   // 強制表達層級：auto/simple/normal
-
-// ── 即時資料來源（小天鷹查資料用）──
-var SCHEDULE_GAS_URL = 'https://script.google.com/macros/s/AKfycbzs56InZLeaHiRJhy1alNfQwDyH0mXEV9t_WJxzfjTjIhf68DHgMiWVQvVG6vKrRZ2x1w/exec'; // 班表 GAS（?action=getSchedule&shift=）
-var WORK_SHEET_ID    = '1QuNkwu9zgPidUfSgWpqyT1M9X683IU-0LhXTc23hw-A'; // 施工單試算表
-var WORK_SHEET_NAME  = '施工單查詢';   // 施工單分頁名
 
 // ── 主入口（POST）──────────────────────────────
 function doPost(e) {
@@ -71,13 +66,6 @@ function handleChat(p) {
 
   var systemText = buildSystemPrompt(role, vocabLevel);
 
-  // ── 即時查資料：依關鍵字抓班表／施工單真實資料，塞進參考資料 ──
-  var dataCtx = buildDataContext(message);
-  if (dataCtx) {
-    systemText += '\n\n【以下是系統剛剛查到的「真實即時資料」，回答相關問題時務必根據這些資料，' +
-                  '不可以自己編造。資料裡沒有的就照誠實原則說查不到】\n' + dataCtx;
-  }
-
   // 組多輪對話（最多保留最近 10 輪，避免 token 過大 / 逾時）
   var contents = [];
   var recent = history.slice(-10);
@@ -91,7 +79,7 @@ function handleChat(p) {
   var reqBody = {
     systemInstruction: { parts: [{ text: systemText }] },
     contents: contents,
-    generationConfig: { maxOutputTokens: 600, temperature: 0.7 }
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.7 }
   };
 
   // 依序嘗試模型清單：模型不存在(404) 或 額度爆掉(429) 就換下一個（每個模型額度分開算）
@@ -162,13 +150,18 @@ function buildSystemPrompt(role, vocabLevel) {
   return '你是「小天鷹」，天鷹保全公司的 AI 助手 🦅。\n' +
     '第一次跟人打招呼時可以說「我是小天鷹，天鷹保全的 AI 助手 🦅」。\n\n' +
     '【你的工作】協助保全同事解決工作問題：\n' +
-    '- 查今天誰上班、班表、班別時間（系統會把即時班表資料給你）\n' +
-    '- 查今天/明天的施工單（哪些廠商進場、施工項目、進退場時間、監工）\n' +
     '- 工作 SOP（巡邏、交接班、緊急事件怎麼處理）\n' +
     '- 事故報告怎麼填、請假怎麼申請\n' +
-    '- APP 各工具怎麼用（打烊登錄、開店登錄、停車位計算等）\n' +
-    '※ 當有人問班表或施工單，下方「真實即時資料」區會附上查到的資料，' +
-    '你要根據那些資料回答；若該區沒有對應資料，就老實說查不到、請他直接看對應工具。\n\n' +
+    '- APP 各工具怎麼用（打烊登錄、開店登錄、停車位計算等）\n\n' +
+    '【超重要：查資料一律「開畫面」給他看，不要自己背資料】\n' +
+    '當有人想看班表、誰上班、誰值班、施工單、廠商進場這類「即時資料」時，' +
+    '你「不知道」也「絕不編」實際內容，而是回一句簡短親切的話（例如「好，幫你把明天的哨表打開 🦅」），' +
+    '然後在回答的「最後面」單獨加上一個開啟指令（使用者看不到，系統會用它直接彈出真實畫面）：\n' +
+    '  - 問「誰上班 / 明天誰上班 / 值班 / 哨表」→ 結尾加：<<OPEN:post>>\n' +
+    '  - 問「整月班表 / 某人的班 / 班表」→ 結尾加：<<OPEN:schedule>>\n' +
+    '  - 問「施工單 / 廠商進場 / 動火 / 今晚或明天施工」→ 結尾加：<<OPEN:work>>\n' +
+    '指令格式務必完全照寫（含兩個角括號），一則回答最多加一個。' +
+    '若只是閒聊或一般 SOP 問題，就正常回答，不要加開啟指令。\n\n' +
     '【說話方式，超重要】\n' +
     '- 我們同事有些年紀比較大、有些學歷不高，' + levelText + '\n' +
     '- 語氣像隔壁熱心同事，親切、自然，不要官腔。\n' +
@@ -182,124 +175,6 @@ function buildSystemPrompt(role, vocabLevel) {
 
 function levelText_simple() {
   return '用小學生也聽得懂的方式說明，避免任何專業術語，多舉生活化的例子。';
-}
-
-/* ════════════════════════════════════════════════
-   即時查資料（班表 / 施工單）
-   依使用者問題的關鍵字決定要抓哪種資料，回傳純文字塞進 prompt
-   ════════════════════════════════════════════════ */
-function buildDataContext(msg) {
-  var m = String(msg || '');
-  var parts = [];
-  // 班表 / 誰上班 / 值班 / 班別 / 休假
-  if (/班表|上班|值班|班別|當班|誰.*班|今天.*班|早班|晚班|排班|休假|放假|誰在|有誰/.test(m)) {
-    try { var sc = getScheduleContext(); if (sc) parts.push(sc); } catch (e) {}
-  }
-  // 施工單 / 廠商進出 / 動火
-  if (/施工|廠商|進場|退場|施工單|動火|工程|維修|裝潢|進出/.test(m)) {
-    try { var wc = getWorkContext(); if (wc) parts.push(wc); } catch (e) {}
-  }
-  return parts.join('\n\n');
-}
-
-// ── 班表：抓早晚班，算今天誰上班 + 附完整月班表 ──
-function getScheduleContext() {
-  var today = new Date();
-  var d = today.getDate();
-  var WORK = { B:'20:00-08:00', 海:'22:00-10:00', 見:'20:00-08:00', N:'20:00-24:00',
-               A:'08:00-20:00', S:'08:00-16:00', L:'12:00-20:00', H:'11:00-22:00',
-               H2:'11:00-22:30', LN:'12:00-24:00' };
-  var week = '日一二三四五六'.charAt(today.getDay());
-  var lines = ['【今天日期】' + (today.getMonth()+1) + '/' + d + '（星期' + week + '）'];
-  var got = false;
-
-  ['morning','night'].forEach(function(shift){
-    var rows = fetchSchedule(shift);
-    if (!rows || !rows.length) return;
-    got = true;
-    var label = (shift === 'morning') ? '早班' : '晚班';
-    var onduty = [], grid = [];
-    rows.forEach(function(r){
-      var name = String(r.name||'').trim();
-      if (!name || name.length < 2 || /^\d/.test(name)) return;
-      var shifts = r.shifts || [];
-      var code = String(shifts[d-1]==null?'':shifts[d-1]).trim();
-      if (WORK[code]) onduty.push(name + '(' + code + '班 ' + WORK[code] + ')');
-      var seq = shifts.map(function(v){ var t=String(v==null?'':v).trim(); return t||'-'; }).join(' ');
-      grid.push(name + (r.roleStr ? ('['+r.roleStr+']') : '') + '：' + seq);
-    });
-    lines.push('【今天'+label+'有上班的人】' + (onduty.length ? onduty.join('、') : '（查無人上班）'));
-    lines.push('【本月'+label+'完整班表｜每人從1號排到月底，- = 空白】\n' + grid.join('\n'));
-  });
-
-  if (!got) return '【班表】目前連不到班表資料，請稍後再試或直接看班表查詢工具。';
-  lines.push('【班別代號】A=08:00-20:00, S=08:00-16:00, L=12:00-20:00, H=11:00-22:00, H2=11:00-22:30, LN=12:00-24:00, B=20:00-08:00(晚班), 海=22:00-10:00, N=20:00-24:00, 見=見習; 休/排休/事/病/補/國例/離 = 沒上班(休假/請假/離職)');
-  return lines.join('\n');
-}
-function fetchSchedule(shift) {
-  try {
-    var resp = UrlFetchApp.fetch(SCHEDULE_GAS_URL + '?action=getSchedule&shift=' + shift,
-                                 { muteHttpExceptions: true });
-    var d = JSON.parse(resp.getContentText());
-    return (d && d.success && d.rows) ? d.rows : null;
-  } catch (e) { return null; }
-}
-
-// ── 施工單：抓今天、明天的施工列 ──
-function getWorkContext() {
-  var data = fetchGviz(WORK_SHEET_ID, WORK_SHEET_NAME);
-  if (!data || !data.rows) return '【施工單】目前連不到施工單資料，請稍後再試。';
-  var today = new Date(), tm = today.getMonth()+1, td = today.getDate();
-  var tmr = new Date(today.getTime() + 86400000), nm = tmr.getMonth()+1, nd = tmr.getDate();
-  var dateIdx = data.labels.indexOf('施工日期');
-  var picked = [];
-  data.rows.forEach(function(row){
-    var md = (dateIdx >= 0) ? parseGvizDate(row[dateIdx]) : null;
-    if (!md) return;
-    var tag = (md.m===tm && md.d===td) ? '今天' : ((md.m===nm && md.d===nd) ? '明天' : '');
-    if (!tag) return;
-    var fields = [];
-    data.labels.forEach(function(lb, i){
-      var v = fmtCell(row[i]);
-      if (lb && v) fields.push(lb + '=' + v);
-    });
-    picked.push('[' + tag + '] ' + fields.join('，'));
-  });
-  if (!picked.length) return '【今明兩天的施工單】今天和明天目前查不到施工資料。';
-  return '【今明兩天的施工單（真實資料）】\n' + picked.join('\n');
-}
-function fetchGviz(id, sheet) {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + id +
-              '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(sheet);
-    var txt = UrlFetchApp.fetch(url, { muteHttpExceptions: true }).getContentText();
-    var s = txt.indexOf('{'), e = txt.lastIndexOf('}');
-    if (s < 0 || e < 0) return null;
-    var obj = JSON.parse(txt.substring(s, e+1));
-    var table = obj.table || {};
-    var labels = (table.cols||[]).map(function(c,i){ return c.label || c.id || ('col'+i); });
-    var rows = (table.rows||[]).map(function(r){
-      return (r.c||[]).map(function(c){ return c ? c.v : null; });
-    });
-    return { labels: labels, rows: rows };
-  } catch (e) { return null; }
-}
-// gviz 日期值常為字串 "Date(2026,5,29)"（月份從0起算）
-function parseGvizDate(v) {
-  if (v == null) return null;
-  var s = String(v);
-  var mm = s.match(/Date\((\d+),(\d+),(\d+)/);
-  if (mm) return { m: parseInt(mm[2],10)+1, d: parseInt(mm[3],10) };
-  var m2 = s.match(/(\d{1,2})[\/\-](\d{1,2})/);
-  if (m2) return { m: parseInt(m2[1],10), d: parseInt(m2[2],10) };
-  return null;
-}
-function fmtCell(v) {
-  if (v == null) return '';
-  var s = String(v);
-  var mm = s.match(/Date\((\d+),(\d+),(\d+)/);
-  if (mm) return (parseInt(mm[2],10)+1) + '/' + parseInt(mm[3],10);
-  return s;
 }
 
 // ── 管理員：讀設定 ────────────────────────────
