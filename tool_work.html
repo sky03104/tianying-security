@@ -390,6 +390,32 @@ function parseGvizTable(table){
 }
 
 /* ══════════════════════════════════════════
+   去重：來源表常有同一張施工單被重複登錄的列
+   （ID 是純數字流水號、重複列各自不同，故不能用 ID 去重）
+   以「施工內容鍵」判定重複，內容相同只保留一筆
+══════════════════════════════════════════ */
+function dedupeKey(r){
+  return ['廠商專櫃名稱','申請單位','施工地點','施工項目','月','日','進場時間輸入','退場時間輸入']
+    .map(function(k){ return String(r[k]==null?'':r[k]).trim(); })
+    .join('|');
+}
+function dedupeRows(rows){
+  var seen={}, out=[];
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i], key=dedupeKey(r);
+    if(seen[key]==null){
+      seen[key]=out.length;
+      out.push(r);
+    } else {
+      // 已有同筆：若這筆已報到換證而保留的那筆沒有，改保留已報到的，避免去重弄丟報到狀態
+      var keep=out[seen[key]];
+      if(!keep['__checkin'] && r['__checkin']) out[seen[key]]=r;
+    }
+  }
+  return out;
+}
+
+/* ══════════════════════════════════════════
    時間工具
 ══════════════════════════════════════════ */
 function toInt(v){
@@ -804,11 +830,11 @@ async function loadAll(){
   render();
   try {
     document.getElementById('sp-msg').textContent='載入施工單…';
-    S.data.con = await fetchSheetJsonp(SN.con);
+    S.data.con = dedupeRows(await fetchSheetJsonp(SN.con));
   } catch(e){ S.errors.con = e.message; }
   try {
     document.getElementById('sp-msg').textContent='載入動火申請…';
-    S.data.hot = await fetchSheetJsonp(SN.hot);
+    S.data.hot = dedupeRows(await fetchSheetJsonp(SN.hot));
   } catch(e){ S.errors.hot = e.message; }
   S.loading=false;
   setSpinning(false);
