@@ -17727,7 +17727,10 @@ const ScheduleApp = (() => {
         見: { label: "見習", time: "20:00-08:00", color: "#A3E635", bg: "rgba(63,98,18,0.2)", hours: 12 },
         離: { label: "離職", time: "—", color: C.textMute, bg: "rgba(31,41,55,0.4)", hours: 0 },
         國例: { label: "國定補假", time: "—", color: "#FCD34D", bg: "rgba(217,119,6,0.2)", hours: 0 },
+        休B: { label: "停休加班", time: "—", color: "#EADC00", bg: "rgba(234,220,0,0.30)", hours: 12 },
     };
+    /* 自訂班別：從 localStorage 載入使用者新增的班別代號，套入 SHIFT_TYPES */
+    (function() { try { const cs = JSON.parse(localStorage.getItem('tianying_custom_shifts') || '{}'); Object.assign(SHIFT_TYPES, cs); } catch(e) {} })();
     const OFF_TYPES = new Set(["休", "排休", "事", "病", "補", "離", "國例"]);
     const WORK_SHIFT = new Set(["B", "海", "見", "N", "A", "S", "L", "H", "H2", "LN"]);
     const BASE_HRS = 288;
@@ -17963,7 +17966,7 @@ function ok(obj) {
             return buildSched(INIT_STAFF);
         });
         const [view, setView] = useState("today");
-        const [fShift, setFShift] = useState("all");
+        const [shiftVer, setShiftVer] = useState(0);
         const [selSt, setSelSt] = useState(null);
         const [editC, setEditC] = useState(null);
         const [stMod, setStMod] = useState(null);
@@ -17976,12 +17979,12 @@ function ok(obj) {
         const [prev, setPrev] = useState(null);
         const [upSt, setUpSt] = useState("drop");
         const fileRef = useRef();
-        const canE = user && ROLE_LV[user.role] >= ROLE_LV["leader"];
+        const canE = user && ROLE_LV[user.role] >= ROLE_LV["leader"] && curShift !== 'all';
+        const canCaptain = user && ROLE_LV[user.role] >= ROLE_LV["captain"];
         const T = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
         const ask = (msg, fn) => setCfm({ msg, fn });
         async function sync(sc = sched, sf = staff) {
-            if (!asUrl)
-                return;
+            if (!asUrl || curShift === 'all') return;
             setSyncS("syncing");
             try {
                 const p = { action: "updateSchedule", shift: curShift, month: M, year: Y,
@@ -17997,6 +18000,7 @@ function ok(obj) {
         }
         /* ── 持久化：staff/sched 任一變更即寫入「目前班別」的快取（晚班/早班分開存） ── */
         useEffect(() => {
+            if (!SHED_CACHE_KEYS[curShift]) return;
             try {
                 localStorage.setItem(SHED_CACHE_KEYS[curShift], JSON.stringify({ ym: `${Y}-${M}`, staff: staff, sched: sched }));
             } catch (e) { }
@@ -18060,6 +18064,32 @@ function ok(obj) {
         /* ── 切換班別：載入目標班別快取後再向雲端取最新（目前班別資料已由持久化 effect 寫入各自快取） ── */
         const switchShift = async (s) => {
             if (s === curShift) return;
+            /* 案場班表：合併晚班 + 早班快取，唯讀不同步 */
+            if (s === 'all') {
+                const ID_OFFSET = 10000;
+                let nStaff = [], nSc = {};
+                try {
+                    const nc = JSON.parse(localStorage.getItem(SHED_CACHE_KEYS['night']) || 'null');
+                    if (nc && Array.isArray(nc.staff) && nc.staff.length) {
+                        nStaff = [...nc.staff];
+                        nSc = nc.ym === `${Y}-${M}` && nc.sched ? { ...nc.sched } : buildSched(nc.staff);
+                    }
+                    const mc = JSON.parse(localStorage.getItem(SHED_CACHE_KEYS['morning']) || 'null');
+                    if (mc && Array.isArray(mc.staff) && mc.staff.length) {
+                        const mStaff = mc.staff.map(ms => ({ ...ms, id: ms.id + ID_OFFSET }));
+                        const mSc = mc.ym === `${Y}-${M}` && mc.sched ? mc.sched : buildSched(mc.staff);
+                        const mScOff = {};
+                        Object.entries(mSc).forEach(([id, v]) => { mScOff[+id + ID_OFFSET] = v; });
+                        nStaff = [...nStaff, ...mStaff];
+                        nSc = { ...nSc, ...mScOff };
+                    }
+                } catch(e) {}
+                setCurShift('all');
+                setStaff(nStaff);
+                setSched(nSc);
+                T('🏢 案場班表（晚班 + 早班全員，唯讀）');
+                return;
+            }
             let nStaff = [], nSc = {};
             try {
                 const c = JSON.parse(localStorage.getItem(SHED_CACHE_KEYS[s]) || 'null');
@@ -18358,7 +18388,7 @@ function ok(obj) {
             else
                 T("請上傳 .xlsx", "err");
         }, [staff]);
-        const filtered = staff.filter(s => fShift === "all" || s.shift === fShift);
+        const filtered = staff;
         /* ── 登入 ── */
         if (!user)
             return (React.createElement("div", { style: { background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Microsoft JhengHei','PingFang TC',sans-serif" } },
@@ -18610,6 +18640,72 @@ function ok(obj) {
                     React.createElement("div", { style: { fontSize: 12, color: C.textMute, marginBottom: 18 } }, asUrl ? "已同步至 Google 試算表" : "（尚未設定 Google 試算表）"),
                     React.createElement("button", { style: { ...iBtn, padding: "11px 24px", fontSize: 13 }, onClick: () => setUpSt("drop") }, "\u518D\u6B21\u4E0A\u50B3")))));
         }
+        /* ── ShiftSettingsView：班別設定（隊長+）── */
+        function ShiftSettingsView() {
+            const [editKey, setEditKey] = useState(null);
+            const [editForm, setEditForm] = useState({ time: '', hours: '' });
+            const [showAdd, setShowAdd] = useState(false);
+            const [addForm, setAddForm] = useState({ code: '', label: '', time: '', hours: '', color: '#60A5FA' });
+            const saveST = (extra) => {
+                const cs = {};
+                Object.entries(SHIFT_TYPES).forEach(([k, v]) => { cs[k] = v; });
+                try { localStorage.setItem('tianying_custom_shifts', JSON.stringify(cs)); } catch(e) {}
+                setShiftVer(v => v + 1);
+                if (extra) T(extra);
+            };
+            const saveEdit = () => {
+                if (!editKey) return;
+                SHIFT_TYPES[editKey] = { ...SHIFT_TYPES[editKey], time: editForm.time || '—', hours: parseFloat(editForm.hours) || 0 };
+                saveST('班別已更新');
+                setEditKey(null);
+            };
+            const saveAdd = () => {
+                const code = addForm.code.trim();
+                if (!code) { T('請輸入代號', 'err'); return; }
+                if (SHIFT_TYPES[code]) { T('代號已存在', 'err'); return; }
+                const col = addForm.color || '#60A5FA';
+                SHIFT_TYPES[code] = { label: addForm.label || code, time: addForm.time || '—', color: col, bg: col + '33', hours: parseFloat(addForm.hours) || 0 };
+                saveST(`已新增班別「${code}」`);
+                setShowAdd(false);
+                setAddForm({ code: '', label: '', time: '', hours: '', color: '#60A5FA' });
+            };
+            const fieldStyle = { ...S.input, marginBottom: 8 };
+            return React.createElement("div", { style: { padding: "13px 13px" } },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
+                    React.createElement("span", { style: { fontSize: 15, fontWeight: 900, color: C.text } }, "班別設定"),
+                    React.createElement("button", { style: { ...gBtn, padding: "8px 14px", fontSize: 13 }, onClick: () => { setShowAdd(true); setEditKey(null); } }, "+ 新增班別")),
+                curShift === 'all' && React.createElement("div", { style: { fontSize: 11, color: C.warn, marginBottom: 10, padding: "8px 12px", background: "rgba(251,146,60,0.1)", borderRadius: 8, border: "1px solid rgba(251,146,60,0.3)" } }, "⚠ 案場班表唯讀，班別設定修改後套用至早班/晚班"),
+                showAdd && React.createElement("div", { style: { background: C.card, borderRadius: 12, padding: "14px 13px", marginBottom: 14, border: `1px solid ${C.cardBd}` } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: C.goldBri, marginBottom: 10 } }, "新增班別代號"),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 8 } },
+                        React.createElement("input", { style: fieldStyle, placeholder: "代號（如 C）", value: addForm.code, onChange: e => setAddForm(f => ({ ...f, code: e.target.value })) }),
+                        React.createElement("input", { style: fieldStyle, placeholder: "名稱（如 C班）", value: addForm.label, onChange: e => setAddForm(f => ({ ...f, label: e.target.value })) })),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 8 } },
+                        React.createElement("input", { style: fieldStyle, placeholder: "時間（如 08:00-20:00）", value: addForm.time, onChange: e => setAddForm(f => ({ ...f, time: e.target.value })) }),
+                        React.createElement("input", { style: fieldStyle, placeholder: "工時（如 12）", type: "number", min: 0, max: 24, value: addForm.hours, onChange: e => setAddForm(f => ({ ...f, hours: e.target.value })) })),
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
+                        React.createElement("span", { style: { fontSize: 12, color: C.textMute } }, "顏色"),
+                        React.createElement("input", { type: "color", value: addForm.color, onChange: e => setAddForm(f => ({ ...f, color: e.target.value })), style: { width: 40, height: 32, border: "none", background: "none", cursor: "pointer", padding: 0 } }),
+                        React.createElement("span", { style: { fontSize: 12, color: addForm.color, fontWeight: 700 } }, addForm.code || "預覽")),
+                    React.createElement("div", { style: { display: "flex", gap: 8 } },
+                        React.createElement("button", { style: { ...iBtn, flex: 1, padding: "10px", fontSize: 13 }, onClick: () => setShowAdd(false) }, "取消"),
+                        React.createElement("button", { style: { ...gBtn, flex: 1, padding: "10px", fontSize: 13 }, onClick: saveAdd }, "儲存新增"))),
+                editKey && !showAdd && React.createElement("div", { style: { background: C.card, borderRadius: 12, padding: "14px 13px", marginBottom: 14, border: `1px solid ${C.cardBd}` } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: C.goldBri, marginBottom: 10 } }, `編輯「${editKey}」班 — ${SHIFT_TYPES[editKey]?.label}`),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 10 } },
+                        React.createElement("input", { style: fieldStyle, placeholder: "時間（如 08:00-20:00）", value: editForm.time, onChange: e => setEditForm(f => ({ ...f, time: e.target.value })) }),
+                        React.createElement("input", { style: fieldStyle, placeholder: "工時（如 12）", type: "number", min: 0, max: 24, value: editForm.hours, onChange: e => setEditForm(f => ({ ...f, hours: e.target.value })) })),
+                    React.createElement("div", { style: { display: "flex", gap: 8 } },
+                        React.createElement("button", { style: { ...iBtn, flex: 1, padding: "10px", fontSize: 13 }, onClick: () => setEditKey(null) }, "取消"),
+                        React.createElement("button", { style: { ...gBtn, flex: 1, padding: "10px", fontSize: 13 }, onClick: saveEdit }, "儲存"))),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, Object.entries(SHIFT_TYPES).map(([k, v]) =>
+                    React.createElement("div", { key: k + shiftVer, style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: C.card, borderRadius: 9, border: `1px solid ${C.cardBd}` } },
+                        React.createElement("span", { style: { width: 36, textAlign: "center", fontSize: 14, fontWeight: 900, color: v.color, background: v.bg, borderRadius: 6, padding: "3px 6px", flexShrink: 0 } }, k),
+                        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                            React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text } }, v.label),
+                            React.createElement("div", { style: { fontSize: 11, color: C.textMute } }, `${v.time} · ${v.hours}h`)),
+                        React.createElement("button", { style: { ...iBtn, padding: "5px 11px", fontSize: 12 }, onClick: () => { setShowAdd(false); setEditKey(k); setEditForm({ time: v.time === '—' ? '' : v.time, hours: String(v.hours) }); } }, "修改")))));
+        }
         /* ── Modals ── */
         function EditModal() {
             var _a;
@@ -18673,7 +18769,7 @@ function ok(obj) {
         }
         const syncC = { idle: C.textMute, syncing: C.warn, ok: C.success, err: C.error };
         const syncL = { idle: "", syncing: "同步中…", ok: "已同步 ✓", err: "同步失敗" };
-        const tabs = [{ k: "today", l: "今日" }, { k: "tomorrow", l: "明日" }, { k: "week", l: "本週" }, { k: "month", l: "月班表" }, { k: "hours", l: "時數表" }, ...(canE ? [{ k: "staff", l: "員工" }] : [])];
+        const tabs = [{ k: "today", l: "今日" }, { k: "tomorrow", l: "明日" }, { k: "week", l: "本週" }, { k: "month", l: "月班表" }, { k: "hours", l: "時數表" }, ...(canE ? [{ k: "staff", l: "員工" }] : []), ...(canCaptain ? [{ k: "shiftSettings", l: "班別設定" }] : [])];
         const todayOn = staff.filter(s => { var _a; const sh = (_a = sched[s.id]) === null || _a === void 0 ? void 0 : _a[TODAY]; return sh && sh !== '-' && !OFF_TYPES.has(sh); }).length;
         return (React.createElement("div", { style: { background: C.bg, minHeight: "100vh", fontFamily: "'Microsoft JhengHei','PingFang TC',sans-serif", color: C.text, maxWidth: 480, margin: "0 auto" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 13px", borderBottom: `1px solid ${C.cardBd}`, background: C.bg2 } },
@@ -18692,12 +18788,10 @@ function ok(obj) {
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, padding: "9px 12px" } }, [{ v: staff.length, l: "總人數", c: C.text, b: C.cardBd }, { v: todayOn, l: "今日出勤", c: C.goldBri, b: `${C.gold}55` }, { v: staff.length - todayOn, l: "今日休假", c: C.warn, b: `${C.warn}44` }, { v: `${M}月`, l: "當前月份", c: C.indigoBri, b: `${C.indigo}44` }].map((x, i) => (React.createElement("div", { key: i, style: { background: C.card, borderRadius: 9, padding: "9px 5px", textAlign: "center", border: `1px solid ${x.b}` } },
                 React.createElement("div", { style: { fontSize: 18, fontWeight: 900, color: x.c } }, x.v),
                 React.createElement("div", { style: { fontSize: 9, color: C.textMute, marginTop: 2 } }, x.l))))),
-            React.createElement("div", { style: { display: "flex", gap: 8, padding: "10px 12px 6px" } },
-                React.createElement("button", { style: { flex: 1, padding: "9px", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit", border: curShift === 'night' ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`, background: curShift === 'night' ? "rgba(212,168,0,0.18)" : C.card, color: curShift === 'night' ? C.goldBri : C.textMute }, onClick: () => switchShift('night') }, "🌙 晚班班表"),
-                React.createElement("button", { style: { flex: 1, padding: "9px", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit", border: curShift === 'morning' ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`, background: curShift === 'morning' ? "rgba(212,168,0,0.18)" : C.card, color: curShift === 'morning' ? C.goldBri : C.textMute }, onClick: () => switchShift('morning') }, "☀️ 早班班表")),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, padding: "0 12px 9px" } },
-                React.createElement("span", { style: { fontSize: 11, color: C.textMute } }, "\u73ED\u5225\uFF1A"),
-                ["all", "早班", "晚班"].map(sg => (React.createElement("button", { key: sg, style: { ...S.chip, background: fShift === sg ? "rgba(212,168,0,0.15)" : C.card, color: fShift === sg ? C.goldBri : C.textDim, borderColor: fShift === sg ? `${C.gold}88` : C.cardBd }, onClick: () => setFShift(sg) }, sg === "all" ? "全部" : sg)))),
+            React.createElement("div", { style: { display: "flex", gap: 6, padding: "10px 12px 6px" } },
+                React.createElement("button", { style: { flex: 1, padding: "8px 4px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", border: curShift === 'morning' ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`, background: curShift === 'morning' ? "rgba(212,168,0,0.18)" : C.card, color: curShift === 'morning' ? C.goldBri : C.textMute }, onClick: () => switchShift('morning') }, "☀️ 早班班表"),
+                React.createElement("button", { style: { flex: 1, padding: "8px 4px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", border: curShift === 'night' ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`, background: curShift === 'night' ? "rgba(212,168,0,0.18)" : C.card, color: curShift === 'night' ? C.goldBri : C.textMute }, onClick: () => switchShift('night') }, "🌙 晚班班表"),
+                React.createElement("button", { style: { flex: 1, padding: "8px 4px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", border: curShift === 'all' ? `1.5px solid ${C.indigo}` : `1px solid ${C.cardBd}`, background: curShift === 'all' ? "rgba(99,102,241,0.18)" : C.card, color: curShift === 'all' ? C.indigoBri : C.textMute }, onClick: () => switchShift('all') }, "🏢 案場班表")),
             React.createElement("div", { style: { display: "flex", background: C.bg2, borderBottom: `1px solid ${C.cardBd}`, overflowX: "auto" } }, tabs.map(t => React.createElement("button", { key: t.k, style: { flex: "0 0 auto", padding: "11px 12px", background: "none", border: "none", whiteSpace: "nowrap", borderBottom: view === t.k ? `2px solid ${C.gold}` : "2px solid transparent", color: view === t.k ? C.goldBri : C.textMute, fontSize: 12, cursor: "pointer", fontWeight: view === t.k ? 700 : 400 }, onClick: () => setView(t.k) }, t.l))),
             React.createElement("div", { style: { paddingBottom: 66 } },
                 view === "today" && React.createElement(DayView, { dayNum: TODAY }),
@@ -18706,7 +18800,8 @@ function ok(obj) {
                 view === "month" && React.createElement(MonthView, null),
                 view === "hours" && React.createElement(HoursView, null),
                 view === "upload" && canE && React.createElement(UploadView, null),
-                view === "staff" && canE && React.createElement(StaffView, null)),
+                view === "staff" && canE && React.createElement(StaffView, null),
+                view === "shiftSettings" && canCaptain && React.createElement(ShiftSettingsView, null)),
             React.createElement(EditModal, null),
             React.createElement(StMod, null),
             React.createElement(CfmDlg, null),
