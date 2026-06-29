@@ -254,6 +254,31 @@
   }
   /* APP 內嵌（iframe）時隱藏工具自己的 header，避免雙重返回 */
   body.embedded > header{display:none;}
+
+  /* 浮動語音設定鈕（所有人；embedded 時上移避開 APP header）*/
+  #voiceCfgFloat{
+    position:fixed;left:12px;top:calc(10px + env(safe-area-inset-top));
+    width:44px;height:44px;border-radius:12px;cursor:pointer;z-index:36;
+    background:rgba(129,140,248,.14);border:1px solid rgba(129,140,248,.4);
+    color:var(--indigo);font-size:20px;display:none;
+  }
+  body.embedded #voiceCfgFloat{display:block;}
+
+  /* 語音設定 sheet（沿用 admin-sheet 樣式）*/
+  #voice-sheet{
+    position:fixed;left:0;right:0;bottom:0;max-height:80vh;
+    display:flex;flex-direction:column;
+    background:rgba(13,15,20,.98);backdrop-filter:blur(14px);
+    border:1px solid rgba(129,140,248,.4);border-bottom:none;border-radius:22px 22px 0 0;
+    transform:translateY(110%);transition:transform .42s cubic-bezier(.4,0,.2,1);
+    z-index:45;padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+  #voice-sheet.open{transform:translateY(0);}
+  #speed-row .spd{
+    flex:1;padding:13px;border-radius:12px;cursor:pointer;font-size:16px;font-weight:700;
+    font-family:inherit;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:var(--txt);
+  }
+  #speed-row .spd.on{background:rgba(129,140,248,.22);border-color:rgba(129,140,248,.6);color:var(--indigo);}
 </style>
 </head>
 <body data-state="idle">
@@ -267,6 +292,9 @@
 
   <!-- 浮動齒輪（在 APP 內嵌時用，僅管理員）-->
   <button id="gearFloat" type="button" title="小天鷹設定">⚙️</button>
+
+  <!-- 浮動語音設定鈕（所有人）-->
+  <button id="voiceCfgFloat" type="button" title="語音設定">🔊</button>
 
   <!-- 主視覺 -->
   <div id="ai-core">
@@ -336,6 +364,29 @@
     </div>
     <div class="row" style="margin-top:8px;">
       <button id="admin-close" type="button">關閉</button>
+    </div>
+  </div>
+
+  <!-- 語音設定（所有人）-->
+  <div id="voice-sheet">
+    <div class="sheet-head">
+      <span class="nm" style="color:var(--indigo)">🔊 語音設定</span>
+      <button id="close-voice" type="button" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:50%;width:38px;height:38px;cursor:pointer;color:#F5F5F5;font-size:18px;">✕</button>
+    </div>
+    <div style="overflow-y:auto;">
+      <label style="display:block;font-size:15px;color:var(--muted);margin:10px 0 8px;font-weight:700;">說話速度</label>
+      <div id="speed-row" style="display:flex;gap:8px;">
+        <button class="spd" data-rate="0.8" type="button">🐢 慢</button>
+        <button class="spd" data-rate="1.0" type="button">標準</button>
+        <button class="spd" data-rate="1.25" type="button">🐇 快</button>
+      </div>
+      <label style="display:block;font-size:15px;color:var(--muted);margin:16px 0 8px;font-weight:700;">聲音</label>
+      <select id="voice-select" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;color:var(--txt);padding:12px 13px;font-size:16px;font-family:inherit;"></select>
+      <div id="voice-none" style="display:none;font-size:14px;color:var(--muted);margin-top:8px;">這台裝置只有一種中文聲音，無法切換</div>
+    </div>
+    <div class="row" style="display:flex;gap:8px;margin-top:16px;">
+      <button id="voice-test" type="button" style="flex:1;padding:13px;border-radius:12px;cursor:pointer;font-size:16px;font-weight:800;font-family:inherit;border:1px solid rgba(129,140,248,.4);background:rgba(129,140,248,.15);color:var(--indigo);">▶ 試聽</button>
+      <button id="voice-done" type="button" style="flex:1;padding:13px;border-radius:12px;cursor:pointer;font-size:16px;font-weight:800;font-family:inherit;border:none;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0A0C10;">完成</button>
     </div>
   </div>
 
@@ -505,11 +556,30 @@
   }
 
   /* ════════ 語音輸出（TTS）════════ */
+  // 語音偏好（每台裝置記憶）：rate 速度、voiceURI 指定聲音
+  var VOICE_KEY = 'hsh_ai_voice';
+  var voicePref = loadVoicePref();
+  function loadVoicePref(){
+    try { var p = JSON.parse(localStorage.getItem(VOICE_KEY)||'{}');
+      return { rate: p.rate || 1.0, voiceURI: p.voiceURI || '' }; }
+    catch(e){ return { rate:1.0, voiceURI:'' }; }
+  }
+  function saveVoicePref(){ try{ localStorage.setItem(VOICE_KEY, JSON.stringify(voicePref)); }catch(e){} }
+  // 取得可用的中文語音
+  function chineseVoices(){
+    var vs = [];
+    try { vs = window.speechSynthesis.getVoices() || []; } catch(e){}
+    return vs.filter(function(v){ return /^zh/i.test(v.lang); });
+  }
   function speakText(text){
     if (!('speechSynthesis' in window)) return;
     stopSpeak();
     var u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-TW'; u.rate = 1.0; u.pitch = 1.0;
+    u.lang = 'zh-TW'; u.rate = voicePref.rate || 1.0; u.pitch = 1.0;
+    if (voicePref.voiceURI){
+      var v = chineseVoices().filter(function(x){ return x.voiceURI === voicePref.voiceURI; })[0];
+      if (v) u.voice = v;
+    }
     try { window.speechSynthesis.speak(u); } catch(e){}
   }
   function stopSpeak(){ try { window.speechSynthesis.cancel(); } catch(e){} }
@@ -559,36 +629,10 @@
     }
   }
 
-  /* ════════ 聲波動畫（麥克風音量）════════ */
-  var audioCtx=null, analyser=null, micStream=null, waveRAF=null;
+  /* ════════ 聲波動畫（純視覺，不額外開麥克風→避免重複授權）════════ */
+  var waveRAF=null;
   var canvas=$('waveform'), cctx=canvas.getContext('2d');
-  function startWave(){
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ drawFakeWave(); return; }
-    navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
-      micStream = stream;
-      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-      var src = audioCtx.createMediaStreamSource(stream);
-      analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
-      src.connect(analyser);
-      drawWave();
-    }).catch(function(){ drawFakeWave(); });
-  }
-  function drawWave(){
-    var buf = new Uint8Array(analyser.frequencyBinCount);
-    function loop(){
-      waveRAF = requestAnimationFrame(loop);
-      analyser.getByteFrequencyData(buf);
-      cctx.clearRect(0,0,canvas.width,canvas.height);
-      var bars = 28, w = canvas.width/bars;
-      for (var i=0;i<bars;i++){
-        var v = buf[i*2]/255;
-        var h = Math.max(3, v*canvas.height);
-        cctx.fillStyle = 'rgba(129,140,248,'+(0.4+v*0.6)+')';
-        cctx.fillRect(i*w+1, (canvas.height-h)/2, w-2, h);
-      }
-    }
-    loop();
-  }
+  function startWave(){ drawFakeWave(); }
   function drawFakeWave(){
     var t=0;
     function loop(){
@@ -607,8 +651,6 @@
   function stopWave(){
     if (waveRAF) cancelAnimationFrame(waveRAF), waveRAF=null;
     if (cctx) cctx.clearRect(0,0,canvas.width,canvas.height);
-    if (micStream){ micStream.getTracks().forEach(function(t){t.stop();}); micStream=null; }
-    if (audioCtx){ try{audioCtx.close();}catch(e){} audioCtx=null; }
   }
 
   /* ════════ 模式切換 ════════ */
@@ -697,6 +739,7 @@
   scrim.addEventListener('click', function(){
     if (sheet.classList.contains('open')) closeSheet();
     if (adminSheet.classList.contains('open')) closeAdmin();
+    if ($('voice-sheet').classList.contains('open')) closeVoiceCfg();
   });
   // admin
   $('gearBtn').addEventListener('click', openAdmin);
@@ -705,6 +748,52 @@
   $('admin-close').addEventListener('click', closeAdmin);
   $('admin-save').addEventListener('click', saveAdmin);
   $('admin-reset').addEventListener('click', function(){ $('admin-rules').value=''; $('admin-level').value='auto'; });
+
+  /* ════════ 語音設定面板 ════════ */
+  function openVoiceCfg(){
+    populateVoiceCfg();
+    $('voice-sheet').classList.add('open');
+    scrim.classList.add('show');
+  }
+  function closeVoiceCfg(){ $('voice-sheet').classList.remove('open'); scrim.classList.remove('show'); }
+  function populateVoiceCfg(){
+    var btns = document.querySelectorAll('#speed-row .spd');
+    for (var i=0;i<btns.length;i++){
+      btns[i].classList.toggle('on', parseFloat(btns[i].dataset.rate) === (voicePref.rate||1.0));
+    }
+    var sel = $('voice-select'), vs = chineseVoices();
+    sel.innerHTML = '';
+    if (vs.length <= 1){
+      $('voice-none').style.display = 'block';
+      sel.style.display = vs.length > 1 ? 'block' : 'none';
+    } else {
+      $('voice-none').style.display = 'none'; sel.style.display = 'block';
+    }
+    vs.forEach(function(v){
+      var o = document.createElement('option');
+      o.value = v.voiceURI;
+      o.textContent = v.name + '（' + v.lang + '）';
+      if (v.voiceURI === voicePref.voiceURI) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+  $('voiceCfgFloat').addEventListener('click', openVoiceCfg);
+  $('close-voice').addEventListener('click', closeVoiceCfg);
+  $('voice-done').addEventListener('click', closeVoiceCfg);
+  $('voice-test').addEventListener('click', function(){ speakText('你好，我是小天鷹，這是我現在的聲音。'); });
+  document.querySelectorAll('#speed-row .spd').forEach(function(b){
+    b.addEventListener('click', function(){
+      voicePref.rate = parseFloat(b.dataset.rate); saveVoicePref();
+      document.querySelectorAll('#speed-row .spd').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+  });
+  $('voice-select').addEventListener('change', function(){
+    voicePref.voiceURI = this.value; saveVoicePref();
+  });
+  try { window.speechSynthesis.onvoiceschanged = function(){
+    if ($('voice-sheet').classList.contains('open')) populateVoiceCfg();
+  }; } catch(e){}
 
   // 初始
   setState(STATE.IDLE);
