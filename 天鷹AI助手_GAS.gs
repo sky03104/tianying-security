@@ -19,9 +19,10 @@
  * ───────────────────────────────────────────── */
 
 // ── 設定常數 ──────────────────────────────────
-// 依序嘗試（前面額度爆/不存在自動換下一個）。只用「不思考」的 2.0 系列：
-//   2.5-flash 會花 token 思考→常把回答吃掉切斷，且免費額度小，故不用
-var MODELS      = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+// 依序嘗試（前面額度爆/不存在自動換下一個）。
+// 注意：gemini-2.0-flash 已於 2026/6/1 停用→改用 2.5 系列；並關閉 thinking 避免回答被切斷。
+//   2.5-flash-lite 免費 1000 RPD/15 RPM（額度最大）放第一；2.5-flash 250 RPD 備援；flash-latest 兜底
+var MODELS      = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest'];
 var PROP_KEY    = 'GEMINI_API_KEY';   // API Key 屬性名
 var PROP_RULES  = 'AI_ADMIN_RULES';   // 管理員自訂禁止規則
 var PROP_LEVEL  = 'AI_FORCE_LEVEL';   // 強制表達層級：auto/simple/normal
@@ -79,7 +80,7 @@ function handleChat(p) {
   var reqBody = {
     systemInstruction: { parts: [{ text: systemText }] },
     contents: contents,
-    generationConfig: { maxOutputTokens: 2048, temperature: 0.7 }
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   // 依序嘗試模型清單：模型不存在(404) 或 額度爆掉(429) 就換下一個（每個模型額度分開算）
@@ -97,8 +98,8 @@ function handleChat(p) {
     data = JSON.parse(resp.getContentText());
     if (code === 200) break;
     lastErr = (data.error && data.error.message) ? data.error.message : ('HTTP ' + code);
-    // 404=模型不存在、429=額度上限 → 換下一個模型試；其他錯誤（如金鑰無效）不必再試
-    if (code !== 404 && code !== 429) break;
+    // 400=該模型不吃此參數、404=模型不存在、429=額度上限 → 換下一個模型試；其他錯誤（如金鑰無效）不必再試
+    if (code !== 400 && code !== 404 && code !== 429) break;
   }
 
   if (code !== 200) {
