@@ -30,7 +30,8 @@ function doPost(e) {
                     && (String(values[i][4]).trim() === String(data.day || '').trim())
                     && (String(values[i][5]).trim() === String(data.inTime || '').trim());
       if(byId || byCombo) {
-        sheet.getRange(i + 1, 15).setValue('已報到換證'); // O 欄 = 第15欄
+        // O 欄 = 第15欄。每天制：寫「報到時間戳」而非永久字面值，前端據此判定是否過退場時間
+        sheet.getRange(i + 1, 15).setValue(Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm'));
         found = true;
         break;
       }
@@ -404,11 +405,50 @@ function hasGoodInTime(r){
   var t=fmtT(r['進場時間輸入']);
   return t!=='--' && !isBadTime(t);
 }
-// 重複時要不要用新的這筆 r 取代已保留的 keep（優先序：已報到 > 進場時間正常 > 先到）
+// 重複時要不要用新的這筆 r 取代已保留的 keep（優先序：報到仍有效 > 進場時間正常 > 先到）
 function preferOver(r, keep){
-  var rChk=!!r['__checkin'], kChk=!!keep['__checkin'];
-  if(rChk!==kChk) return rChk;                 // ① 已報到換證者優先
-  return hasGoodInTime(r) && !hasGoodInTime(keep); // ② 同報到狀態下，進場時間正常者優先
+  var rAct=isCheckinActive(r), kAct=isCheckinActive(keep);
+  if(rAct!==kAct) return rAct;                 // ① 目前報到仍有效者優先（不藏進行中的報到）
+  return hasGoodInTime(r) && !hasGoodInTime(keep); // ② 進場時間正常者優先
+}
+
+/* ══════════════════════════════════════════
+   報到換證：改為「每天」制
+   O 欄存報到的日期時間（非永久「已報到換證」字面值）
+   前端據此判定：現在是否仍在這次施工時段內，過退場時間/隔天 → 回未報到
+══════════════════════════════════════════ */
+// 解析 O 欄報到值 → Date（失敗回 null）。相容 gviz 日期物件與文字時間戳；舊「已報到換證」字面值 → null
+function parseCheckinTime(v){
+  if(v==null) return null;
+  var s=String(v).trim();
+  if(!s || s.toLowerCase()==='null') return null;
+  var m=s.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
+  if(m) return new Date(+m[1],+m[2],+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+  var d=new Date(s.replace(' ','T'));       // "2026-06-28 19:30" → 可解析
+  return isNaN(d.getTime()) ? null : d;
+}
+// 報到是否仍在有效時段內（沿用早班/晚班跨夜邏輯）
+function isCheckinActive(rec){
+  if(!rec) return false;
+  var tc=parseCheckinTime(rec['__checkin']);
+  if(!tc) return false;
+  var out=toInt(rec['退場時間輸入']);
+  var end;
+  if(out>=0 && out<3000){
+    var addDay=0, hh, mm;
+    if(out>=2400){ addDay=1; hh=Math.floor((out-2400)/100); mm=(out-2400)%100; }
+    else { hh=Math.floor(out/100); mm=out%100; }
+    end=new Date(tc.getFullYear(),tc.getMonth(),tc.getDate()+addDay,hh,mm,0);
+    if(end<=tc) end=new Date(end.getTime()+86400000);  // 退場早於報到 → 跨夜，順延一天
+  } else {
+    end=new Date(tc.getTime()+86400000);     // 退場時間缺漏/爛資料 → 退而求其次：有效 24 小時
+  }
+  return new Date()<=end;
+}
+// 產生報到時間戳（與 GAS 寫入格式一致），供樂觀更新本地狀態用
+function nowStamp(){
+  var n=new Date(), p=function(x){ return (x<10?'0':'')+x; };
+  return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+' '+p(n.getHours())+':'+p(n.getMinutes());
 }
 function dedupeRows(rows){
   var seen={}, out=[];
@@ -575,8 +615,8 @@ function cardHtml(rec, view, isHot, idx){
     ?'<span class="cdate-lbl"><i class="ti ti-calendar"></i>'+esc(dateTag)+'</span>'
     :'<span></span>';
 
-  // 報到換證按鈕：若試算表 O 欄已有值，重整頁面後仍顯示「已報到換證」
-  var isDone = !!rec['__checkin'];
+  // 報到換證按鈕：每天制——僅在這次施工時段內顯示「已報到換證」，過退場時間/隔天自動回「報到換證」
+  var isDone = isCheckinActive(rec);
   var checkinBtn = isDone
     ? '<button class="cbtn-checkin done" id="cbtn-'+idx+'" onclick="checkIn('+idx+','+isHot+')">'
       +'<i class="ti ti-circle-check"></i>已報到換證</button>'
@@ -726,7 +766,7 @@ async function checkIn(idx, isHot){
     btn.innerHTML = '<i class="ti ti-loader" style="animation:spin .6s linear infinite"></i>確認中…';
     var ok = await verifyCheckin(rec, sheetName);
     if(ok){
-      rec['__checkin'] = '已報到換證';   // 同步本地狀態，避免重整前不一致
+      rec['__checkin'] = nowStamp();     // 同步本地狀態為當下時間戳，使 isCheckinActive 立即生效
       btn.className = 'cbtn-checkin done';
       btn.innerHTML = '<i class="ti ti-circle-check"></i>已報到換證';
       toast('✓ 報到換證完成','ok');
@@ -747,7 +787,7 @@ async function checkIn(idx, isHot){
 }
 
 /* ══════════════════════════════════════════
-   報到換證驗證：no-cors 無法讀回應，改重讀分頁確認 O 欄是否真的寫入「已報到換證」
+   報到換證驗證：no-cors 無法讀回應，改重讀分頁確認 O 欄是否真的寫入有效報到時間戳
 ══════════════════════════════════════════ */
 function checkinMatchKey(r){
   // 與 GAS 比對邏輯一致：優先 ID，否則 廠商+月+日+進場時間
@@ -766,8 +806,8 @@ async function verifyCheckin(rec, sheetName){
       var rows = await fetchSheetJsonp(sheetName);
       for(var i=0;i<rows.length;i++){
         if(checkinMatchKey(rows[i])===key){
-          var v = rows[i]['__checkin'];
-          if(v && String(v).trim() && String(v).trim().toLowerCase()!=='null') return true;
+          // 確認寫入的是「這次、現在有效」的報到時間戳（非舊戳記殘留）
+          if(isCheckinActive(rows[i])) return true;
           break; // 找到該筆但尚未寫入 → 再等一輪
         }
       }
