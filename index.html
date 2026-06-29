@@ -18112,6 +18112,21 @@ function ok(obj) {
             (async () => {
                 const cnt = await loadFromCloud();
                 if (cnt) T(`📅 已載入線上班表最新資料（${cnt} 人）`);
+                if (asUrl) {
+                    try {
+                        const r = await fetch(asUrl + '?action=getShiftSettings');
+                        const d = await r.json();
+                        if (d.success && Array.isArray(d.types) && d.types.length) {
+                            const cs = {};
+                            d.types.forEach(t => {
+                                cs[t.code] = { label: t.label, time: t.time, color: t.color, bg: t.color + '33', hours: t.hours };
+                            });
+                            Object.assign(SHIFT_TYPES, cs);
+                            localStorage.setItem('tianying_custom_shifts', JSON.stringify(cs));
+                            setShiftVer(v => v + 1);
+                        }
+                    } catch(e) { /* offline: localStorage already loaded */ }
+                }
             })();
         }, []);
         /* ── 資料上傳工具完成上傳後的同步 ──
@@ -18647,9 +18662,20 @@ function ok(obj) {
             const [showAdd, setShowAdd] = useState(false);
             const [addForm, setAddForm] = useState({ code: '', label: '', time: '', hours: '', color: '#60A5FA' });
             const saveST = (extra) => {
+                const baseCodes = new Set(["B","海","A","S","L","H","H2","LN","N","休","排休","事","病","補","見","離","國例","休B"]);
+                const custom = Object.entries(SHIFT_TYPES)
+                    .filter(([k]) => !baseCodes.has(k))
+                    .map(([code, v]) => ({ code, label: v.label, time: v.time, hours: v.hours, color: v.color }));
                 const cs = {};
                 Object.entries(SHIFT_TYPES).forEach(([k, v]) => { cs[k] = v; });
                 try { localStorage.setItem('tianying_custom_shifts', JSON.stringify(cs)); } catch(e) {}
+                if (asUrl) {
+                    fetch(asUrl, {
+                        method: 'POST', mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'updateShiftSettings', types: custom })
+                    }).catch(() => {});
+                }
                 setShiftVer(v => v + 1);
                 if (extra) T(extra);
             };
