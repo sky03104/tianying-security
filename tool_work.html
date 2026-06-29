@@ -118,6 +118,12 @@ input[type=date]{color-scheme:dark}
 .sinp{width:100%;padding:.44rem .7rem .44rem 2.1rem;background:var(--sur);border:1px solid var(--bdr);border-radius:8px;color:var(--t1);font-size:.86rem;font-family:inherit;outline:none;transition:border-color .2s}
 .sinp::placeholder{color:var(--t3)}.sinp:focus{border-color:var(--gld)}
 .dinp{padding:.44rem .7rem;background:var(--sur);border:1px solid var(--bdr);border-radius:8px;color:var(--t1);font-size:.86rem;font-family:inherit;outline:none;cursor:pointer}
+/* ── 樓層快選 ── */
+.fbar{display:flex;gap:.35rem;padding:0 .8rem .55rem;background:var(--bg2);flex-wrap:wrap;align-items:center}
+.fbar .flbl{color:var(--t3);font-size:.78rem;display:flex;align-items:center;gap:.25rem;margin-right:.1rem}
+.fbtn{padding:.3rem .72rem;border-radius:16px;cursor:pointer;font-size:.82rem;font-weight:700;border:1px solid var(--bdr);background:var(--sur);color:var(--t2);transition:all .15s;user-select:none;flex-shrink:0}
+.fbtn:active{transform:scale(.95)}
+.fbtn.on{background:rgba(212,168,0,.14);border-color:var(--gld);color:var(--gld)}
 .dinp:focus{border-color:var(--gld)}
 
 /* ── STATS ── */
@@ -262,6 +268,9 @@ input[type=date]{color-scheme:dark}
     <input class="dinp" id="dinp" type="date" style="display:none" onchange="onDateChange(this.value)">
   </div>
 
+  <!-- 樓層快選按鈕（依資料動態產生，點一下只看該樓層，免打字） -->
+  <div class="fbar" id="fbar" style="display:none"></div>
+
   <div class="stats" id="stats" style="display:none">
     <div class="stats-lf">
       <div class="scnt" id="stats-cnt">共 <em>0</em> 筆記錄</div>
@@ -291,7 +300,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbyv3H-sB6vVKocrXF7zi53-6u
    STATE
 ══════════════════════════════════════════ */
 var S = {
-  tab:'con', view:'tonight', search:'', histDate:'',
+  tab:'con', view:'tonight', search:'', histDate:'', floor:'',
   data:{con:[],hot:[]}, errors:{con:null,hot:null},
   loading:true, spinning:false
 };
@@ -643,13 +652,61 @@ function cardHtml(rec, view, isHot, idx){
 }
 
 /* ══════════════════════════════════════════
+   樓層快選：從施工地點/申請單位抽出樓層（B1F、1F、5F…），免打字篩選
+══════════════════════════════════════════ */
+// 抽出一筆記錄涉及的樓層（可多個，如「5F、6F、7F」），正規化為 B1F/1F/5F…
+function extractFloors(rec){
+  var txt = String(rec['施工地點']||'')+' '+String(rec['申請單位']||'');
+  var out = [], seen = {};
+  var m = txt.match(/B?\d{1,2}\s*(?:F|樓)/gi) || [];
+  m.forEach(function(s){
+    var f = s.toUpperCase().replace(/\s+/g,'').replace(/樓/,'F');
+    if(!seen[f]){ seen[f]=1; out.push(f); }
+  });
+  return out;
+}
+// 樓層排序鍵：B 層在前（B1F→-1、B2F→-2），地上層升冪（1F→1…）
+function floorSortKey(f){
+  var n = parseInt(f.replace(/\D/g,''));
+  if(isNaN(n)) return 999;
+  return /^B/i.test(f) ? -n : n;
+}
+// 彙整一批記錄出現過的樓層，排序後回傳
+function floorList(rows){
+  var seen = {}, list = [];
+  rows.forEach(function(r){
+    extractFloors(r).forEach(function(f){ if(!seen[f]){ seen[f]=1; list.push(f); } });
+  });
+  return list.sort(function(a,b){ return floorSortKey(a)-floorSortKey(b); });
+}
+// 渲染樓層按鈕列
+function renderFloorBar(floors){
+  var fbar = document.getElementById('fbar');
+  if(!floors.length){ fbar.style.display='none'; fbar.innerHTML=''; return; }
+  fbar.style.display='flex';
+  var html = '<span class="flbl"><i class="ti ti-building"></i>樓層</span>'
+    + '<button class="fbtn'+(S.floor===''?' on':'')+'" onclick="clickFloor(\'\')">全部</button>';
+  floors.forEach(function(f){
+    html += '<button class="fbtn'+(S.floor===f?' on':'')+'" onclick="clickFloor(\''+f+'\')">'+esc(f)+'</button>';
+  });
+  fbar.innerHTML = html;
+}
+function clickFloor(f){
+  S.floor = (S.floor===f ? '' : f);   // 再點同樓層 = 取消
+  render();
+}
+
+/* ══════════════════════════════════════════
    渲染
 ══════════════════════════════════════════ */
 function render(){
   var rows   = S.tab==='con'?S.data.con:S.data.hot;
   var curErr = S.tab==='con'?S.errors.con:S.errors.hot;
   var isHot  = S.tab==='hot';
-  var filtered = filterRows(rows, S.view, S.search, S.histDate);
+  var filteredNoFloor = filterRows(rows, S.view, S.search, S.histDate);
+  var filtered = S.floor
+    ? filteredNoFloor.filter(function(r){ return extractFloors(r).indexOf(S.floor)>=0; })
+    : filteredNoFloor;
 
   // 儲存當前過濾結果供 checkIn 使用
   window._cards = filtered;
@@ -668,17 +725,22 @@ function render(){
 
   if(S.loading){
     stats.style.display='none';
+    document.getElementById('fbar').style.display='none';
     content.innerHTML='<div class="stctr"><div class="spinner"></div><span style="color:var(--t2);font-size:.88rem">讀取 Google Sheets 中…</span></div>';
     return;
   }
   if(curErr){
     stats.style.display='none';
+    document.getElementById('fbar').style.display='none';
     content.innerHTML='<div class="errbox"><i class="ti ti-alert-circle"></i><div>'
       +'<strong>'+esc(curErr)+'</strong>'
       +'<small>試算表右上角 → 共用 → 一般存取 → 知道連結的人 · 檢視者</small>'
       +'</div></div>';
     return;
   }
+
+  // 樓層快選按鈕：依目前 view+搜尋結果動態產生（0 筆的樓層不出現）
+  renderFloorBar(floorList(filteredNoFloor));
 
   stats.style.display='flex';
 
@@ -820,14 +882,14 @@ async function verifyCheckin(rec, sheetName){
    UI 操作
 ══════════════════════════════════════════ */
 function switchTab(t){
-  S.tab=t; S.search=''; document.getElementById('sinp').value='';
+  S.tab=t; S.search=''; S.floor=''; document.getElementById('sinp').value='';
   ['con','hot'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('on',x===t);
   });
   render();
 }
 function switchView(v){
-  S.view=v; S.search=''; S.histDate='';
+  S.view=v; S.search=''; S.histDate=''; S.floor='';
   document.getElementById('sinp').value='';
   document.getElementById('dinp').value='';
   ['tonight','morning','history'].forEach(function(x){
