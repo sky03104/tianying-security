@@ -390,14 +390,25 @@ function parseGvizTable(table){
 }
 
 /* ══════════════════════════════════════════
-   去重：來源表常有同一張施工單被重複登錄的列
-   （ID 是純數字流水號、重複列各自不同，故不能用 ID 去重）
-   以「施工內容鍵」判定重複，內容相同只保留一筆
+   去重：來源表常有同一張常態性施工單被重複登錄的列
+   （同廠商/地點/項目/監工，但時間、日期、人數常有變異或爛資料 4230800）
+   故以「穩定身份鍵 = 廠商+地點+施工項目+監工」判定重複，相同只留一筆
 ══════════════════════════════════════════ */
 function dedupeKey(r){
-  return ['廠商專櫃名稱','申請單位','施工地點','施工項目','月','日','進場時間輸入','退場時間輸入']
+  return ['廠商專櫃名稱','施工地點','施工項目','監工']
     .map(function(k){ return String(r[k]==null?'':r[k]).trim(); })
     .join('|');
+}
+// 進場時間是否為正常值（非爛資料）：用既有 fmtT/isBadTime 判定
+function hasGoodInTime(r){
+  var t=fmtT(r['進場時間輸入']);
+  return t!=='--' && !isBadTime(t);
+}
+// 重複時要不要用新的這筆 r 取代已保留的 keep（優先序：已報到 > 進場時間正常 > 先到）
+function preferOver(r, keep){
+  var rChk=!!r['__checkin'], kChk=!!keep['__checkin'];
+  if(rChk!==kChk) return rChk;                 // ① 已報到換證者優先
+  return hasGoodInTime(r) && !hasGoodInTime(keep); // ② 同報到狀態下，進場時間正常者優先
 }
 function dedupeRows(rows){
   var seen={}, out=[];
@@ -406,10 +417,8 @@ function dedupeRows(rows){
     if(seen[key]==null){
       seen[key]=out.length;
       out.push(r);
-    } else {
-      // 已有同筆：若這筆已報到換證而保留的那筆沒有，改保留已報到的，避免去重弄丟報到狀態
-      var keep=out[seen[key]];
-      if(!keep['__checkin'] && r['__checkin']) out[seen[key]]=r;
+    } else if(preferOver(r, out[seen[key]])){
+      out[seen[key]]=r;                         // ③ 否則保留先到的那筆
     }
   }
   return out;
