@@ -71,8 +71,8 @@ function doPost(e) {
     if (action === 'feedback')       return handleFeedback_(d);
     if (action === 'updateStatus')   return handleUpdateStatus_(d);
     if (action === 'deleteRow')      return handleDeleteRow_(d);
-    if (action === 'recognizePlate') return recognizePlate(d);
-    if (action === 'vehicleReg')     return vehicleReg(d);
+    // 車牌辨識已移至「天鷹AI助手_GAS.gs」的 recognizePlate（共用 Gemini API Key）；
+    // 本檔原本的 recognizePlate / vehicleReg 路由指向不存在的函數，已移除避免整支 doPost 崩潰。
 
     // 向後相容：舊版事故報告前端送 e.parameter.data（無 action）
     if (p.data) { try { return handleReport_(JSON.parse(p.data)); } catch (err2) {} }

@@ -195,7 +195,7 @@ const NODES = [
 
   // ── AI 小助手（小天鷹，2026-06-29）──
   { id: 29, title: '天鷹 AI 小助手',     topic: 'tools',   pos: [ 0.7, -0.5,  0.05], note: 'tool_ai_chat.html；J.A.R.V.I.S. 風格 LOGO 光環＋語音輸入/輸出；個人化習慣記憶 hsh_ai_profile；admin 控制台調禁止規則' },
-  { id: 30, title: '小天鷹 GAS Proxy',   topic: 'backend', pos: [-1.0, -0.5,  0.05], note: '天鷹AI助手_GAS.gs；Gemini Proxy，藏 API Key；依 role/vocabLevel 組 system prompt；getConfig/saveConfig' },
+  { id: 30, title: '小天鷹 GAS Proxy',   topic: 'backend', pos: [-1.0, -0.5,  0.05], note: '天鷹AI助手_GAS.gs；Gemini Proxy，藏 API Key；依 role/vocabLevel 組 system prompt；getConfig/saveConfig；recognizePlate 車牌辨識（過夜車輛登記用）' },
   { id: 31, title: 'Gemini 1.5 Flash',   topic: 'infra',   pos: [-1.35,-0.55,-0.45], note: '外部 AI 服務（免費額度）；API Key 存 GAS Script Properties' },
 
   // ── obsidian-second-brain（咖哩個人第二大腦，2026-07-01）── 非員工功能，Claude Code 開發工具
@@ -223,6 +223,8 @@ const EDGES = [
   [26, 1], [27, 8], [28, 0],
   // AI 小助手：主控台→工具→GAS→Gemini；工具讀本地個人化檔；TODO-13 對應
   [0, 29], [29, 30], [30, 31], [29, 21], [28, 29],
+  // 車牌辨識：過夜車輛登記（tool_signin）→ 小天鷹 GAS recognizePlate → Gemini
+  [11, 30],
   // cec-up：與 tpl-upload 同步、部署在 GitHub Pages
   [10, 32], [23, 32],
   // obsidian-second-brain：skill 操作 vault、hook 在 session 開始注入 vault 內容

@@ -252,7 +252,9 @@
 
 <script>
 // ===== 設定 =====
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZ5f7h_Lv_MOCxPrqPpBPKA917-JKmEz5DDekYixLDsGf1QAKCTOuVxwo18OYKX7a4ng/exec';  // 填入 GAS 網址
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZ5f7h_Lv_MOCxPrqPpBPKA917-JKmEz5DDekYixLDsGf1QAKCTOuVxwo18OYKX7a4ng/exec';  // 車輛登記寫入 GAS
+// 車牌辨識走小天鷹 GAS（Gemini 代理，API Key 已設定、模型自動容錯）
+const OCR_GAS_URL = 'https://script.google.com/macros/s/AKfycbzsy2OlhP5e-nrpTiLVuG91ZuWxToAC23TRxjOjviAyAjMJ3pz8NZzNHP_7OP6Ns0dXQA/exec';
 const MS_FORMS = {
   moto: 'https://forms.cloud.microsoft/r/QGHn5SQ0en?origin=lprLink',
   car:  'https://forms.cloud.microsoft/r/Mcf0VUYBX7?origin=lprLink',
@@ -338,7 +340,7 @@ function compressImage(file) {
     var img = new Image();
     var url = URL.createObjectURL(file);
     img.onload = function() {
-      var maxSide = 1600;
+      var maxSide = 1280;
       var w = img.width, h = img.height;
       if (Math.max(w, h) > maxSide) {
         var scale = maxSide / Math.max(w, h);
@@ -353,8 +355,9 @@ function compressImage(file) {
       ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
       // 回傳純 base64（去掉 data:image/jpeg;base64, 前綴）
-      // 提高 JPEG 品質到 0.95，讓車牌文字更清晰以利 AI 辨識
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      // 長邊 1280 + 品質 0.85：車牌佔 2/3 畫面時已足夠清晰，
+      // 上傳量約減半 → 辨識明顯更快（base64 傳輸是主要瓶頸）
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       resolve({ base64: dataUrl.split(',')[1], previewUrl: dataUrl });
     };
     img.onerror = function() { reject(new Error('讀取照片失敗')); };
@@ -405,9 +408,9 @@ async function startOCR(file) {
   document.getElementById('ocrProgress').classList.add('show');
   startFakeProgress();
 
-  // 3. 呼叫 GAS Gemini OCR
+  // 3. 呼叫小天鷹 GAS Gemini OCR
   try {
-    var res = await fetch(GAS_URL, {
+    var res = await fetch(OCR_GAS_URL, {
       method: 'POST',
       body: JSON.stringify({
         action: 'recognizePlate',
