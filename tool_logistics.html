@@ -927,7 +927,13 @@ function getDay(e) {
     }
   }
   rows.reverse(); // 新的在前
-  return jsonRes({ status: 'ok', date: key, rows: rows, totals: totals });
+  var res = { status: 'ok', date: key, rows: rows, totals: totals, ver: 'v3-H欄比對' };
+  // 自我診斷：有資料卻一筆都對不到時，回傳第一列算出的日期鍵供比對除錯
+  if (rows.length === 0 && lastRow >= 2) {
+    var first = sheet.getRange(2, 1, 1, 8).getValues()[0];
+    res.debug = { reqKey: key, firstRowKey: rowDateKey_(first), firstRowB: String(first[1]), firstRowH: String(first[7]) };
+  }
+  return jsonRes(res);
 }
 
 // 讀整月：?action=getMonth&month=YYYY-MM → 每日 × 三分類彙總
