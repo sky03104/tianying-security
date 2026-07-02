@@ -541,7 +541,7 @@ async function loadTodaySummary(){
   if (!gasUrl) return;
   try {
     const r = await apiGet({ action:'getDay', date: todayISO() });
-    if (r.status!=='ok') return;
+    if (r.status!=='ok'){ showToast('今日累計載入失敗：'+(r.msg||'未知錯誤'), 'err'); return; }
     CATS.forEach((c,i)=>{ el('tsum-'+i).textContent = r.totals[c] || 0; });
   } catch(e){}
 }
@@ -912,12 +912,12 @@ function getDay(e) {
   if (lastRow >= 2) {
     var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
     for (var i = 0; i < data.length; i++) {
-      if (fmtDateVal_(data[i][1]) !== key) continue;
+      if (rowDateKey_(data[i]) !== key) continue;
       var cat = String(data[i][3]);
       var cnt = parseInt(data[i][4], 10) || 0;
       rows.push({
         id: data[i][0],
-        time: fmtTimeVal_(data[i][2]).substring(0, 5),
+        time: rowTime_(data[i]),
         category: cat,
         count: cnt,
         empId: String(data[i][5] || ''),
@@ -971,7 +971,7 @@ function aggregateMonth_(year, month) {
     var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
     var prefix = year + '/' + month + '/';
     for (var i = 0; i < data.length; i++) {
-      var dstr = fmtDateVal_(data[i][1]);
+      var dstr = rowDateKey_(data[i]);
       if (dstr.indexOf(prefix) !== 0) continue;
       var day = parseInt(dstr.split('/')[2], 10);
       if (isNaN(day)) continue;
@@ -1092,6 +1092,18 @@ function monthParts_(s) {
   var y = parseInt(p[0], 10), m = parseInt(p[1], 10);
   if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return null;
   return { year: y, month: m };
+}
+
+// 取列的「登記日期」：優先用 H 建立時間（絕對時間戳，不受試算表時區/儲存格格式影響），沒有才退回 B 欄
+function rowDateKey_(row) {
+  if (row[7] instanceof Date) return Utilities.formatDate(row[7], TZ, 'yyyy/M/d');
+  return fmtDateVal_(row[1]);
+}
+
+// 取列的顯示時間 'HH:mm'：優先用 H 建立時間，沒有才退回 C 欄
+function rowTime_(row) {
+  if (row[7] instanceof Date) return Utilities.formatDate(row[7], TZ, 'HH:mm');
+  return fmtTimeVal_(row[2]).substring(0, 5);
 }
 
 // B欄日期：可能是 Date 或字串，統一成 'yyyy/M/d'
