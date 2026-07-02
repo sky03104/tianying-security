@@ -19039,6 +19039,7 @@ function App() {
     const [editingAnn, setEditingAnn] = useState(null);
     const [showLeave, setShowLeave] = useState(false);
     const [leaveRequests, setLeaveRequests] = useState([]);
+    const [expandedLeaveNames, setExpandedLeaveNames] = useState(() => new Set()); // 請假紀錄依人摺疊：已展開的工號集合
     const [pendingReports, setPendingReports] = useState([]);   // 事故報告清單（主管待審卡片）
     const [pendingFeedback, setPendingFeedback] = useState([]); // 匿名表揚/檢舉清單（主管待審卡片）
     const [leaveForm, setLeaveForm] = useState({
@@ -20411,21 +20412,13 @@ function App() {
                         ? leaveRequests
                         : leaveRequests.filter(r => r.empId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId)))
                         .slice().sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0)); // 最新申請在最上面
-                    const pending = myReqs.filter(r => r.status === 'pending');
-                    const done = myReqs.filter(r => r.status !== 'pending');
                     const statusColor = { pending: '#FBBF24', approved: 'var(--success)', rejected: '#F87171' };
                     const statusLabel = { pending: '⏳ 待審核', approved: '✅ 已核准', rejected: '❌ 已拒絕' };
                     const typeColor = {
                         排休: '#FB923C', 病假: '#F87171', 事假: '#6B7280',
                         婚假: '#F472B6', 喪假: '#9CA3AF', 公假: '#34D399'
                     };
-                    return (React.createElement("div", null,
-                        React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: 'var(--muted)',
-                                letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' } }, isManager ? `📋 所有申請（${myReqs.length} 筆）` : '📋 我的申請紀錄'),
-                        myReqs.length === 0 && (React.createElement("div", { style: { textAlign: 'center', padding: '40px 0', color: 'var(--muted)' } },
-                            React.createElement("div", { style: { fontSize: 32, marginBottom: 8 } }, "\uD83D\uDCED"),
-                            React.createElement("div", null, "\u76EE\u524D\u6C92\u6709\u8ACB\u5047\u7533\u8ACB"))),
-                        [...pending, ...done].map(req => (React.createElement("div", { key: req.id, style: { background: 'rgba(255,255,255,.055)',
+                    const renderReqCard = (req) => (React.createElement("div", { key: req.id, style: { background: 'rgba(255,255,255,.055)',
                                 backdropFilter: 'blur(8px)',
                                 border: `1px solid ${req.status === 'pending' ? 'rgba(251,191,36,.3)' :
                                     req.status === 'approved' ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.2)'}`,
@@ -20503,7 +20496,57 @@ function App() {
                                         background: 'rgba(107,114,128,.15)',
                                         border: '1px solid rgba(107,114,128,.35)', borderRadius: 8,
                                         padding: '9px 12px', fontSize: 12, fontWeight: 700, color: 'var(--muted)',
-                                        cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\uD83D\uDDD1\uFE0F \u522A\u9664"))))))));
+                                        cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\uD83D\uDDD1\uFE0F \u522A\u9664")))));
+
+                    if (!isManager) {
+                        return (React.createElement("div", null,
+                            React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: 'var(--muted)',
+                                    letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' } }, '📋 我的申請紀錄'),
+                            myReqs.length === 0 && (React.createElement("div", { style: { textAlign: 'center', padding: '40px 0', color: 'var(--muted)' } },
+                                React.createElement("div", { style: { fontSize: 32, marginBottom: 8 } }, "\uD83D\uDCED"),
+                                React.createElement("div", null, "\u76EE\u524D\u6C92\u6709\u8ACB\u5047\u7533\u8ACB"))),
+                            myReqs.map(renderReqCard)));
+                    }
+                    // 主管視角：依姓名（工號）摺疊分組，組內展開後依最新排序（沿用上方 myReqs 已排序結果）
+                    const leaveGroupsMap = new Map();
+                    myReqs.forEach(r => {
+                        const gKey = r.empId || r.name;
+                        if (!leaveGroupsMap.has(gKey)) leaveGroupsMap.set(gKey, { key: gKey, name: r.name, dept: r.dept, items: [] });
+                        leaveGroupsMap.get(gKey).items.push(r);
+                    });
+                    const leaveGroups = [...leaveGroupsMap.values()].sort((a, b) => {
+                        const aPending = a.items.some(r => r.status === 'pending');
+                        const bPending = b.items.some(r => r.status === 'pending');
+                        if (aPending !== bPending) return aPending ? -1 : 1;
+                        return (Number(b.items[0].id) || 0) - (Number(a.items[0].id) || 0);
+                    });
+                    return (React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: 'var(--muted)',
+                                letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' } }, `📋 所有申請（${myReqs.length} 筆．${leaveGroups.length} 人）`),
+                        myReqs.length === 0 && (React.createElement("div", { style: { textAlign: 'center', padding: '40px 0', color: 'var(--muted)' } },
+                            React.createElement("div", { style: { fontSize: 32, marginBottom: 8 } }, "\uD83D\uDCED"),
+                            React.createElement("div", null, "\u76EE\u524D\u6C92\u6709\u8ACB\u5047\u7533\u8ACB"))),
+                        leaveGroups.map(g => {
+                            const expanded = expandedLeaveNames.has(g.key);
+                            const pendingCount = g.items.filter(r => r.status === 'pending').length;
+                            return React.createElement("div", { key: g.key, style: { marginBottom: 10 } },
+                                React.createElement("div", { onClick: () => setExpandedLeaveNames(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(g.key)) next.delete(g.key); else next.add(g.key);
+                                        return next;
+                                    }), style: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                                        background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.1)',
+                                        borderRadius: 10, padding: '10px 12px' } },
+                                    React.createElement("span", { style: { fontSize: 13, color: 'var(--gold2)', transition: 'transform .15s',
+                                            transform: expanded ? 'rotate(90deg)' : 'none', display: 'inline-block' } }, "\u203A"),
+                                    React.createElement("span", { style: { flex: 1, fontSize: 13, fontWeight: 800 } },
+                                        g.name, g.dept ? ` · ${g.dept}` : ''),
+                                    pendingCount > 0 && (React.createElement("span", { style: { background: 'rgba(251,191,36,.2)', color: '#FBBF24',
+                                            border: '1px solid rgba(251,191,36,.4)', borderRadius: 6, padding: '1px 7px',
+                                            fontSize: 11, fontWeight: 700 } }, `⏳ ${pendingCount}`)),
+                                    React.createElement("span", { style: { fontSize: 11, color: 'var(--muted)' } }, `${g.items.length} 筆`)),
+                                expanded && React.createElement("div", { style: { marginTop: 8 } }, g.items.map(renderReqCard)));
+                        })));
                 })()))),
         showBulletin && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10',
                 display: 'flex', flexDirection: 'column', fontFamily: "'Microsoft JhengHei',sans-serif" } },
