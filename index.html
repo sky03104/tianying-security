@@ -17739,7 +17739,6 @@ const ScheduleApp = (() => {
     /* 自訂班別：從 localStorage 載入使用者新增的班別代號，套入 SHIFT_TYPES */
     (function() { try { const cs = JSON.parse(localStorage.getItem('tianying_custom_shifts') || '{}'); Object.assign(SHIFT_TYPES, cs); } catch(e) {} })();
     const OFF_TYPES = new Set(["休", "排休", "事", "病", "補", "離", "國例"]);
-    const WORK_SHIFT = new Set(["B", "海", "見", "N", "A", "S", "L", "H", "H2", "LN"]);
     const BASE_HRS = 288;
     const ROLES = { admin: "管理員", manager: "主管", captain: "隊長", vice: "副隊長", leader: "組長", staff: "保全" };
     const ROLE_LV = { admin: 5, manager: 4, captain: 3, vice: 2, leader: 1, staff: 0 };
@@ -17784,19 +17783,20 @@ const ScheduleApp = (() => {
     const isWk = d => { const w = getDow(d); return w === 0 || w === 6; };
     const rBg = r => ({ admin: C.indigo, manager: "#DC2626", captain: C.gold, vice: "#0891B2", leader: "#059669", staff: C.textMute }[r] || C.textMute);
     function calcStats(id, sched) {
-        var _a;
         const sh = sched[id] || {};
         let off = 0, work = 0, hrs = 0;
         for (let d = 1; d <= DAYS; d++) {
             const t = sh[d];
             if (!t || t === '-')
                 continue;
-            if (OFF_TYPES.has(t))
+            if (OFF_TYPES.has(t)) {
                 off++;
-            else if (WORK_SHIFT.has(t)) {
-                work++;
-                hrs += ((_a = SHIFT_TYPES[t]) === null || _a === void 0 ? void 0 : _a.hours) || 12;
+                continue;
             }
+            // 以 SHIFT_TYPES（班別設定）為唯一資料來源，涵蓋新增/編輯過的班別（含停休加班）
+            const def = SHIFT_TYPES[t];
+            work++;
+            hrs += (def && def.hours) || 12;
         }
         return { offDays: off, workDays: work, workHours: hrs, otHours: Math.max(0, hrs - BASE_HRS) };
     }
