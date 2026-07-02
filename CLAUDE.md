@@ -62,6 +62,9 @@ tianying-security/
 ├── tool_feedback.html                 ← Feedback tool
 ├── tool_opening.html                  ← 開店前進出快速登錄（獨立檔，靛藍主題，雙GAS）
 ├── tool_opening_GAS_部署說明.md        ← 開店 GAS 部署指南
+├── tool_logistics.html                ← 物流車輛統計（獨立檔，橙色主題，單一獨立GAS）
+├── 物流車輛統計_GAS.gs                 ← 物流統計後端（登記/查日/查月/改刪/月統計分頁）
+├── 物流車輛統計_GAS_部署說明.md        ← 物流 GAS 部署指南
 │
 └── tianying-monitor/                  ← Main automation system
     ├── README.md                      ← System documentation (English)
@@ -1157,6 +1160,26 @@ python3 snapshot-generator-simple.py
 - **下一步**：將 `sky03104/cec-up` 加入 Claude Code 授權 repo → 拉原始碼與 `tpl-upload` 解碼版做 diff（app 版已暫存比對基準）→ 列差異、必要時同步修正
 - **狀態**：✅ 完成（2026-06-30）— 比對發現早班切換功能未同步，已補入 cec-up 並推上線
 
+#### [TODO-16] 物流車輛統計工具 → 獨立檔 + 獨立 GAS + 新試算表
+- **需求**：每天統計物流區貨車數量；三分類（1.9噸/3.5噸/8噸以上）選完輸入幾輛送出，登記時間＝送出當下；選日期查當天各分類數量；「查看整月」每日×分類統計；每月產出月統計表
+- **狀態**：✅ 完成（2026-07-02），待部署 GAS
+
+**實作結果（2026-07-02）**：
+
+| 項目 | 值 |
+|------|-----|
+| 工具檔案 | `tool_logistics.html`（獨立檔，vanilla JS 非 React，橙色 #FB923C 主題） |
+| index.html 串接 | `LOGISTICS_PAGE_URL` + TOOLS 卡片 `id:18, toolId:"logistics"` + 標題 + iframe `src`（仿 opening 模式） |
+| 權限 | 全員開放（DEFAULT_PERMS 七角色皆加 18）；「設定」分頁限 admin |
+| 分頁 | `物流車輛紀錄`（GAS 自動建立，A紀錄ID~H建立時間 8 欄） |
+| 主鍵 | 純數字流水號 `max(既有ID)+1`（支援刪除列，不可用列號否則重號） |
+| GAS 端點 | add / update / delete / getDay / getMonth / exportMonth |
+| 月統計 | 工具內表格（每日×三分類＋合計）＋ `exportMonth` 產「YYYY-MM 月統計」試算表分頁 |
+| 防呆 | 分類白名單、數量 1~999、送出中鎖按鈕防重、LockService 防併發、工號欄純文字保開頭 0、伺服器端蓋時間戳 |
+| GAS 部署說明 | `物流車輛統計_GAS_部署說明.md` |
+
+**待使用者動作**：新建試算表 → 依 `物流車輛統計_GAS_部署說明.md` 部署 GAS → 取得 `/exec` 網址 → 填入 `tool_logistics.html` 的 `BUILT_IN_GAS_URL`（或貼工具設定頁）。
+
 ### 🟢 本次（2026-06-27）額外完成
 
 #### [TODO-07] 開店/打烊工具「設定」分頁限管理員
@@ -1368,6 +1391,7 @@ python3 snapshot-generator-simple.py
 | 1.5 | 2026-06-28 | 整合「知識星空大腦」brain_map.html（填入天鷹專案真實節點 6 主題/29 節點/36 關聯）+ 維護規則寫進 CLAUDE.md |
 | 1.6 | 2026-06-28 | TODO-11 完成：建立三層 AI Agents 團隊（`.claude/agents/`，1 主協調者 + 5 執行 + 5 檢視 + 工作流程檔）；檢視角色取法 system_prompts_leaks |
 | 1.8 | 2026-06-30 | TODO-05/06/15 完成；cec-up 早班切換同步；brain_map 新增 cec-up 節點(id32)；補 2026-06-30 技術筆記 |
+| 1.9 | 2026-07-02 | TODO-16 完成：物流車輛統計工具（`tool_logistics.html` + 獨立 GAS + 部署說明，三分類登記/日查/月統計/月分頁匯出，全員開放 id18）；brain_map 同步節點 37~39 |
 | 1.7 | 2026-06-29 | TODO-13 完成：天鷹 AI 小助手（小天鷹）上線（`tool_ai_chat.html` + `天鷹AI助手_GAS.gs`，Gemini Proxy、語音、個人化、管理員控制台、資料問題自動彈真實畫面）；brain_map 同步 AI 節點；新增 2026-06-29 技術經驗筆記（Gemini 模型/額度坑、麥克風授權、LLM 導航不當資料庫、git checkout 覆蓋教訓）；7 PR 迭代上線 main |
 
 ---

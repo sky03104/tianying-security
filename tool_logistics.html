@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>天鷹保全｜物流車輛統計</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Share+Tech+Mono&display=swap');
+:root{
+  --bg:#0A0C10;--surface:#0D0F14;--surface2:#131720;--surface3:#1a1f2a;
+  --border:rgba(251,146,60,.2);--border2:rgba(255,255,255,.07);
+  --accent:#FB923C;--accent2:#FDBA74;--accent-dim:rgba(251,146,60,.12);
+  --danger:#F87171;--danger-dim:rgba(239,68,68,.12);
+  --green:#4ADE80;--green-dim:rgba(34,197,94,.1);
+  --indigo:#818CF8;--indigo-dim:rgba(99,102,241,.12);
+  --text:#F5F5F5;--text2:#9CA3AF;--text3:#4B5563;
+  --radius:12px;--rsm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;min-height:100vh;padding-bottom:40px;font-size:16px;}
+/* HEADER */
+.hdr{background:rgba(13,15,20,.97);border-bottom:1px solid var(--border);padding:9px 13px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;backdrop-filter:blur(12px);}
+.hdr-brand{display:flex;align-items:center;gap:9px;}
+.hdr-logo{width:32px;height:32px;background:var(--accent-dim);border:1px solid rgba(251,146,60,.45);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.hdr-title{font-size:14px;font-weight:900;color:var(--accent);line-height:1.2;text-shadow:0 0 15px rgba(251,146,60,.4);}
+.hdr-sub{font-size:10px;color:var(--text3);}
+.hdr-time{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-align:right;line-height:1.5;}
+/* TABS */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);}
+.tab{flex:1;padding:10px 4px;text-align:center;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;transition:color .2s;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-ico{font-size:20px;display:block;margin-bottom:2px;}
+/* PANELS */
+.panel{display:none;padding:14px 14px 30px;max-width:560px;margin:0 auto;}
+.panel.active{display:block;}
+.lbl{font-size:15px;font-weight:900;color:var(--accent2);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+/* 分類大按鈕 */
+.cat-btn{width:100%;display:flex;align-items:center;gap:14px;padding:16px 18px;margin-bottom:10px;background:var(--surface2);border:2px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:22px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;transition:all .15s;}
+.cat-btn .ci{font-size:30px;}
+.cat-btn.sel{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);box-shadow:0 0 18px rgba(251,146,60,.25);}
+.cat-btn .ck{margin-left:auto;font-size:22px;color:var(--accent);opacity:0;}
+.cat-btn.sel .ck{opacity:1;}
+/* 數量 stepper */
+.cnt-wrap{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+.cbtn{width:64px;height:64px;background:var(--surface2);border:2px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:34px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s;user-select:none;}
+.cbtn:active{border-color:var(--accent);color:var(--accent);}
+.cnt-inp{flex:1;height:64px;padding:4px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius);color:var(--accent);font-size:40px;font-weight:900;font-family:'Share Tech Mono',monospace;text-align:center;outline:none;min-width:0;-webkit-appearance:none;}
+.cnt-inp:focus{border-color:var(--accent);}
+/* 送出 */
+.submit-btn{width:100%;padding:17px;background:linear-gradient(135deg,rgba(251,146,60,.3),rgba(251,146,60,.14));border:1px solid rgba(251,146,60,.65);border-radius:var(--radius);color:var(--accent);font-size:19px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;letter-spacing:.06em;text-shadow:0 0 12px rgba(251,146,60,.5);transition:all .15s;}
+.submit-btn:active{opacity:.85;}
+.submit-btn:disabled{opacity:.5;cursor:default;}
+/* 今日累計 */
+.today-card{margin-top:18px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:13px;}
+.today-title{font-size:14px;font-weight:900;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.tot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.tot-box{background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);padding:10px 4px;text-align:center;}
+.tot-cat{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:4px;}
+.tot-num{font-size:30px;font-weight:900;color:var(--accent);font-family:'Share Tech Mono',monospace;line-height:1;}
+.tot-unit{font-size:11px;color:var(--text3);margin-top:3px;}
+/* 查紀錄 */
+.date-row{display:flex;gap:8px;margin-bottom:12px;}
+.date-inp{flex:1;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:17px;font-weight:700;font-family:'Share Tech Mono',monospace;outline:none;color-scheme:dark;min-width:0;}
+.month-btn{padding:12px 14px;background:var(--indigo-dim);border:1px solid rgba(129,140,248,.5);border-radius:var(--radius);color:var(--indigo);font-size:15px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;white-space:nowrap;transition:all .15s;}
+.month-btn:active{opacity:.8;}
+.rec-item{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.rec-time{font-family:'Share Tech Mono',monospace;font-size:15px;color:var(--text2);flex-shrink:0;}
+.rec-cat{font-size:17px;font-weight:900;flex:1;}
+.rec-cnt{font-family:'Share Tech Mono',monospace;font-size:22px;font-weight:900;color:var(--accent);flex-shrink:0;}
+.rec-by{font-size:11px;color:var(--text3);display:block;margin-top:2px;font-weight:400;}
+.rec-act{display:flex;gap:6px;flex-shrink:0;}
+.rec-btn{width:38px;height:38px;border-radius:var(--rsm);border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.rec-edit{background:var(--indigo-dim);color:var(--indigo);}
+.rec-del{background:var(--danger-dim);color:var(--danger);}
+.empty-note{text-align:center;color:var(--text3);font-size:15px;padding:26px 0;}
+/* 月統計表 */
+.mtable{width:100%;border-collapse:collapse;font-size:15px;margin-top:10px;}
+.mtable th{background:var(--accent-dim);color:var(--accent);font-weight:900;padding:8px 4px;border:1px solid var(--border2);font-size:14px;}
+.mtable td{padding:7px 4px;border:1px solid var(--border2);text-align:center;font-family:'Share Tech Mono',monospace;color:var(--text2);}
+.mtable td:first-child{color:var(--text);font-weight:700;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;}
+.mtable tr.hasdata td{color:var(--text);}
+.mtable tr.hasdata td.sumcell{color:var(--accent);font-weight:900;}
+.mtable tr.totalrow td{background:var(--surface3);color:var(--accent);font-weight:900;font-size:16px;border-top:2px solid var(--border);}
+.export-btn{width:100%;margin-top:14px;padding:14px;background:var(--green-dim);border:1px solid rgba(74,222,128,.5);border-radius:var(--radius);color:var(--green);font-size:16px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;transition:all .15s;}
+.export-btn:active{opacity:.8;}
+.export-btn:disabled{opacity:.5;cursor:default;}
+/* 設定 */
+.set-card{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:13px;margin-bottom:12px;}
+.txt{width:100%;padding:11px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--text);font-size:13px;font-family:'Share Tech Mono',monospace;outline:none;}
+.txt:focus{border-color:rgba(251,146,60,.5);}
+.set-btn{margin-top:9px;padding:10px 16px;background:var(--accent-dim);border:1px solid rgba(251,146,60,.4);border-radius:var(--rsm);color:var(--accent);font-size:14px;font-weight:700;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;}
+.note{margin-top:9px;padding:8px 11px;border-radius:var(--rsm);font-size:13px;display:none;}
+.gas-box{margin-top:9px;background:#0b0d12;border:1px solid var(--border2);border-radius:var(--rsm);padding:10px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);max-height:220px;overflow:auto;white-space:pre;}
+/* TOAST */
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%) translateY(20px);background:var(--surface3);border:1px solid var(--border2);border-radius:12px;padding:13px 20px;font-size:16px;font-weight:700;z-index:900;opacity:0;pointer-events:none;transition:all .25s;max-width:92vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.ok{border-color:rgba(74,222,128,.5);color:var(--green);background:rgba(20,35,25,.97);}
+.toast.err{border-color:rgba(248,113,113,.5);color:var(--danger);background:rgba(40,18,18,.97);}
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:800;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:18px;width:100%;max-width:340px;}
+.modal-title{font-size:17px;font-weight:900;color:var(--accent2);margin-bottom:12px;}
+.modal-body{font-size:15px;color:var(--text2);margin-bottom:16px;line-height:1.6;}
+.modal-acts{display:flex;gap:10px;}
+.m-btn{flex:1;padding:12px;border-radius:var(--rsm);border:none;font-size:16px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;}
+.m-cancel{background:var(--surface3);color:var(--text2);border:1px solid var(--border2);}
+.m-ok{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(251,146,60,.5);}
+.m-danger{background:var(--danger-dim);color:var(--danger);border:1px solid rgba(248,113,113,.5);}
+.loading{text-align:center;color:var(--text3);font-size:14px;padding:20px 0;}
+@media (max-width:360px){
+  .cat-btn{font-size:19px;padding:14px;}
+  .cnt-inp{font-size:34px;}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-logo">🚚</div>
+    <div>
+      <div class="hdr-title">物流車輛統計</div>
+      <div class="hdr-sub">天鷹保全 · TIANYING SECURITY</div>
+    </div>
+  </div>
+  <div class="hdr-time" id="hdrTime"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="nav-reg" onclick="switchTab('reg')"><span class="tab-ico">🚚</span>登記</div>
+  <div class="tab" id="nav-query" onclick="switchTab('query')"><span class="tab-ico">📅</span>查紀錄</div>
+  <div class="tab" id="nav-settings" onclick="switchTab('settings')"><span class="tab-ico">⚙️</span>設定</div>
+</div>
+
+<!-- ═══ 登記 ═══ -->
+<div class="panel active" id="tab-reg">
+  <div class="lbl">1️⃣ 選擇車輛分類</div>
+  <button class="cat-btn" id="cat-0" onclick="selectCat(0)"><span class="ci">🛻</span>1.9噸<span class="ck">✔</span></button>
+  <button class="cat-btn" id="cat-1" onclick="selectCat(1)"><span class="ci">🚚</span>3.5噸<span class="ck">✔</span></button>
+  <button class="cat-btn" id="cat-2" onclick="selectCat(2)"><span class="ci">🚛</span>8噸以上<span class="ck">✔</span></button>
+
+  <div class="lbl" style="margin-top:16px;">2️⃣ 輸入幾輛</div>
+  <div class="cnt-wrap">
+    <button class="cbtn" onclick="stepCount(-1)">−</button>
+    <input class="cnt-inp" id="cntInp" type="number" inputmode="numeric" min="1" max="999" value="1">
+    <button class="cbtn" onclick="stepCount(1)">＋</button>
+  </div>
+
+  <button class="submit-btn" id="submitBtn" onclick="submitReg()">✓ 送出登記（時間＝送出當下）</button>
+
+  <div class="today-card">
+    <div class="today-title">📊 今日累計 <span id="todayDateLbl" style="font-family:'Share Tech Mono',monospace;"></span></div>
+    <div class="tot-grid" id="todayGrid">
+      <div class="tot-box"><div class="tot-cat">1.9噸</div><div class="tot-num" id="tsum-0">–</div><div class="tot-unit">輛</div></div>
+      <div class="tot-box"><div class="tot-cat">3.5噸</div><div class="tot-num" id="tsum-1">–</div><div class="tot-unit">輛</div></div>
+      <div class="tot-box"><div class="tot-cat">8噸以上</div><div class="tot-num" id="tsum-2">–</div><div class="tot-unit">輛</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 查紀錄 ═══ -->
+<div class="panel" id="tab-query">
+  <!-- 單日檢視 -->
+  <div id="dayView">
+    <div class="lbl">📅 選日期查當天紀錄</div>
+    <div class="date-row">
+      <input class="date-inp" type="date" id="dayInp" onchange="loadDay()">
+      <button class="month-btn" onclick="showMonthView()">📊 查看整月</button>
+    </div>
+    <div class="tot-grid" style="margin-bottom:14px;">
+      <div class="tot-box"><div class="tot-cat">1.9噸</div><div class="tot-num" id="dsum-0">–</div><div class="tot-unit">輛</div></div>
+      <div class="tot-box"><div class="tot-cat">3.5噸</div><div class="tot-num" id="dsum-1">–</div><div class="tot-unit">輛</div></div>
+      <div class="tot-box"><div class="tot-cat">8噸以上</div><div class="tot-num" id="dsum-2">–</div><div class="tot-unit">輛</div></div>
+    </div>
+    <div class="lbl" style="font-size:14px;">📝 逐筆紀錄（可修改／刪除）</div>
+    <div id="dayList"><div class="empty-note">選擇日期後載入</div></div>
+  </div>
+
+  <!-- 整月檢視 -->
+  <div id="monthView" style="display:none;">
+    <div class="lbl">📊 整月統計</div>
+    <div class="date-row">
+      <input class="date-inp" type="month" id="monthInp" onchange="loadMonth()">
+      <button class="month-btn" onclick="showDayView()">↩ 回單日</button>
+    </div>
+    <div id="monthBody"><div class="empty-note">選擇月份後載入</div></div>
+    <button class="export-btn" id="exportBtn" onclick="exportMonthSheet()" style="display:none;">📤 產生試算表月統計分頁</button>
+  </div>
+</div>
+
+<!-- ═══ 設定 ═══ -->
+<div class="panel" id="tab-settings">
+  <div class="set-card">
+    <div class="lbl">🔗 GAS 連線網址</div>
+    <input class="txt" id="gasUrlInp" placeholder="https://script.google.com/macros/s/.../exec">
+    <button class="set-btn" onclick="saveGasUrl()">儲存並測試連線</button>
+    <div class="note" id="builtInNote"></div>
+    <div class="note" id="testNote"></div>
+  </div>
+  <div class="set-card">
+    <div class="lbl">📜 GAS 程式碼（部署用）</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7;">新建 Google 試算表 → 擴充功能 → Apps Script → 貼上此程式碼 → 部署為網頁應用程式（執行身分：我／存取：任何人）→ 把 /exec 網址貼到上方。詳見 <b>物流車輛統計_GAS_部署說明.md</b>。分頁「物流車輛紀錄」會自動建立。</div>
+    <button class="set-btn" onclick="copyGasCode()">📋 一鍵複製程式碼</button>
+    <div class="gas-box" id="gasCodeBox"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- 修改數量 MODAL -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <div class="modal-title">✏️ 修改數量</div>
+    <div class="modal-body" id="editInfo"></div>
+    <div class="cnt-wrap" style="margin-bottom:16px;">
+      <button class="cbtn" onclick="stepEdit(-1)">−</button>
+      <input class="cnt-inp" id="editCnt" type="number" inputmode="numeric" min="1" max="999" value="1">
+      <button class="cbtn" onclick="stepEdit(1)">＋</button>
+    </div>
+    <div class="modal-acts">
+      <button class="m-btn m-cancel" onclick="closeModals()">取消</button>
+      <button class="m-btn m-ok" id="editOkBtn" onclick="confirmEdit()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 刪除確認 MODAL -->
+<div class="modal-bg" id="delModal">
+  <div class="modal">
+    <div class="modal-title">🗑 刪除這筆紀錄？</div>
+    <div class="modal-body" id="delInfo"></div>
+    <div class="modal-acts">
+      <button class="m-btn m-cancel" onclick="closeModals()">取消</button>
+      <button class="m-btn m-danger" id="delOkBtn" onclick="confirmDel()">刪除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   天鷹保全 · 物流車輛統計（獨立檔，iframe src 串接）
+   後端：物流車輛統計_GAS.gs（獨立部署，綁新試算表）
+   ═══════════════════════════════════════════ */
+
+// ★ 預設連線設定（管理員部署 GAS 後填入 /exec 網址，所有員工開啟即自動連線）
+const BUILT_IN_GAS_URL = '';
+
+// 優先用寫死的 URL；沒有才用 localStorage（管理員可在設定頁貼網址先行測試）
+let gasUrl = BUILT_IN_GAS_URL || localStorage.getItem('hsh_logi_gasUrl') || '';
+
+const CATS = ['1.9噸', '3.5噸', '8噸以上'];
+let selCat = '';          // 目前選中的分類
+let sending = false;      // 防重：送出中鎖定
+let dayRows = [];         // 查紀錄頁目前載入的當日逐筆
+let editTarget = null;    // 修改中的紀錄 {id, category, count}
+let delTarget = null;     // 待刪除的紀錄 {id, category, count, time}
+
+// 使用量記錄（與其他工具共用的工作流 GAS，失敗不影響功能）
+const WORKFLOW_GAS_URL = 'https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec';
+function logWorkflow(actionType, status) {
+  const u = sessionUser();
+  if (!u.empId) return;
+  try { fetch(WORKFLOW_GAS_URL, { method:'POST', body: JSON.stringify({ action:'logTask', tool:'物流車輛統計', empId:u.empId, userName:u.name||'未知', actionType, status:status||'已完成' }) }); } catch(e) {}
+}
+
+function sessionUser(){
+  try { return JSON.parse(localStorage.getItem('hsh_session_user')||'{}'); } catch(e){ return {}; }
+}
+function el(id){ return document.getElementById(id); }
+
+// 本地日期（不能用 toISOString，會差時區）
+function todayISO(){
+  const n = new Date();
+  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+}
+function thisMonth(){
+  const n = new Date();
+  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');
+}
+function x(s){ // HTML escape
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ── API（URLSearchParams 簡單請求，避開 CORS 預檢） ── */
+async function apiGet(params){
+  const res = await fetch(gasUrl+'?'+new URLSearchParams(params).toString());
+  return res.json();
+}
+async function apiPost(params){
+  const res = await fetch(gasUrl, { method:'POST', body:new URLSearchParams(params) });
+  return res.json();
+}
+function needGas(){
+  if (gasUrl) return false;
+  showToast('尚未設定 GAS 連線，請到「設定」頁貼上網址', 'err');
+  return true;
+}
+
+/* ── TOAST ── */
+let _toastTimer = null;
+function showToast(msg, type){
+  const t = el('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type==='err' ? 'err' : 'ok');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>{ t.classList.remove('show'); }, 2600);
+}
+
+/* ── TABS ── */
+function switchTab(key){
+  ['reg','query','settings'].forEach(k=>{
+    el('tab-'+k).classList.toggle('active', k===key);
+    el('nav-'+k).classList.toggle('active', k===key);
+  });
+  if (key==='query' && el('dayList').dataset.loaded!=='1') loadDay();
+}
+
+/* ── 登記 ── */
+function selectCat(i){
+  selCat = CATS[i];
+  CATS.forEach((c,idx)=> el('cat-'+idx).classList.toggle('sel', idx===i));
+}
+function stepCount(d){
+  const inp = el('cntInp');
+  let v = parseInt(inp.value,10); if (isNaN(v)) v = 1;
+  v = Math.min(999, Math.max(1, v+d));
+  inp.value = v;
+}
+async function submitReg(){
+  if (sending) return;
+  if (!selCat){ showToast('請先選擇車輛分類', 'err'); return; }
+  const count = parseInt(el('cntInp').value,10);
+  if (isNaN(count) || count<1 || count>999){ showToast('請輸入 1~999 的數量', 'err'); return; }
+  if (needGas()) return;
+
+  sending = true;
+  const btn = el('submitBtn');
+  btn.disabled = true; btn.textContent = '⏳ 送出中…';
+  try {
+    const u = sessionUser();
+    const r = await apiPost({ action:'add', category:selCat, count:count, empId:u.empId||'', name:u.name||'未知' });
+    if (r.status==='ok'){
+      showToast('✓ 已登記 '+selCat+' × '+count+' 輛', 'ok');
+      el('cntInp').value = 1;
+      loadTodaySummary();
+      el('dayList').dataset.loaded = ''; // 查紀錄頁下次進入時重載
+      logWorkflow('登記車輛');
+    } else {
+      showToast('登記失敗：'+(r.msg||'未知錯誤'), 'err');
+    }
+  } catch(e){
+    showToast('連線失敗，請檢查網路後再試', 'err');
+  } finally {
+    sending = false;
+    btn.disabled = false; btn.textContent = '✓ 送出登記（時間＝送出當下）';
+  }
+}
+
+/* ── 今日累計（登記頁小卡） ── */
+async function loadTodaySummary(){
+  if (!gasUrl) return;
+  try {
+    const r = await apiGet({ action:'getDay', date: todayISO() });
+    if (r.status!=='ok') return;
+    CATS.forEach((c,i)=>{ el('tsum-'+i).textContent = r.totals[c] || 0; });
+  } catch(e){}
+}
+
+/* ── 查紀錄：單日 ── */
+async function loadDay(){
+  const date = el('dayInp').value || todayISO();
+  el('dayInp').value = date;
+  if (needGas()) return;
+  el('dayList').innerHTML = '<div class="loading">⏳ 載入中…</div>';
+  try {
+    const r = await apiGet({ action:'getDay', date:date });
+    if (r.status!=='ok'){ el('dayList').innerHTML = '<div class="empty-note">載入失敗：'+x(r.msg||'')+'</div>'; return; }
+    CATS.forEach((c,i)=>{ el('dsum-'+i).textContent = r.totals[c] || 0; });
+    if (!r.rows.length){
+      el('dayList').innerHTML = '<div class="empty-note">這一天沒有登記紀錄</div>';
+    } else {
+      dayRows = r.rows;
+      el('dayList').innerHTML = r.rows.map((row,i) =>
+        '<div class="rec-item">'+
+          '<span class="rec-time">'+x(row.time)+'</span>'+
+          '<span class="rec-cat">'+x(row.category)+
+            '<span class="rec-by">'+x(row.name||row.empId||'')+'</span></span>'+
+          '<span class="rec-cnt">'+x(row.count)+'<span style="font-size:12px;color:var(--text3);"> 輛</span></span>'+
+          '<span class="rec-act">'+
+            '<button class="rec-btn rec-edit" onclick="openEdit('+i+')">✏️</button>'+
+            '<button class="rec-btn rec-del" onclick="openDel('+i+')">🗑</button>'+
+          '</span>'+
+        '</div>'
+      ).join('');
+    }
+    el('dayList').dataset.loaded = '1';
+  } catch(e){
+    el('dayList').innerHTML = '<div class="empty-note">連線失敗，請檢查網路</div>';
+  }
+}
+
+/* ── 修改數量 ── */
+function openEdit(i){
+  const row = dayRows[i];
+  if (!row) return;
+  editTarget = row;
+  el('editInfo').innerHTML = x(row.time)+'　<b style="color:var(--text);">'+x(row.category)+'</b>　目前 '+x(row.count)+' 輛';
+  el('editCnt').value = row.count;
+  el('editModal').classList.add('show');
+}
+function stepEdit(d){
+  const inp = el('editCnt');
+  let v = parseInt(inp.value,10); if (isNaN(v)) v = 1;
+  inp.value = Math.min(999, Math.max(1, v+d));
+}
+async function confirmEdit(){
+  if (!editTarget) return;
+  const count = parseInt(el('editCnt').value,10);
+  if (isNaN(count) || count<1 || count>999){ showToast('請輸入 1~999 的數量', 'err'); return; }
+  const btn = el('editOkBtn'); btn.disabled = true;
+  try {
+    const r = await apiPost({ action:'update', id:editTarget.id, count:count });
+    if (r.status==='ok'){ showToast('✓ 已改為 '+count+' 輛', 'ok'); closeModals(); loadDay(); loadTodaySummary(); }
+    else showToast('修改失敗：'+(r.msg||''), 'err');
+  } catch(e){ showToast('連線失敗，請檢查網路', 'err'); }
+  finally { btn.disabled = false; }
+}
+
+/* ── 刪除 ── */
+function openDel(i){
+  const row = dayRows[i];
+  if (!row) return;
+  delTarget = row;
+  el('delInfo').innerHTML = x(row.time)+'　<b style="color:var(--text);">'+x(row.category)+'</b>　'+x(row.count)+' 輛<br>刪除後無法復原，登錯的請刪掉重登。';
+  el('delModal').classList.add('show');
+}
+async function confirmDel(){
+  if (!delTarget) return;
+  const btn = el('delOkBtn'); btn.disabled = true;
+  try {
+    const r = await apiPost({ action:'delete', id:delTarget.id });
+    if (r.status==='ok'){ showToast('✓ 已刪除', 'ok'); closeModals(); loadDay(); loadTodaySummary(); }
+    else showToast('刪除失敗：'+(r.msg||''), 'err');
+  } catch(e){ showToast('連線失敗，請檢查網路', 'err'); }
+  finally { btn.disabled = false; }
+}
+function closeModals(){
+  el('editModal').classList.remove('show');
+  el('delModal').classList.remove('show');
+  editTarget = null; delTarget = null;
+}
+
+/* ── 查紀錄：整月 ── */
+function showMonthView(){
+  el('dayView').style.display = 'none';
+  el('monthView').style.display = 'block';
+  if (!el('monthInp').value) el('monthInp').value = thisMonth();
+  loadMonth();
+}
+function showDayView(){
+  el('monthView').style.display = 'none';
+  el('dayView').style.display = 'block';
+}
+async function loadMonth(){
+  const month = el('monthInp').value || thisMonth();
+  el('monthInp').value = month;
+  if (needGas()) return;
+  el('monthBody').innerHTML = '<div class="loading">⏳ 統計中…</div>';
+  el('exportBtn').style.display = 'none';
+  try {
+    const r = await apiGet({ action:'getMonth', month:month });
+    if (r.status!=='ok'){ el('monthBody').innerHTML = '<div class="empty-note">載入失敗：'+x(r.msg||'')+'</div>'; return; }
+    let html = '<table class="mtable"><tr><th>日期</th><th>1.9噸</th><th>3.5噸</th><th>8噸以上</th><th>合計</th></tr>';
+    const mNum = parseInt(month.split('-')[1],10);
+    r.days.forEach(d=>{
+      html += '<tr class="'+(d.sum>0?'hasdata':'')+'"><td>'+mNum+'/'+d.day+'</td><td>'+d.t19+'</td><td>'+d.t35+'</td><td>'+d.t80+'</td><td class="sumcell">'+d.sum+'</td></tr>';
+    });
+    html += '<tr class="totalrow"><td>合計</td><td>'+r.totals.t19+'</td><td>'+r.totals.t35+'</td><td>'+r.totals.t80+'</td><td>'+r.totals.sum+'</td></tr></table>';
+    el('monthBody').innerHTML = html;
+    el('exportBtn').style.display = 'block';
+  } catch(e){
+    el('monthBody').innerHTML = '<div class="empty-note">連線失敗，請檢查網路</div>';
+  }
+}
+async function exportMonthSheet(){
+  const month = el('monthInp').value || thisMonth();
+  if (needGas()) return;
+  const btn = el('exportBtn');
+  btn.disabled = true; btn.textContent = '⏳ 產生中…';
+  try {
+    const r = await apiPost({ action:'exportMonth', month:month });
+    if (r.status==='ok'){ showToast('✓ 已產生分頁「'+r.sheetName+'」，開試算表即可看', 'ok'); logWorkflow('匯出月統計'); }
+    else showToast('產生失敗：'+(r.msg||''), 'err');
+  } catch(e){ showToast('連線失敗，請檢查網路', 'err'); }
+  finally { btn.disabled = false; btn.textContent = '📤 產生試算表月統計分頁'; }
+}
+
+/* ── 設定 ── */
+function saveGasUrl(){
+  const v = el('gasUrlInp').value.trim();
+  if (!v){ showToast('請貼上 GAS /exec 網址', 'err'); return; }
+  localStorage.setItem('hsh_logi_gasUrl', v);
+  gasUrl = BUILT_IN_GAS_URL || v;
+  const note = el('testNote');
+  note.style.display = 'block';
+  note.style.background = 'rgba(99,102,241,.1)'; note.style.color = 'var(--indigo)'; note.style.border = '1px solid rgba(129,140,248,.3)';
+  note.textContent = '⏳ 測試連線中…';
+  apiGet({}).then(r=>{
+    if (r.status==='ok'){
+      note.style.background = 'rgba(74,222,128,.1)'; note.style.color = 'var(--green)'; note.style.border = '1px solid rgba(74,222,128,.3)';
+      note.textContent = '✓ 連線成功：'+(r.msg||'');
+      loadTodaySummary();
+    } else {
+      note.style.background = 'rgba(248,113,113,.1)'; note.style.color = 'var(--danger)'; note.style.border = '1px solid rgba(248,113,113,.3)';
+      note.textContent = '✗ 回應異常：'+(r.msg||'');
+    }
+  }).catch(()=>{
+    note.style.background = 'rgba(248,113,113,.1)'; note.style.color = 'var(--danger)'; note.style.border = '1px solid rgba(248,113,113,.3)';
+    note.textContent = '✗ 連線失敗，請確認網址與部署設定（存取權：任何人）';
+  });
+}
+function copyGasCode(){
+  navigator.clipboard.writeText(GAS_CODE).then(
+    ()=>showToast('✓ 已複製 GAS 程式碼', 'ok'),
+    ()=>showToast('複製失敗，請手動選取', 'err')
+  );
+}
+
+/* ── INIT ── */
+function init(){
+  // 角色權限：僅管理員可見「設定」；直接開啟（非 APP 內嵌）時放行，供部署設定用
+  (function checkRole(){
+    try {
+      const u = sessionUser();
+      const canSetting = ['admin'].includes(u.role) || window.self === window.top;
+      if (!canSetting){
+        el('nav-settings').style.display = 'none';
+        el('tab-settings').style.display = 'none';
+      }
+    } catch(e){}
+  })();
+
+  setInterval(()=>{
+    const n = new Date();
+    el('hdrTime').innerHTML =
+      n.toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'})+'<br>'+
+      n.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }, 1000);
+
+  el('todayDateLbl').textContent = todayISO();
+  el('dayInp').value = todayISO();
+  el('gasUrlInp').value = gasUrl;
+  el('gasCodeBox').textContent = GAS_CODE;
+
+  const note = el('builtInNote');
+  note.style.display = 'block';
+  if (BUILT_IN_GAS_URL){
+    note.style.background = 'rgba(74,222,128,.1)'; note.style.color = 'var(--green)'; note.style.border = '1px solid rgba(74,222,128,.25)';
+    note.textContent = '✓ 已內建連線設定，員工開啟即自動連線';
+  } else {
+    note.style.background = 'rgba(251,146,60,.1)'; note.style.color = 'var(--accent)'; note.style.border = '1px solid rgba(251,146,60,.25)';
+    note.textContent = '⚠ BUILT_IN_GAS_URL 尚未填入：部署 GAS 後把 /exec 網址回填到 tool_logistics.html，或先貼在上方欄位測試';
+  }
+
+  // 點背景關閉 Modal
+  ['editModal','delModal'].forEach(id=>{
+    el(id).addEventListener('click', e=>{ if (e.target===el(id)) closeModals(); });
+  });
+
+  loadTodaySummary();
+}
+
+/* ── 內嵌 GAS 程式碼（設定頁一鍵複製用，與 物流車輛統計_GAS.gs 一致） ── */
+const GAS_CODE = `// ============================
+// 物流車輛統計 — 獨立 GAS（天鷹保全）
+// 綁定試算表：物流車輛統計（新建）
+// 分頁：物流車輛紀錄
+// 欄位：A紀錄ID | B日期 | C時間 | D分類 | E數量 | F登記人工號 | G登記人姓名 | H建立時間
+// 主鍵：純數字流水號（既有最大ID+1；支援刪除列，故不可用列號產生，否則會重號）
+// ============================
+
+var SHEET_NAME = '物流車輛紀錄';
+var CATEGORIES = ['1.9噸', '3.5噸', '8噸以上'];
+var TZ = 'Asia/Taipei';
+
+function doPost(e) {
+  try {
+    var action = e.parameter.action || '';
+    if (action === 'add')         return addRecord(e);
+    if (action === 'update')      return updateRecord(e);
+    if (action === 'delete')      return deleteRecord(e);
+    if (action === 'exportMonth') return exportMonth(e);
+    return jsonRes({ status: 'error', msg: '未知動作: ' + action });
+  } catch (err) {
+    return jsonRes({ status: 'error', msg: err.toString() });
+  }
+}
+
+function doGet(e) {
+  try {
+    var action = (e && e.parameter) ? (e.parameter.action || '') : '';
+    if (action === 'getDay')   return getDay(e);
+    if (action === 'getMonth') return getMonth(e);
+    return jsonRes({ status: 'ok', msg: '天鷹保全 物流車輛統計 API 正常 ✓' });
+  } catch (err) {
+    return jsonRes({ status: 'error', msg: err.toString() });
+  }
+}
+
+// 取得（或自動建立）紀錄分頁
+function getSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.getRange(1, 1, 1, 8).setValues([[
+      '紀錄ID', '日期', '時間', '分類', '數量', '登記人工號', '登記人姓名', '建立時間'
+    ]]);
+    sheet.getRange('F:F').setNumberFormat('@'); // 工號設純文字，避免開頭 0 被吃掉
+  }
+  return sheet;
+}
+
+// 主鍵：掃描既有最大ID+1
+function nextId_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1;
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var max = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var n = parseInt(ids[i][0], 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return max + 1;
+}
+
+// 以紀錄ID找列號（找不到回 -1）
+function findRowById_(sheet, id) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) return i + 2;
+  }
+  return -1;
+}
+
+// 新增登記：登記時間一律伺服器端「送出當下」
+function addRecord(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var category = String(e.parameter.category || '').trim();
+    if (CATEGORIES.indexOf(category) === -1) {
+      return jsonRes({ status: 'error', msg: '分類無效: ' + category });
+    }
+    var count = parseInt(e.parameter.count, 10);
+    if (isNaN(count) || count < 1 || count > 999) {
+      return jsonRes({ status: 'error', msg: '數量無效（需 1~999）' });
+    }
+    var empId = String(e.parameter.empId || '').trim();
+    var name  = String(e.parameter.name || '').trim();
+
+    var sheet = getSheet_();
+    var now = new Date();
+    var id = nextId_(sheet);
+    var row = sheet.getLastRow() + 1;
+    sheet.getRange(row, 1, 1, 8).setValues([[
+      id,
+      Utilities.formatDate(now, TZ, 'yyyy/M/d'),
+      Utilities.formatDate(now, TZ, 'HH:mm:ss'),
+      category,
+      count,
+      empId,
+      name,
+      now
+    ]]);
+    sheet.getRange(row, 6).setNumberFormat('@');                    // 工號純文字（保留開頭 0）
+    sheet.getRange(row, 8).setNumberFormat('yyyy/M/d HH:mm:ss');
+    return jsonRes({ status: 'ok', id: id });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 修改數量
+function updateRecord(e) {
+  var sheet = getSheet_();
+  var row = findRowById_(sheet, e.parameter.id);
+  if (row < 0) return jsonRes({ status: 'error', msg: '找不到該筆紀錄' });
+  var count = parseInt(e.parameter.count, 10);
+  if (isNaN(count) || count < 1 || count > 999) {
+    return jsonRes({ status: 'error', msg: '數量無效（需 1~999）' });
+  }
+  sheet.getRange(row, 5).setValue(count);
+  return jsonRes({ status: 'ok' });
+}
+
+// 刪除紀錄
+function deleteRecord(e) {
+  var sheet = getSheet_();
+  var row = findRowById_(sheet, e.parameter.id);
+  if (row < 0) return jsonRes({ status: 'error', msg: '找不到該筆紀錄' });
+  sheet.deleteRow(row);
+  return jsonRes({ status: 'ok' });
+}
+
+// 讀單日：?action=getDay&date=YYYY-MM-DD → 逐筆 + 各分類合計
+function getDay(e) {
+  var key = dateKey_(e.parameter.date);
+  if (!key) return jsonRes({ status: 'error', msg: '日期格式無效（需 YYYY-MM-DD）' });
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  var rows = [];
+  var totals = { '1.9噸': 0, '3.5噸': 0, '8噸以上': 0 };
+  if (lastRow >= 2) {
+    var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (fmtDateVal_(data[i][1]) !== key) continue;
+      var cat = String(data[i][3]);
+      var cnt = parseInt(data[i][4], 10) || 0;
+      rows.push({
+        id: data[i][0],
+        time: fmtTimeVal_(data[i][2]).substring(0, 5),
+        category: cat,
+        count: cnt,
+        empId: String(data[i][5] || ''),
+        name: String(data[i][6] || '')
+      });
+      if (totals.hasOwnProperty(cat)) totals[cat] += cnt;
+    }
+  }
+  rows.reverse(); // 新的在前
+  return jsonRes({ status: 'ok', date: key, rows: rows, totals: totals });
+}
+
+// 讀整月：?action=getMonth&month=YYYY-MM → 每日 × 三分類彙總
+function getMonth(e) {
+  var m = monthParts_(e.parameter.month);
+  if (!m) return jsonRes({ status: 'error', msg: '月份格式無效（需 YYYY-MM）' });
+  var agg = aggregateMonth_(m.year, m.month);
+  return jsonRes({ status: 'ok', month: e.parameter.month, days: agg.days, totals: agg.totals });
+}
+
+// 產生試算表月統計分頁：action=exportMonth&month=YYYY-MM
+function exportMonth(e) {
+  var m = monthParts_(e.parameter.month);
+  if (!m) return jsonRes({ status: 'error', msg: '月份格式無效（需 YYYY-MM）' });
+  var agg = aggregateMonth_(m.year, m.month);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = e.parameter.month + ' 月統計';
+  var sheet = ss.getSheetByName(sheetName);
+  if (sheet) sheet.clear(); else sheet = ss.insertSheet(sheetName);
+
+  var out = [['日期', '1.9噸', '3.5噸', '8噸以上', '合計']];
+  for (var i = 0; i < agg.days.length; i++) {
+    var d = agg.days[i];
+    out.push([m.month + '/' + d.day, d.t19, d.t35, d.t80, d.sum]);
+  }
+  out.push(['合計', agg.totals.t19, agg.totals.t35, agg.totals.t80, agg.totals.sum]);
+  sheet.getRange(1, 1, out.length, 5).setValues(out);
+  sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  sheet.getRange(out.length, 1, 1, 5).setFontWeight('bold');
+  return jsonRes({ status: 'ok', sheetName: sheetName });
+}
+
+// 整月彙總（含沒資料的日子，補 0 方便交報表）
+function aggregateMonth_(year, month) {
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var map = {};
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+    var prefix = year + '/' + month + '/';
+    for (var i = 0; i < data.length; i++) {
+      var dstr = fmtDateVal_(data[i][1]);
+      if (dstr.indexOf(prefix) !== 0) continue;
+      var day = parseInt(dstr.split('/')[2], 10);
+      if (isNaN(day)) continue;
+      if (!map[day]) map[day] = { t19: 0, t35: 0, t80: 0 };
+      var cat = String(data[i][3]);
+      var cnt = parseInt(data[i][4], 10) || 0;
+      if (cat === '1.9噸') map[day].t19 += cnt;
+      else if (cat === '3.5噸') map[day].t35 += cnt;
+      else if (cat === '8噸以上') map[day].t80 += cnt;
+    }
+  }
+  var days = [];
+  var totals = { t19: 0, t35: 0, t80: 0, sum: 0 };
+  for (var d = 1; d <= daysInMonth; d++) {
+    var v = map[d] || { t19: 0, t35: 0, t80: 0 };
+    var sum = v.t19 + v.t35 + v.t80;
+    days.push({ day: d, t19: v.t19, t35: v.t35, t80: v.t80, sum: sum });
+    totals.t19 += v.t19; totals.t35 += v.t35; totals.t80 += v.t80; totals.sum += sum;
+  }
+  return { days: days, totals: totals };
+}
+
+// ── 工具函數 ──
+
+// 'YYYY-MM-DD' → 'yyyy/M/d'（與試算表儲存格式一致）
+function dateKey_(iso) {
+  var p = String(iso || '').split('-');
+  if (p.length !== 3) return '';
+  var y = parseInt(p[0], 10), m = parseInt(p[1], 10), d = parseInt(p[2], 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return '';
+  return y + '/' + m + '/' + d;
+}
+
+// 'YYYY-MM' → {year, month}
+function monthParts_(s) {
+  var p = String(s || '').split('-');
+  if (p.length !== 2) return null;
+  var y = parseInt(p[0], 10), m = parseInt(p[1], 10);
+  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return null;
+  return { year: y, month: m };
+}
+
+// B欄日期：可能是 Date 或字串，統一成 'yyyy/M/d'
+function fmtDateVal_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy/M/d');
+  return String(v || '').trim();
+}
+
+// C欄時間：可能是 Date 或字串，統一成 'HH:mm:ss'
+function fmtTimeVal_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'HH:mm:ss');
+  return String(v || '').trim();
+}
+
+function jsonRes(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+`;
+
+init();
+</script>
+</body>
+</html>

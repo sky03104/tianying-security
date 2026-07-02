@@ -205,6 +205,11 @@ const NODES = [
 
   // ── 車牌辨識（過夜車輛登記，2026-07-02）──
   { id: 36, title: '車牌辨識 GAS',        topic: 'backend', pos: [-0.7, -0.15, 0.35], note: '車牌辨識_後端_GAS.gs（獨立部署）；recognizePlate Gemini Vision 辨識＋台灣車牌格式正規化、vehicleReg 寫車輛登記試算表 1K46ZEq…；Key 存指令碼屬性' },
+
+  // ── 物流車輛統計（2026-07-02）──
+  { id: 37, title: '物流車輛統計',        topic: 'tools',   pos: [ 0.75, 0.25, -0.35], note: 'tool_logistics.html 獨立檔（iframe src）；三分類(1.9噸/3.5噸/8噸以上)登記＋單日查詢＋整月統計；可修改/刪除；全員開放(id18)' },
+  { id: 38, title: '物流統計 GAS',        topic: 'backend', pos: [-0.55, 0.05, 0.05], note: '物流車輛統計_GAS.gs（獨立部署）；add/update/delete/getDay/getMonth/exportMonth；時間戳伺服器端蓋、主鍵 max(ID)+1' },
+  { id: 39, title: '物流試算表',          topic: 'data',    pos: [ 0.65, -1.2, -0.15], note: '新建試算表；物流車輛紀錄分頁(A~H) + YYYY-MM 月統計分頁（exportMonth 產生）；工號欄純文字保開頭0' },
 ];
 
 const EDGES = [
@@ -232,6 +237,8 @@ const EDGES = [
   [10, 32], [23, 32],
   // obsidian-second-brain：skill 操作 vault、hook 在 session 開始注入 vault 內容
   [33, 34], [33, 35], [35, 34],
+  // 物流車輛統計：主控台→工具→GAS→試算表
+  [0, 37], [37, 38], [38, 39],
 ];
 
 // === BRAIN_MAP_DATA_END ===
