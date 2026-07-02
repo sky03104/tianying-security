@@ -252,9 +252,8 @@
 
 <script>
 // ===== 設定 =====
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZ5f7h_Lv_MOCxPrqPpBPKA917-JKmEz5DDekYixLDsGf1QAKCTOuVxwo18OYKX7a4ng/exec';  // 車輛登記寫入 GAS
-// 車牌辨識走小天鷹 GAS（Gemini 代理，API Key 已設定、模型自動容錯）
-const OCR_GAS_URL = 'https://script.google.com/macros/s/AKfycbzsy2OlhP5e-nrpTiLVuG91ZuWxToAC23TRxjOjviAyAjMJ3pz8NZzNHP_7OP6Ns0dXQA/exec';
+// 車牌辨識獨立 GAS（recognizePlate 辨識 + vehicleReg 登記寫入，綁車輛登記試算表）
+const GAS_URL = 'https://script.google.com/macros/s/AKfycby8wWysK9AeiXzVlfB2MSyyxgrBLp7T6W0i-cKl-7RFHi2TL2P0gTw2btCpwJo_m6Mq/exec';
 const MS_FORMS = {
   moto: 'https://forms.cloud.microsoft/r/QGHn5SQ0en?origin=lprLink',
   car:  'https://forms.cloud.microsoft/r/Mcf0VUYBX7?origin=lprLink',
@@ -408,9 +407,9 @@ async function startOCR(file) {
   document.getElementById('ocrProgress').classList.add('show');
   startFakeProgress();
 
-  // 3. 呼叫小天鷹 GAS Gemini OCR
+  // 3. 呼叫車牌辨識 GAS（Gemini Vision）
   try {
-    var res = await fetch(OCR_GAS_URL, {
+    var res = await fetch(GAS_URL, {
       method: 'POST',
       body: JSON.stringify({
         action: 'recognizePlate',

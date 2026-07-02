@@ -13,11 +13,9 @@
  *    複製 /exec 網址，貼進 tool_ai_chat.html 的 GAS_URL
  *
  * 【動作 action】
- *   chat            一般員工對話（傳 message/history/role/vocabLevel）
- *   getConfig       管理員讀取目前小天鷹設定（需 role===admin）
- *   saveConfig      管理員儲存設定（禁止規則 + 強制表達層級，需 role===admin）
- *   recognizePlate  車牌辨識（過夜車輛登記工具用；傳 imageBase64/mimeType，
- *                   回 {status:'ok', success:true, plate:'ABC-1234', raw:'AI原始回應'}）
+ *   chat       一般員工對話（傳 message/history/role/vocabLevel）
+ *   getConfig  管理員讀取目前小天鷹設定（需 role===admin）
+ *   saveConfig 管理員儲存設定（禁止規則 + 強制表達層級，需 role===admin）
  * ───────────────────────────────────────────── */
 
 // ── 設定常數 ──────────────────────────────────
@@ -36,11 +34,10 @@ function doPost(e) {
     var action  = payload.action;
 
     switch (action) {
-      case 'chat':           return handleChat(payload);
-      case 'getConfig':      return handleGetConfig(payload);
-      case 'saveConfig':     return handleSaveConfig(payload);
-      case 'recognizePlate': return handleRecognizePlate(payload);
-      default:               return err('未知動作：' + action);
+      case 'chat':       return handleChat(payload);
+      case 'getConfig':  return handleGetConfig(payload);
+      case 'saveConfig': return handleSaveConfig(payload);
+      default:           return err('未知動作：' + action);
     }
   } catch (e2) {
     return err('伺服器錯誤：' + e2.message);
@@ -86,93 +83,7 @@ function handleChat(p) {
     generationConfig: { maxOutputTokens: 2048, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } }
   };
 
-  var r = callGemini_(apiKey, reqBody);
-  if (r.code !== 200) {
-    // 全部模型都額度爆 → 給友善訊息，不丟英文
-    if (r.code === 429) return err('小天鷹現在比較忙（免費額度用量較高），休息一下下再問我一次喔 🦅');
-    return err('AI 服務暫時無法使用（' + r.lastErr + '）');
-  }
-
-  // 安全過濾被擋 / 無回應
-  var aiText = geminiText_(r.data);
-  if (!aiText) return err('這個問題我沒辦法回答，換個方式問問看？');
-  return ok({ reply: aiText });
-}
-
-// ── 車牌辨識（過夜車輛登記工具用）──────────────
-function handleRecognizePlate(p) {
-  var imageBase64 = p.imageBase64 || '';
-  var mimeType    = p.mimeType || 'image/jpeg';
-  if (!imageBase64) return err('沒有收到照片，請重新拍攝');
-
-  var apiKey = PropertiesService.getScriptProperties().getProperty(PROP_KEY);
-  if (!apiKey) return err('API Key 未設定，請聯絡管理員');
-
-  var reqBody = {
-    contents: [{
-      role: 'user',
-      parts: [
-        { text: '這是一張台灣車輛的照片，請辨識照片中的車牌號碼。' +
-                '只回覆車牌號碼本身（大寫英文字母、數字與連字號 -），不要加任何其他文字或標點。' +
-                '注意：台灣車牌沒有字母 O（一律是數字 0）、也沒有字母 I（一律是數字 1）。' +
-                '如果照片中沒有清楚可辨識的車牌，只回覆 NONE。' },
-        { inline_data: { mime_type: mimeType, data: imageBase64 } }
-      ]
-    }],
-    // 溫度 0 + 小 token 上限：辨識結果穩定且回應最快
-    generationConfig: { maxOutputTokens: 64, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
-  };
-
-  var r = callGemini_(apiKey, reqBody);
-  if (r.code !== 200) {
-    if (r.code === 429) return err('辨識服務目前用量較高，請稍等幾秒再拍一次');
-    return err('辨識服務暫時無法使用（' + r.lastErr + '）');
-  }
-
-  var raw   = (geminiText_(r.data) || '').trim();
-  var plate = extractPlate_(raw);
-  // plate 為空字串 = 辨識失敗，前端會提示手動輸入
-  return ok({ success: true, plate: plate, raw: raw });
-}
-
-// ── 台灣車牌格式提取＋正規化（AI 回應 → 標準車牌）──
-function extractPlate_(text) {
-  var clean = String(text || '').toUpperCase().replace(/[^A-Z0-9\-]/g, '');
-  if (!clean || clean === 'NONE') return '';
-  // 台灣車牌沒有 O / I：AI 若誤判成字母，修正為數字
-  clean = clean.replace(/O/g, '0').replace(/I/g, '1');
-  // 由長到短比對，避免長車牌被短格式截斷
-  var patterns = [
-    /[A-Z]{3}-?[0-9]{4}/,      // 新式汽車 ABC-1234
-    /[0-9]{4}-?[A-Z]{2,3}/,    // 4321-AB / 4321-ABC
-    /[A-Z]{3}-?[0-9]{3}/,      // 新式機車 ABC-123
-    /[A-Z]{2}-?[0-9]{3,4}/,    // 舊式 AB-1234 / AB-123
-    /[0-9]{3}-?[A-Z]{3}/,      // 321-ABC
-    /[A-Z][0-9]{2}-?[0-9]{3}/, // 電動車 E12-345
-    /[0-9]{2,3}-?[A-Z]{2}/     // 舊式輕機 12-AB
-  ];
-  for (var i = 0; i < patterns.length; i++) {
-    var m = clean.match(patterns[i]);
-    if (m && m[0].replace(/-/g, '').length >= 4) {
-      var p = m[0];
-      // 沒有連字號時，在字母／數字交界補上（台灣車牌標準格式）
-      if (p.indexOf('-') < 0) {
-        for (var j = 1; j < p.length; j++) {
-          var prevIsDigit = p.charCodeAt(j - 1) <= 57;
-          var curIsDigit  = p.charCodeAt(j) <= 57;
-          if (prevIsDigit !== curIsDigit) { p = p.slice(0, j) + '-' + p.slice(j); break; }
-        }
-      }
-      return p;
-    }
-  }
-  return '';
-}
-
-// ── Gemini 共用呼叫：依序嘗試模型清單 ───────────
-// 400=該模型不吃此參數、404=模型不存在、429=額度上限 → 換下一個模型試（每個模型額度分開算）；
-// 其他錯誤（如金鑰無效）不必再試
-function callGemini_(apiKey, reqBody) {
+  // 依序嘗試模型清單：模型不存在(404) 或 額度爆掉(429) 就換下一個（每個模型額度分開算）
   var data = null, code = 0, lastErr = '';
   for (var mi = 0; mi < MODELS.length; mi++) {
     var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
@@ -187,17 +98,24 @@ function callGemini_(apiKey, reqBody) {
     data = JSON.parse(resp.getContentText());
     if (code === 200) break;
     lastErr = (data.error && data.error.message) ? data.error.message : ('HTTP ' + code);
+    // 400=該模型不吃此參數、404=模型不存在、429=額度上限 → 換下一個模型試；其他錯誤（如金鑰無效）不必再試
     if (code !== 400 && code !== 404 && code !== 429) break;
   }
-  return { code: code, data: data, lastErr: lastErr };
-}
 
-// 取出 Gemini 回應文字（安全過濾被擋 / 無回應時回空字串）
-function geminiText_(data) {
-  if (!data || !data.candidates || !data.candidates[0] ||
-      !data.candidates[0].content || !data.candidates[0].content.parts ||
-      !data.candidates[0].content.parts[0]) return '';
-  return data.candidates[0].content.parts[0].text || '';
+  if (code !== 200) {
+    // 全部模型都額度爆 → 給友善訊息，不丟英文
+    if (code === 429) return err('小天鷹現在比較忙（免費額度用量較高），休息一下下再問我一次喔 🦅');
+    return err('AI 服務暫時無法使用（' + lastErr + '）');
+  }
+
+  // 安全過濾被擋 / 無回應
+  if (!data.candidates || !data.candidates[0] ||
+      !data.candidates[0].content || !data.candidates[0].content.parts) {
+    return err('這個問題我沒辦法回答，換個方式問問看？');
+  }
+
+  var aiText = data.candidates[0].content.parts[0].text;
+  return ok({ reply: aiText });
 }
 
 // ── system prompt 組裝（人性化 + 權限 + 表達層級）──
