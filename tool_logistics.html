@@ -50,6 +50,27 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
 .submit-btn{width:100%;padding:17px;background:linear-gradient(135deg,rgba(251,146,60,.3),rgba(251,146,60,.14));border:1px solid rgba(251,146,60,.65);border-radius:var(--radius);color:var(--accent);font-size:19px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;letter-spacing:.06em;text-shadow:0 0 12px rgba(251,146,60,.5);transition:all .15s;}
 .submit-btn:active{opacity:.85;}
 .submit-btn:disabled{opacity:.5;cursor:default;}
+/* 快捷登記 */
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.sc-btn{padding:15px 8px;background:var(--surface2);border:2px solid rgba(251,146,60,.35);border-radius:var(--radius);color:var(--text);font-size:18px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px;}
+.sc-btn:active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.sc-btn:disabled{opacity:.5;cursor:default;}
+.sc-btn .scx{color:var(--accent);font-family:'Share Tech Mono',monospace;}
+/* 設定頁快捷管理 */
+.sci{display:flex;align-items:center;gap:10px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);padding:10px 12px;margin-bottom:7px;}
+.sci-lbl{flex:1;font-size:16px;font-weight:900;}
+.sci-lbl .scx{color:var(--accent);font-family:'Share Tech Mono',monospace;}
+.sc-cats{display:flex;gap:6px;margin-bottom:9px;}
+.sc-cat{flex:1;padding:10px 4px;background:var(--surface3);border:2px solid var(--border2);border-radius:var(--rsm);color:var(--text2);font-size:15px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;transition:all .15s;}
+.sc-cat.sel{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.sc-cnt-wrap{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+.cbtn-sm{width:46px;height:46px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--text);font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;user-select:none;}
+.cbtn-sm:active{border-color:var(--accent);color:var(--accent);}
+.cnt-inp-sm{flex:1;height:46px;padding:4px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--accent);font-size:24px;font-weight:900;font-family:'Share Tech Mono',monospace;text-align:center;outline:none;min-width:0;-webkit-appearance:none;}
+.sc-form-acts{display:flex;gap:8px;}
+.sc-save{flex:1;padding:11px;background:var(--accent-dim);border:1px solid rgba(251,146,60,.5);border-radius:var(--rsm);color:var(--accent);font-size:15px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;}
+.sc-save:disabled{opacity:.5;cursor:default;}
+.sc-cancel{padding:11px 16px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--text2);font-size:15px;font-weight:700;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;display:none;}
 /* 今日累計 */
 .today-card{margin-top:18px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:13px;}
 .today-title{font-size:14px;font-weight:900;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
@@ -149,6 +170,12 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
 
   <button class="submit-btn" id="submitBtn" onclick="submitReg()">✓ 送出登記（時間＝送出當下）</button>
 
+  <!-- 快捷登記（管理員在設定頁維護，全員可見；沒設定時整區隱藏） -->
+  <div id="shortcutSec" style="display:none;margin-top:18px;">
+    <div class="lbl">⚡ 快捷登記（點一下直接送出）</div>
+    <div class="sc-grid" id="shortcutBtns"></div>
+  </div>
+
   <div class="today-card">
     <div class="today-title">📊 今日累計 <span id="todayDateLbl" style="font-family:'Share Tech Mono',monospace;"></span></div>
     <div class="tot-grid" id="todayGrid">
@@ -191,6 +218,27 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
 
 <!-- ═══ 設定 ═══ -->
 <div class="panel" id="tab-settings">
+  <div class="set-card">
+    <div class="lbl">⚡ 快捷鍵管理</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px;">設定常用組合（如 1.9噸 × 2），所有員工的登記頁會出現快捷按鈕，點一下直接送出。設定存雲端試算表「快捷設定」分頁，全員即時同步。</div>
+    <div id="scList"><div class="empty-note" style="padding:10px 0;">尚未設定快捷鍵</div></div>
+    <div class="divider" style="height:1px;background:var(--border2);margin:12px 0;"></div>
+    <div class="lbl" style="font-size:13px;" id="scFormTitle">➕ 新增快捷</div>
+    <div class="sc-cats">
+      <button class="sc-cat" id="sccat-0" onclick="selectScCat(0)">🛻 1.9噸</button>
+      <button class="sc-cat" id="sccat-1" onclick="selectScCat(1)">🚚 3.5噸</button>
+      <button class="sc-cat" id="sccat-2" onclick="selectScCat(2)">🚛 8噸以上</button>
+    </div>
+    <div class="sc-cnt-wrap">
+      <button class="cbtn-sm" onclick="stepScCount(-1)">−</button>
+      <input class="cnt-inp-sm" id="scCnt" type="number" inputmode="numeric" min="1" max="999" value="1">
+      <button class="cbtn-sm" onclick="stepScCount(1)">＋</button>
+    </div>
+    <div class="sc-form-acts">
+      <button class="sc-save" id="scSaveBtn" onclick="submitShortcutForm()">➕ 新增快捷</button>
+      <button class="sc-cancel" id="scCancelBtn" onclick="cancelScEdit()">取消</button>
+    </div>
+  </div>
   <div class="set-card">
     <div class="lbl">🔗 GAS 連線網址</div>
     <input class="txt" id="gasUrlInp" placeholder="https://script.google.com/macros/s/.../exec">
@@ -255,7 +303,12 @@ let selCat = '';          // 目前選中的分類
 let sending = false;      // 防重：送出中鎖定
 let dayRows = [];         // 查紀錄頁目前載入的當日逐筆
 let editTarget = null;    // 修改中的紀錄 {id, category, count}
-let delTarget = null;     // 待刪除的紀錄 {id, category, count, time}
+let delTarget = null;     // 待刪除的目標（紀錄或快捷）
+let delMode = 'record';   // 刪除彈窗模式：record=當日紀錄、shortcut=快捷鍵
+let shortcuts = [];       // 快捷組合（雲端「快捷設定」分頁，localStorage 快取先顯示）
+let scSelCat = '';        // 設定頁快捷表單選中的分類
+let scEditId = null;      // 編輯中的快捷 id（null=新增模式）
+try { shortcuts = JSON.parse(localStorage.getItem('hsh_logi_shortcuts')||'[]'); } catch(e) { shortcuts = []; }
 
 // 使用量記錄（與其他工具共用的工作流 GAS，失敗不影響功能）
 const WORKFLOW_GAS_URL = 'https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec';
@@ -358,6 +411,131 @@ async function submitReg(){
   }
 }
 
+/* ── 快捷登記（登記頁一鍵送出；管理員在設定頁維護） ── */
+const CAT_ICONS = { '1.9噸':'🛻', '3.5噸':'🚚', '8噸以上':'🚛' };
+
+function renderShortcutBtns(){
+  const sec = el('shortcutSec');
+  if (!shortcuts.length){ sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  el('shortcutBtns').innerHTML = shortcuts.map((s,i)=>
+    '<button class="sc-btn" onclick="quickSubmit('+i+')">'+
+      (CAT_ICONS[s.category]||'🚚')+' '+x(s.category)+
+      '<span class="scx">× '+x(s.count)+'</span>'+
+    '</button>'
+  ).join('');
+}
+async function loadShortcuts(){
+  if (!gasUrl) return;
+  try {
+    const r = await apiGet({ action:'getShortcuts' });
+    if (r.status!=='ok' || !Array.isArray(r.shortcuts)) return;
+    shortcuts = r.shortcuts;
+    localStorage.setItem('hsh_logi_shortcuts', JSON.stringify(shortcuts));
+    renderShortcutBtns();
+    renderScList();
+  } catch(e){}
+}
+async function quickSubmit(i){
+  const s = shortcuts[i];
+  if (!s || sending) return;
+  if (needGas()) return;
+  sending = true;
+  const btns = document.querySelectorAll('.sc-btn');
+  btns.forEach(b=>b.disabled=true);
+  try {
+    const u = sessionUser();
+    const r = await apiPost({ action:'add', category:s.category, count:s.count, empId:u.empId||'', name:u.name||'未知' });
+    if (r.status==='ok'){
+      showToast('⚡ 已登記 '+s.category+' × '+s.count+' 輛', 'ok');
+      loadTodaySummary();
+      el('dayList').dataset.loaded = '';
+      logWorkflow('快捷登記');
+    } else {
+      showToast('登記失敗：'+(r.msg||'未知錯誤'), 'err');
+    }
+  } catch(e){
+    showToast('連線失敗，請檢查網路後再試', 'err');
+  } finally {
+    sending = false;
+    btns.forEach(b=>b.disabled=false);
+  }
+}
+
+/* ── 快捷鍵管理（設定頁，僅 admin 可見該分頁） ── */
+function renderScList(){
+  const box = el('scList');
+  if (!box) return;
+  if (!shortcuts.length){
+    box.innerHTML = '<div class="empty-note" style="padding:10px 0;">尚未設定快捷鍵</div>';
+    return;
+  }
+  box.innerHTML = shortcuts.map((s,i)=>
+    '<div class="sci">'+
+      '<span class="sci-lbl">'+(CAT_ICONS[s.category]||'🚚')+' '+x(s.category)+' <span class="scx">× '+x(s.count)+'</span></span>'+
+      '<button class="rec-btn rec-edit" onclick="editShortcut('+i+')">✏️</button>'+
+      '<button class="rec-btn rec-del" onclick="openDelShortcut('+i+')">🗑</button>'+
+    '</div>'
+  ).join('');
+}
+function selectScCat(i){
+  scSelCat = CATS[i];
+  CATS.forEach((c,idx)=> el('sccat-'+idx).classList.toggle('sel', idx===i));
+}
+function stepScCount(d){
+  const inp = el('scCnt');
+  let v = parseInt(inp.value,10); if (isNaN(v)) v = 1;
+  inp.value = Math.min(999, Math.max(1, v+d));
+}
+function editShortcut(i){
+  const s = shortcuts[i];
+  if (!s) return;
+  scEditId = s.id;
+  selectScCat(CATS.indexOf(s.category));
+  el('scCnt').value = s.count;
+  el('scFormTitle').textContent = '✏️ 編輯快捷：'+s.category+' × '+s.count;
+  el('scSaveBtn').textContent = '💾 儲存修改';
+  el('scCancelBtn').style.display = 'block';
+}
+function cancelScEdit(){
+  scEditId = null;
+  scSelCat = '';
+  CATS.forEach((c,idx)=> el('sccat-'+idx).classList.remove('sel'));
+  el('scCnt').value = 1;
+  el('scFormTitle').textContent = '➕ 新增快捷';
+  el('scSaveBtn').textContent = '➕ 新增快捷';
+  el('scCancelBtn').style.display = 'none';
+}
+async function submitShortcutForm(){
+  if (!scSelCat){ showToast('請先選擇分類', 'err'); return; }
+  const count = parseInt(el('scCnt').value,10);
+  if (isNaN(count) || count<1 || count>999){ showToast('請輸入 1~999 的數量', 'err'); return; }
+  if (needGas()) return;
+  const btn = el('scSaveBtn'); btn.disabled = true;
+  try {
+    const params = scEditId===null
+      ? { action:'addShortcut', category:scSelCat, count:count }
+      : { action:'updateShortcut', id:scEditId, category:scSelCat, count:count };
+    const r = await apiPost(params);
+    if (r.status==='ok'){
+      showToast(scEditId===null ? '✓ 已新增快捷' : '✓ 已修改快捷', 'ok');
+      cancelScEdit();
+      loadShortcuts();
+    } else {
+      showToast('儲存失敗：'+(r.msg||''), 'err');
+    }
+  } catch(e){ showToast('連線失敗，請檢查網路', 'err'); }
+  finally { btn.disabled = false; }
+}
+function openDelShortcut(i){
+  const s = shortcuts[i];
+  if (!s) return;
+  delMode = 'shortcut';
+  delTarget = s;
+  el('delInfo').innerHTML = '快捷鍵　<b style="color:var(--text);">'+x(s.category)+'</b>　× '+x(s.count)+'<br>刪除後全員登記頁都不會再顯示這顆按鈕。';
+  el('delModal').classList.add('show');
+}
+
 /* ── 今日累計（登記頁小卡） ── */
 async function loadTodaySummary(){
   if (!gasUrl) return;
@@ -432,6 +610,7 @@ async function confirmEdit(){
 function openDel(i){
   const row = dayRows[i];
   if (!row) return;
+  delMode = 'record';
   delTarget = row;
   el('delInfo').innerHTML = x(row.time)+'　<b style="color:var(--text);">'+x(row.category)+'</b>　'+x(row.count)+' 輛<br>刪除後無法復原，登錯的請刪掉重登。';
   el('delModal').classList.add('show');
@@ -440,8 +619,13 @@ async function confirmDel(){
   if (!delTarget) return;
   const btn = el('delOkBtn'); btn.disabled = true;
   try {
-    const r = await apiPost({ action:'delete', id:delTarget.id });
-    if (r.status==='ok'){ showToast('✓ 已刪除', 'ok'); closeModals(); loadDay(); loadTodaySummary(); }
+    const r = await apiPost({ action: delMode==='shortcut' ? 'deleteShortcut' : 'delete', id:delTarget.id });
+    if (r.status==='ok'){
+      showToast('✓ 已刪除', 'ok');
+      closeModals();
+      if (delMode==='shortcut'){ loadShortcuts(); }
+      else { loadDay(); loadTodaySummary(); }
+    }
     else showToast('刪除失敗：'+(r.msg||''), 'err');
   } catch(e){ showToast('連線失敗，請檢查網路', 'err'); }
   finally { btn.disabled = false; }
@@ -512,6 +696,7 @@ function saveGasUrl(){
       note.style.background = 'rgba(74,222,128,.1)'; note.style.color = 'var(--green)'; note.style.border = '1px solid rgba(74,222,128,.3)';
       note.textContent = '✓ 連線成功：'+(r.msg||'');
       loadTodaySummary();
+      loadShortcuts();
     } else {
       note.style.background = 'rgba(248,113,113,.1)'; note.style.color = 'var(--danger)'; note.style.border = '1px solid rgba(248,113,113,.3)';
       note.textContent = '✗ 回應異常：'+(r.msg||'');
@@ -570,28 +755,36 @@ function init(){
   });
 
   loadTodaySummary();
+  renderShortcutBtns();  // 先用本地快取立即顯示
+  renderScList();
+  loadShortcuts();       // 再從雲端同步最新
 }
 
 /* ── 內嵌 GAS 程式碼（設定頁一鍵複製用，與 物流車輛統計_GAS.gs 一致） ── */
 const GAS_CODE = `// ============================
 // 物流車輛統計 — 獨立 GAS（天鷹保全）
 // 綁定試算表：物流車輛統計（新建）
-// 分頁：物流車輛紀錄
-// 欄位：A紀錄ID | B日期 | C時間 | D分類 | E數量 | F登記人工號 | G登記人姓名 | H建立時間
+// 分頁：物流車輛紀錄（主資料）、快捷設定（管理員設定的快捷組合，與資料分開）
+// 紀錄欄位：A紀錄ID | B日期 | C時間 | D分類 | E數量 | F登記人工號 | G登記人姓名 | H建立時間
+// 快捷欄位：A快捷ID | B分類 | C數量
 // 主鍵：純數字流水號（既有最大ID+1；支援刪除列，故不可用列號產生，否則會重號）
 // ============================
 
 var SHEET_NAME = '物流車輛紀錄';
+var SHORTCUT_SHEET = '快捷設定';
 var CATEGORIES = ['1.9噸', '3.5噸', '8噸以上'];
 var TZ = 'Asia/Taipei';
 
 function doPost(e) {
   try {
     var action = e.parameter.action || '';
-    if (action === 'add')         return addRecord(e);
-    if (action === 'update')      return updateRecord(e);
-    if (action === 'delete')      return deleteRecord(e);
-    if (action === 'exportMonth') return exportMonth(e);
+    if (action === 'add')            return addRecord(e);
+    if (action === 'update')         return updateRecord(e);
+    if (action === 'delete')         return deleteRecord(e);
+    if (action === 'exportMonth')    return exportMonth(e);
+    if (action === 'addShortcut')    return addShortcut(e);
+    if (action === 'updateShortcut') return updateShortcut(e);
+    if (action === 'deleteShortcut') return deleteShortcut(e);
     return jsonRes({ status: 'error', msg: '未知動作: ' + action });
   } catch (err) {
     return jsonRes({ status: 'error', msg: err.toString() });
@@ -601,8 +794,9 @@ function doPost(e) {
 function doGet(e) {
   try {
     var action = (e && e.parameter) ? (e.parameter.action || '') : '';
-    if (action === 'getDay')   return getDay(e);
-    if (action === 'getMonth') return getMonth(e);
+    if (action === 'getDay')       return getDay(e);
+    if (action === 'getMonth')     return getMonth(e);
+    if (action === 'getShortcuts') return getShortcuts();
     return jsonRes({ status: 'ok', msg: '天鷹保全 物流車輛統計 API 正常 ✓' });
   } catch (err) {
     return jsonRes({ status: 'error', msg: err.toString() });
@@ -798,6 +992,86 @@ function aggregateMonth_(year, month) {
     totals.t19 += v.t19; totals.t35 += v.t35; totals.t80 += v.t80; totals.sum += sum;
   }
   return { days: days, totals: totals };
+}
+
+// ══════════════════════════════
+// 快捷組合（管理員在工具「設定」頁管理，全員登記頁顯示一鍵送出）
+// 存「快捷設定」分頁，與主資料分開
+// ══════════════════════════════
+
+// 取得（或自動建立）快捷設定分頁
+function getShortcutSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHORTCUT_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHORTCUT_SHEET);
+    sheet.getRange(1, 1, 1, 3).setValues([['快捷ID', '分類', '數量']]);
+  }
+  return sheet;
+}
+
+// 快捷清單（全員可讀）
+function getShortcuts() {
+  var sheet = getShortcutSheet_();
+  var lastRow = sheet.getLastRow();
+  var list = [];
+  if (lastRow >= 2) {
+    var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === '' && data[i][1] === '') continue; // 略過空列
+      list.push({
+        id: data[i][0],
+        category: String(data[i][1]),
+        count: parseInt(data[i][2], 10) || 0
+      });
+    }
+  }
+  return jsonRes({ status: 'ok', shortcuts: list });
+}
+
+// 驗證快捷參數（分類白名單、數量 1~999），錯誤回訊息字串、正確回 null
+function validateShortcut_(e) {
+  var category = String(e.parameter.category || '').trim();
+  if (CATEGORIES.indexOf(category) === -1) return '分類無效: ' + category;
+  var count = parseInt(e.parameter.count, 10);
+  if (isNaN(count) || count < 1 || count > 999) return '數量無效（需 1~999）';
+  return null;
+}
+
+// 新增快捷
+function addShortcut(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var err = validateShortcut_(e);
+    if (err) return jsonRes({ status: 'error', msg: err });
+    var sheet = getShortcutSheet_();
+    var id = nextId_(sheet);
+    sheet.appendRow([id, String(e.parameter.category).trim(), parseInt(e.parameter.count, 10)]);
+    return jsonRes({ status: 'ok', id: id });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 修改快捷（分類＋數量）
+function updateShortcut(e) {
+  var err = validateShortcut_(e);
+  if (err) return jsonRes({ status: 'error', msg: err });
+  var sheet = getShortcutSheet_();
+  var row = findRowById_(sheet, e.parameter.id);
+  if (row < 0) return jsonRes({ status: 'error', msg: '找不到該快捷' });
+  sheet.getRange(row, 2, 1, 2).setValues([[String(e.parameter.category).trim(), parseInt(e.parameter.count, 10)]]);
+  return jsonRes({ status: 'ok' });
+}
+
+// 刪除快捷
+function deleteShortcut(e) {
+  var sheet = getShortcutSheet_();
+  var row = findRowById_(sheet, e.parameter.id);
+  if (row < 0) return jsonRes({ status: 'error', msg: '找不到該快捷' });
+  sheet.deleteRow(row);
+  return jsonRes({ status: 'ok' });
 }
 
 // ── 工具函數 ──

@@ -1171,9 +1171,10 @@ python3 snapshot-generator-simple.py
 | 工具檔案 | `tool_logistics.html`（獨立檔，vanilla JS 非 React，橙色 #FB923C 主題） |
 | index.html 串接 | `LOGISTICS_PAGE_URL` + TOOLS 卡片 `id:18, toolId:"logistics"` + 標題 + iframe `src`（仿 opening 模式） |
 | 權限 | 全員開放（DEFAULT_PERMS 七角色皆加 18）；「設定」分頁限 admin |
-| 分頁 | `物流車輛紀錄`（GAS 自動建立，A紀錄ID~H建立時間 8 欄） |
+| 分頁 | `物流車輛紀錄`（主資料，A~H 8 欄）＋`快捷設定`（A~C 3 欄），GAS 自動建立 |
 | 主鍵 | 純數字流水號 `max(既有ID)+1`（支援刪除列，不可用列號否則重號） |
-| GAS 端點 | add / update / delete / getDay / getMonth / exportMonth |
+| GAS 端點 | add / update / delete / getDay / getMonth / exportMonth ＋ getShortcuts / addShortcut / updateShortcut / deleteShortcut |
+| 快捷登記 | 管理員在設定頁維護快捷組合（如 1.9噸×2，可增改刪，雲端同步「快捷設定」分頁）→ 全員登記頁一鍵送出 |
 | 月統計 | 工具內表格（每日×三分類＋合計）＋ `exportMonth` 產「YYYY-MM 月統計」試算表分頁 |
 | 防呆 | 分類白名單、數量 1~999、送出中鎖按鈕防重、LockService 防併發、工號欄純文字保開頭 0、伺服器端蓋時間戳 |
 | GAS 部署說明 | `物流車輛統計_GAS_部署說明.md` |

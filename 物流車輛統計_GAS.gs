@@ -1,22 +1,27 @@
 // ============================
 // 物流車輛統計 — 獨立 GAS（天鷹保全）
 // 綁定試算表：物流車輛統計（新建）
-// 分頁：物流車輛紀錄
-// 欄位：A紀錄ID | B日期 | C時間 | D分類 | E數量 | F登記人工號 | G登記人姓名 | H建立時間
+// 分頁：物流車輛紀錄（主資料）、快捷設定（管理員設定的快捷組合，與資料分開）
+// 紀錄欄位：A紀錄ID | B日期 | C時間 | D分類 | E數量 | F登記人工號 | G登記人姓名 | H建立時間
+// 快捷欄位：A快捷ID | B分類 | C數量
 // 主鍵：純數字流水號（既有最大ID+1；支援刪除列，故不可用列號產生，否則會重號）
 // ============================
 
 var SHEET_NAME = '物流車輛紀錄';
+var SHORTCUT_SHEET = '快捷設定';
 var CATEGORIES = ['1.9噸', '3.5噸', '8噸以上'];
 var TZ = 'Asia/Taipei';
 
 function doPost(e) {
   try {
     var action = e.parameter.action || '';
-    if (action === 'add')         return addRecord(e);
-    if (action === 'update')      return updateRecord(e);
-    if (action === 'delete')      return deleteRecord(e);
-    if (action === 'exportMonth') return exportMonth(e);
+    if (action === 'add')            return addRecord(e);
+    if (action === 'update')         return updateRecord(e);
+    if (action === 'delete')         return deleteRecord(e);
+    if (action === 'exportMonth')    return exportMonth(e);
+    if (action === 'addShortcut')    return addShortcut(e);
+    if (action === 'updateShortcut') return updateShortcut(e);
+    if (action === 'deleteShortcut') return deleteShortcut(e);
     return jsonRes({ status: 'error', msg: '未知動作: ' + action });
   } catch (err) {
     return jsonRes({ status: 'error', msg: err.toString() });
@@ -26,8 +31,9 @@ function doPost(e) {
 function doGet(e) {
   try {
     var action = (e && e.parameter) ? (e.parameter.action || '') : '';
-    if (action === 'getDay')   return getDay(e);
-    if (action === 'getMonth') return getMonth(e);
+    if (action === 'getDay')       return getDay(e);
+    if (action === 'getMonth')     return getMonth(e);
+    if (action === 'getShortcuts') return getShortcuts();
     return jsonRes({ status: 'ok', msg: '天鷹保全 物流車輛統計 API 正常 ✓' });
   } catch (err) {
     return jsonRes({ status: 'error', msg: err.toString() });
@@ -223,6 +229,86 @@ function aggregateMonth_(year, month) {
     totals.t19 += v.t19; totals.t35 += v.t35; totals.t80 += v.t80; totals.sum += sum;
   }
   return { days: days, totals: totals };
+}
+
+// ══════════════════════════════
+// 快捷組合（管理員在工具「設定」頁管理，全員登記頁顯示一鍵送出）
+// 存「快捷設定」分頁，與主資料分開
+// ══════════════════════════════
+
+// 取得（或自動建立）快捷設定分頁
+function getShortcutSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHORTCUT_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHORTCUT_SHEET);
+    sheet.getRange(1, 1, 1, 3).setValues([['快捷ID', '分類', '數量']]);
+  }
+  return sheet;
+}
+
+// 快捷清單（全員可讀）
+function getShortcuts() {
+  var sheet = getShortcutSheet_();
+  var lastRow = sheet.getLastRow();
+  var list = [];
+  if (lastRow >= 2) {
+    var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === '' && data[i][1] === '') continue; // 略過空列
+      list.push({
+        id: data[i][0],
+        category: String(data[i][1]),
+        count: parseInt(data[i][2], 10) || 0
+      });
+    }
+  }
+  return jsonRes({ status: 'ok', shortcuts: list });
+}
+
+// 驗證快捷參數（分類白名單、數量 1~999），錯誤回訊息字串、正確回 null
+function validateShortcut_(e) {
+  var category = String(e.parameter.category || '').trim();
+  if (CATEGORIES.indexOf(category) === -1) return '分類無效: ' + category;
+  var count = parseInt(e.parameter.count, 10);
+  if (isNaN(count) || count < 1 || count > 999) return '數量無效（需 1~999）';
+  return null;
+}
+
+// 新增快捷
+function addShortcut(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var err = validateShortcut_(e);
+    if (err) return jsonRes({ status: 'error', msg: err });
+    var sheet = getShortcutSheet_();
+    var id = nextId_(sheet);
+    sheet.appendRow([id, String(e.parameter.category).trim(), parseInt(e.parameter.count, 10)]);
+    return jsonRes({ status: 'ok', id: id });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 修改快捷（分類＋數量）
+function updateShortcut(e) {
+  var err = validateShortcut_(e);
+  if (err) return jsonRes({ status: 'error', msg: err });
+  var sheet = getShortcutSheet_();
+  var row = findRowById_(sheet, e.parameter.id);
+  if (row < 0) return jsonRes({ status: 'error', msg: '找不到該快捷' });
+  sheet.getRange(row, 2, 1, 2).setValues([[String(e.parameter.category).trim(), parseInt(e.parameter.count, 10)]]);
+  return jsonRes({ status: 'ok' });
+}
+
+// 刪除快捷
+function deleteShortcut(e) {
+  var sheet = getShortcutSheet_();
+  var row = findRowById_(sheet, e.parameter.id);
+  if (row < 0) return jsonRes({ status: 'error', msg: '找不到該快捷' });
+  sheet.deleteRow(row);
+  return jsonRes({ status: 'ok' });
 }
 
 // ── 工具函數 ──
