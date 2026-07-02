@@ -927,7 +927,7 @@ function getDay(e) {
     }
   }
   rows.reverse(); // 新的在前
-  var res = { status: 'ok', date: key, rows: rows, totals: totals, ver: 'v3-H欄比對' };
+  var res = { status: 'ok', date: key, rows: rows, totals: totals, ver: 'v4-isDate修正' };
   // 自我診斷：有資料卻一筆都對不到時，回傳第一列算出的日期鍵供比對除錯
   if (rows.length === 0 && lastRow >= 2) {
     var first = sheet.getRange(2, 1, 1, 8).getValues()[0];
@@ -1100,27 +1100,33 @@ function monthParts_(s) {
   return { year: y, month: m };
 }
 
+// 判斷是否為日期物件：GAS 某些執行環境 instanceof Date 會誤判 false（跨 realm 問題），
+// 一律用 Object.prototype.toString 判斷才可靠
+function isDate_(v) {
+  return Object.prototype.toString.call(v) === '[object Date]';
+}
+
 // 取列的「登記日期」：優先用 H 建立時間（絕對時間戳，不受試算表時區/儲存格格式影響），沒有才退回 B 欄
 function rowDateKey_(row) {
-  if (row[7] instanceof Date) return Utilities.formatDate(row[7], TZ, 'yyyy/M/d');
+  if (isDate_(row[7])) return Utilities.formatDate(row[7], TZ, 'yyyy/M/d');
   return fmtDateVal_(row[1]);
 }
 
 // 取列的顯示時間 'HH:mm'：優先用 H 建立時間，沒有才退回 C 欄
 function rowTime_(row) {
-  if (row[7] instanceof Date) return Utilities.formatDate(row[7], TZ, 'HH:mm');
+  if (isDate_(row[7])) return Utilities.formatDate(row[7], TZ, 'HH:mm');
   return fmtTimeVal_(row[2]).substring(0, 5);
 }
 
 // B欄日期：可能是 Date 或字串，統一成 'yyyy/M/d'
 function fmtDateVal_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy/M/d');
+  if (isDate_(v)) return Utilities.formatDate(v, TZ, 'yyyy/M/d');
   return String(v || '').trim();
 }
 
 // C欄時間：可能是 Date 或字串，統一成 'HH:mm:ss'
 function fmtTimeVal_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'HH:mm:ss');
+  if (isDate_(v)) return Utilities.formatDate(v, TZ, 'HH:mm:ss');
   return String(v || '').trim();
 }
 
