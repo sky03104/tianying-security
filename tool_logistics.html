@@ -293,7 +293,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
    ═══════════════════════════════════════════ */
 
 // ★ 預設連線設定（管理員部署 GAS 後填入 /exec 網址，所有員工開啟即自動連線）
-const BUILT_IN_GAS_URL = '';
+const BUILT_IN_GAS_URL = 'https://script.google.com/macros/s/AKfycbxjfioKVFtltWo0HyuiKcqnzh8YrgvRkNtXgm-mdM8rO-qvXuax9mtrxuiVDkTZHgBI/exec'; // ★ 物流 GAS Web App URL（2026-07-02 部署）
 
 // 優先用寫死的 URL；沒有才用 localStorage（管理員可在設定頁貼網址先行測試）
 let gasUrl = BUILT_IN_GAS_URL || localStorage.getItem('hsh_logi_gasUrl') || '';
