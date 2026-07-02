@@ -17253,16 +17253,16 @@ const TOOLS = [
     { id: 3, name: "資料上傳工具", icon: "☁️", category: "核心工具", toolId: "upload" },
     { id: 4, name: "事故報告填寫", icon: "📋", category: "現場管理", externalUrl: "https://sky03104.github.io/tianying-security/tool_report.html" },
     { id: 99, name: "請假申請", icon: "📝", category: "人事管理", toolId: "leave" },
-    { id: 5, name: "訪客登記系統", icon: "🪪", category: "門禁管理" },
+    { id: 5, name: "訪客登記系統", icon: "🪪", category: "待開發" },
     { id: 7, name: "停車場車位數計算", icon: "🅿️", category: "核心工具", toolId: "car" },
     { id: 6, name: "過夜車輛登記", icon: "🚗", category: "門禁管理", toolId: "signin" },
     { id: 9, name: "施工單查詢", icon: "📋", category: "資料管理", externalUrl: "https://sky03104.github.io/tianying-security/tool_work.html" },
-    { id: 10, name: "影像調閱申請", icon: "📷", category: "資料管理" },
-    { id: 11, name: "設備檢查表", icon: "🔧", category: "設備管理" },
+    { id: 10, name: "影像調閱申請", icon: "📷", category: "待開發" },
+    { id: 11, name: "設備檢查表", icon: "🔧", category: "待開發" },
     { id: 12, name: "緊急聯絡清單", icon: "📞", category: "緊急應變", toolId: "emergency" },
     { id: 13, name: "匿名表揚／舉報", icon: "🚨", category: "緊急應變", externalUrl: "https://sky03104.github.io/tianying-security/tool_feedback.html" },
     { id: 14, name: "明日哨表", icon: "📋", category: "核心工具", toolId: "post" },
-    { id: 15, name: "績效報表查看", icon: "📊", category: "管理報表" },
+    { id: 15, name: "績效報表查看", icon: "📊", category: "待開發" },
     { id: 17, name: "天鷹 AI 小助手", icon: "🦅", category: "核心工具", toolId: "aichat" },
     { id: 18, name: "物流車輛統計", icon: "🚚", category: "門禁管理", toolId: "logistics" },
 ];
@@ -19025,6 +19025,7 @@ function App() {
     const [externalScheduleData, setExternalScheduleData] = useState(null);
     const [showBulletin, setShowBulletin] = useState(false);
     const [bulletinSearch, setBulletinSearch] = useState('');
+    const [annReadId, setAnnReadId] = useState(0); // 已讀到的最大公告ID（依工號記錄，用於算未讀數）
     const [announcements, setAnnouncements] = useState(() => {
         /* 公告持久化載入：重開不再消失（無儲存值時帶入預設歡迎公告） */
         try {
@@ -19143,6 +19144,36 @@ function App() {
             } catch (e) { /* 離線 → 沿用本機快取 */ }
         })();
     }, []);
+    // 公告自動刷新：每 2 分鐘輪詢一次雲端，避免首頁公告欄長時間停留在舊資料
+    useEffect(() => {
+        if (!ACCOUNT_GAS_URL) return;
+        const timer = setInterval(loadAnnouncementsCloud, 120000);
+        return () => clearInterval(timer);
+    }, []);
+    // 切回首頁分頁時，順手刷新一次公告（避免切到其他分頁再切回還是看到舊公告）
+    useEffect(() => {
+        if (tab === 'home') loadAnnouncementsCloud();
+    }, [tab]);
+    // 未讀公告：登入後依工號讀取「已讀到的最大公告ID」，算出未讀數用於右上角紅點
+    useEffect(() => {
+        if (!currentUser) { setAnnReadId(0); return; }
+        try {
+            const v = parseInt(localStorage.getItem('tianying_ann_read_' + currentUser.empId) || '0', 10);
+            setAnnReadId(isNaN(v) ? 0 : v);
+        } catch (e) { setAnnReadId(0); }
+    }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
+    // 開啟公告欄：同時把目前最新公告ID記為「已讀」，右上角未讀數歸零
+    const openBulletin = () => {
+        setShowBulletin(true);
+        if (announcements.length) {
+            const maxId = announcements.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0);
+            setAnnReadId(maxId);
+            try {
+                if (currentUser) localStorage.setItem('tianying_ann_read_' + currentUser.empId, String(maxId));
+            } catch (e) { }
+        }
+    };
+    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length;
     // 載入已儲存的權限設定（v6：儲存值為權威，含「移除」的工具不再被預設值蓋回；
     //  僅針對「儲存後系統才新增的工具」自動補上預設權限，靠 perms_known 已知工具清單判斷）
     const PERMS_VER = 'v6';
@@ -19763,7 +19794,7 @@ function App() {
                     _a.label)),
             announcements.length > 0 && (() => {
                 const latest = [...announcements].sort((a, b) => b.id - a.id)[0];
-                return (React.createElement("div", { className: "alert", style: { cursor: 'pointer' }, onClick: () => setShowBulletin(true) },
+                return (React.createElement("div", { className: "alert", style: { cursor: 'pointer' }, onClick: () => openBulletin() },
                     React.createElement("span", null, "\uD83D\uDCE2"),
                     React.createElement("span", { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
                         latest.pinned ? '📌 ' : '',
@@ -19777,7 +19808,7 @@ function App() {
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDEE0\uFE0F"),
                     React.createElement("div", { className: "stat-num" }, userTools.length),
                     React.createElement("div", { className: "stat-lbl" }, "\u53EF\u7528\u5DE5\u5177")),
-                React.createElement("div", { className: "stat-card", style: { cursor: 'pointer' }, onClick: () => setShowBulletin(true) },
+                React.createElement("div", { className: "stat-card", style: { cursor: 'pointer' }, onClick: () => openBulletin() },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDCE2"),
                     React.createElement("div", { className: "stat-num", style: { color: announcements.length > 0 ? 'var(--gold2)' : 'var(--muted)' } }, announcements.length),
                     React.createElement("div", { className: "stat-lbl" }, "\u5247\u516C\u544A")),
@@ -20111,13 +20142,13 @@ function App() {
                     React.createElement("div", { className: "topbar-en" }, "TIANYING SECURITY \u00B7 INTERNAL SYSTEM"))),
             React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8 } },
                 React.createElement("span", { style: { fontSize: 12, color: 'var(--muted)', display: 'none' } }, (_a = ROLES.find(r => r.id === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.role))) === null || _a === void 0 ? void 0 : _a.label),
-                React.createElement("button", { onClick: () => setShowBulletin(true), style: { position: 'relative', background: 'rgba(212,168,0,.12)', border: '1px solid rgba(212,168,0,.25)',
+                React.createElement("button", { onClick: () => openBulletin(), style: { position: 'relative', background: 'rgba(212,168,0,.12)', border: '1px solid rgba(212,168,0,.25)',
                         borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                         color: 'var(--gold2)', fontSize: 12, fontFamily: "'Microsoft JhengHei',sans-serif" } },
                     "\uD83D\uDCE2",
-                    announcements.length > 0 && (React.createElement("span", { style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
+                    unreadAnnCount > 0 && (React.createElement("span", { style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
                             borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, announcements.length))),
+                            alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, unreadAnnCount > 9 ? '9+' : unreadAnnCount))),
                 React.createElement("div", { className: "avatar", onClick: () => setTab("profile") }, currentUser === null || currentUser === void 0 ? void 0 : currentUser.name[0]))),
         tab === "home" && renderHome(),
         tab === "tools" && renderTools(),
@@ -20376,9 +20407,10 @@ function App() {
                         " \u5929\uFF09"))),
                 (() => {
                     const isManager = CAN_MANAGE_ROLES.includes(currentUser === null || currentUser === void 0 ? void 0 : currentUser.role);
-                    const myReqs = isManager
+                    const myReqs = (isManager
                         ? leaveRequests
-                        : leaveRequests.filter(r => r.empId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId));
+                        : leaveRequests.filter(r => r.empId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId)))
+                        .slice().sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0)); // 最新申請在最上面
                     const pending = myReqs.filter(r => r.status === 'pending');
                     const done = myReqs.filter(r => r.status !== 'pending');
                     const statusColor = { pending: '#FBBF24', approved: 'var(--success)', rejected: '#F87171' };
@@ -20565,7 +20597,7 @@ function App() {
                                 }
                                 else {
                                     const next = [
-                                        { id: Date.now(), ...editingAnn,
+                                        { ...editingAnn, id: Date.now(),
                                             author: (currentUser === null || currentUser === void 0 ? void 0 : currentUser.name) || '管理員', date: now },
                                         ...announcements
                                     ];
