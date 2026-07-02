@@ -159,3 +159,121 @@ function jsonOut(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+/* ═════════════════════════════════════════════
+ * 每日登記摘要 Email（主管/公司看得到登記資料）
+ * ─────────────────────────────────────────────
+ * 統計窗：昨天 08:00 ～ 今天 08:00（涵蓋整個晚班，班別定義：晚班 20:00～隔天 08:00）
+ *
+ * 【啟用步驟（只要做一次）】
+ * 1. 「專案設定 → 指令碼屬性」新增：
+ *      名稱：SUMMARY_EMAILS   值：收件人 email（多人用逗號分隔）
+ * 2. 編輯器上方函數選 setupDailyTrigger → 執行 →（首次會跳授權，全部允許）
+ *    → 之後每天早上 08:00~09:00 自動寄出，不用再管
+ * 3. 想馬上看效果：函數選 testDailySummary → 執行 → 收信箱
+ *
+ * 注意：排程吃「最新存檔」的程式，貼上存檔即可，這部分不用重新部署。
+ *       專案時區務必為 Asia/Taipei（專案設定可查）。
+ * ═════════════════════════════════════════════ */
+
+var SUMMARY_EMAILS_FALLBACK = ''; // ← 不想用指令碼屬性時，把收件人貼進引號內（僅限 GAS 編輯器，勿上傳 GitHub）
+
+function getSummaryEmails_() {
+  return (PropertiesService.getScriptProperties().getProperty('SUMMARY_EMAILS') || SUMMARY_EMAILS_FALLBACK || '').trim();
+}
+
+// 建立每日 08:00 排程（重跑會先清掉舊排程，不會重複寄）
+function setupDailyTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'sendDailySummary') ScriptApp.deleteTrigger(triggers[i]);
+  }
+  ScriptApp.newTrigger('sendDailySummary').timeBased().everyDays(1).atHour(8).create();
+  Logger.log('✅ 排程已建立：每天 08:00~09:00 寄出登記摘要');
+}
+
+// 立即寄一封測試（統計窗與正式版相同）
+function testDailySummary() {
+  sendDailySummary();
+  Logger.log('✅ 測試信已寄出，請收信箱（含垃圾郵件夾）');
+}
+
+function sendDailySummary() {
+  var emails = getSummaryEmails_();
+  if (!emails) throw new Error('收件人未設定：請在「專案設定 → 指令碼屬性」新增 SUMMARY_EMAILS（多人用逗號分隔）');
+
+  var tz  = 'Asia/Taipei';
+  var now = new Date();
+  // 時間戳存的是 'yyyy-MM-dd HH:mm:ss' 台北時間字串 → 直接用字串比大小，避開時區換算陷阱
+  var todayStr     = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  var yesterdayStr = Utilities.formatDate(new Date(now.getTime() - 86400000), tz, 'yyyy-MM-dd');
+  var startKey = yesterdayStr + ' 08:00:00';
+  var endKey   = todayStr     + ' 08:00:00';
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheets()[0];
+  var rows = sheet.getDataRange().getValues();
+
+  var hits = [];        // [時間, 類型, 車牌, 登記人]
+  var byType = {};      // 類型 → 台數
+  for (var i = 0; i < rows.length; i++) {
+    var ts = rows[i][0];
+    // 儲存格可能是字串或已被試算表轉成 Date，統一格式化後比對
+    var key = (ts instanceof Date)
+      ? Utilities.formatDate(ts, tz, 'yyyy-MM-dd HH:mm:ss')
+      : String(ts || '');
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(key)) continue; // 跳過表頭/空列/爛值
+    if (key < startKey || key >= endKey) continue;
+    var type = String(rows[i][1] || '未分類');
+    hits.push([key, type, String(rows[i][2] || ''), String(rows[i][3] || '')]);
+    byType[type] = (byType[type] || 0) + 1;
+  }
+  hits.sort(); // 依時間排序
+
+  var dateLabel = yesterdayStr.slice(5).replace('-', '/') + ' 08:00 ～ ' + todayStr.slice(5).replace('-', '/') + ' 08:00';
+  var subject = '【天鷹保全】過夜車輛登記摘要 ' + dateLabel + '（共 ' + hits.length + ' 台）';
+  var sheetUrl = 'https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID;
+
+  // 統計列
+  var statHtml = '';
+  for (var t in byType) {
+    statHtml += '<span style="display:inline-block;margin:0 12px 6px 0;padding:4px 12px;background:#FFF7DB;border:1px solid #E5C84A;border-radius:14px;font-size:13px;color:#7A6200;">' +
+                t + '：<b>' + byType[t] + '</b> 台</span>';
+  }
+  if (!statHtml) statHtml = '<span style="font-size:13px;color:#888;">本時段無登記紀錄</span>';
+
+  // 明細表
+  var trHtml = '';
+  for (var j = 0; j < hits.length; j++) {
+    trHtml += '<tr>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid #EEE;font-size:13px;">' + hits[j][0].slice(11, 16) + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid #EEE;font-size:13px;">' + hits[j][1] + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid #EEE;font-size:14px;font-weight:bold;letter-spacing:1px;">' + hits[j][2] + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid #EEE;font-size:13px;color:#666;">' + hits[j][3] + '</td>' +
+      '</tr>';
+  }
+  var tableHtml = hits.length
+    ? '<table style="border-collapse:collapse;width:100%;max-width:520px;margin-top:14px;">' +
+      '<tr style="background:#1A1C22;color:#FFD700;">' +
+      '<th style="padding:8px 10px;font-size:12px;text-align:left;">時間</th>' +
+      '<th style="padding:8px 10px;font-size:12px;text-align:left;">類型</th>' +
+      '<th style="padding:8px 10px;font-size:12px;text-align:left;">車牌</th>' +
+      '<th style="padding:8px 10px;font-size:12px;text-align:left;">登記人</th>' +
+      '</tr>' + trHtml + '</table>'
+    : '';
+
+  var htmlBody =
+    '<div style="font-family:\'Microsoft JhengHei\',sans-serif;max-width:560px;">' +
+    '<div style="padding:14px 18px;background:#0A0C10;border-radius:10px 10px 0 0;">' +
+    '<div style="color:#D4A800;font-size:17px;font-weight:bold;letter-spacing:2px;">🦅 天鷹保全 · 過夜車輛登記摘要</div>' +
+    '<div style="color:#8A95A8;font-size:12px;margin-top:4px;">' + dateLabel + '（晚班全時段）</div>' +
+    '</div>' +
+    '<div style="padding:16px 18px;border:1px solid #E5E5E5;border-top:none;border-radius:0 0 10px 10px;">' +
+    '<div style="font-size:14px;margin-bottom:10px;">合計 <b style="font-size:18px;color:#B8860B;">' + hits.length + '</b> 台</div>' +
+    statHtml + tableHtml +
+    '<div style="margin-top:16px;"><a href="' + sheetUrl + '" style="font-size:13px;color:#1A73E8;">📊 開啟完整登記試算表</a></div>' +
+    '<div style="margin-top:10px;font-size:11px;color:#AAA;">此信由系統每日 08:00 自動寄出 · TIANYING SECURITY</div>' +
+    '</div></div>';
+
+  MailApp.sendEmail({ to: emails, subject: subject, htmlBody: htmlBody });
+}
