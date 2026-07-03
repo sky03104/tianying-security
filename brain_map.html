@@ -918,6 +918,27 @@ function drawNodeLocations() {
         charCtx.fillText(count > 99 ? '99+' : String(count), bx, bby);
       }
       charCtx.restore();
+
+      // 角色小頭像徽章：貼地點圖右下角，不疊在場景中間（縮小版角色識別，圓形裁切＋色框）
+      const charImg = CHAR_IMAGES[role];
+      if (charImg && charImg.complete && charImg.naturalWidth > 0) {
+        const avatarR = 20;
+        const acx = ix + iw - avatarR * 0.6, acy = iy + ih - avatarR * 0.6;
+        charCtx.save();
+        charCtx.beginPath();
+        charCtx.arc(acx, acy, avatarR, 0, Math.PI * 2);
+        charCtx.closePath();
+        charCtx.clip();
+        const scale2 = Math.max((avatarR * 2) / charImg.naturalWidth, (avatarR * 2) / charImg.naturalHeight);
+        const aw = charImg.naturalWidth * scale2, ah = charImg.naturalHeight * scale2;
+        charCtx.drawImage(charImg, acx - aw / 2, acy - ah / 2, aw, ah);
+        charCtx.restore();
+        charCtx.beginPath();
+        charCtx.arc(acx, acy, avatarR, 0, Math.PI * 2);
+        charCtx.strokeStyle = CHAR_COLORS[role] || '#D4A800';
+        charCtx.lineWidth = 2.5;
+        charCtx.stroke();
+      }
     }
   });
 }
