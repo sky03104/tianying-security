@@ -315,7 +315,7 @@ const WORKFLOW_GAS_URL = 'https://script.google.com/macros/s/AKfycbzxjedGAbxj3G8
 function logWorkflow(actionType, status) {
   const u = sessionUser();
   if (!u.empId) return;
-  try { fetch(WORKFLOW_GAS_URL, { method:'POST', body: JSON.stringify({ action:'logTask', tool:'物流車輛統計', empId:u.empId, userName:u.name||'未知', actionType, status:status||'已完成' }) }); } catch(e) {}
+  try { fetch(WORKFLOW_GAS_URL, { method:'POST', body: JSON.stringify({ action:'logTask', tool:'logistics', empId:u.empId, userName:u.name||'未知', actionType, status:status||'已完成' }) }); } catch(e) {}
 }
 
 function sessionUser(){

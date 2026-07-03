@@ -164,6 +164,13 @@ const BUILT_IN_GAS_URL = 'https://script.google.com/macros/s/AKfycbxllyhJAizfaj8
 const ALLOWED_ROLES = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
 
 let gasUrl = BUILT_IN_GAS_URL || localStorage.getItem('hsh_handover_gasUrl') || '';
+
+const WORKFLOW_GAS_URL = 'https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec';
+function logWorkflow(tool, actionType, status) {
+  const u = getSessionUser();
+  if (!u.empId) return;
+  try { fetch(WORKFLOW_GAS_URL, { method:'POST', body: JSON.stringify({ action:'logTask', tool, empId:u.empId, userName:u.name||'未知', actionType, status:status||'已完成' }) }); } catch(e) {}
+}
 let items = [];
 let curFilter = 'all';
 let submitting = false;
@@ -278,6 +285,7 @@ async function submitAdd() {
   if (r.status === 'ok') {
     document.getElementById('newContent').value = '';
     showToast('新增成功', 'ok');
+    try { logWorkflow('handover', 'submit', '已完成'); } catch(e) {}
     loadItems();
   } else {
     showToast(r.msg || '新增失敗', 'err');
