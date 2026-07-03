@@ -19816,7 +19816,7 @@ function App() {
                     " \u00B7 ", (_a = ROLES.find(r => r.id === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.role))) === null || _a === void 0 ? void 0 :
                     _a.label)),
             announcements.length > 0 && (() => {
-                const latest = [...announcements].sort((a, b) => b.id - a.id)[0];
+                const latest = [...announcements].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (Number(b.id) || 0) - (Number(a.id) || 0))[0]; // 置頂優先，其次最新（id 需轉數字，避免舊資料殘留的非數字id讓排序失真）
                 return (React.createElement("div", { className: "alert", style: { cursor: 'pointer' }, onClick: () => openBulletin() },
                     React.createElement("span", null, "\uD83D\uDCE2"),
                     React.createElement("span", { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
@@ -20653,9 +20653,13 @@ function App() {
                                     return;
                                 }
                                 const now = new Date().toLocaleDateString('zh-TW').replace(/\//g, '-');
-                                if (editingAnn.id) {
+                                // 用「這個 id 是否存在於目前清單」判斷更新／新增，而非 id 是否為 truthy：
+                                // 舊資料若曾因先前的 bug 存成空字串 id，truthy 判斷會誤判成新增造成重複；
+                                // 同時若既有 id 是空字串等假值，順手補一個新 id 自我修復（讓排序恢復正常）。
+                                const isExisting = editingAnn.id != null && announcements.some(a => a.id === editingAnn.id);
+                                if (isExisting) {
                                     const next = announcements.map(a => a.id === editingAnn.id
-                                        ? { ...a, ...editingAnn, date: now } : a);
+                                        ? { ...a, ...editingAnn, id: a.id || Date.now(), date: now } : a);
                                     setAnnouncements(next);
                                     pushAnnouncementsCloud(next);
                                     showToast('✅ 公告已更新（同步雲端）');
@@ -20695,7 +20699,7 @@ function App() {
                     .filter(a => !bulletinSearch ||
                     a.title.toLowerCase().includes(bulletinSearch.toLowerCase()) ||
                     a.content.toLowerCase().includes(bulletinSearch.toLowerCase()))
-                    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.id - a.id)
+                    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (Number(b.id) || 0) - (Number(a.id) || 0))
                     .map(ann => (React.createElement("div", { key: ann.id, style: { background: 'rgba(255,255,255,.055)', backdropFilter: 'blur(8px)',
                         border: `1px solid ${ann.pinned ? 'rgba(212,168,0,.35)' : 'rgba(255,255,255,.08)'}`,
                         borderRadius: 13, padding: 16, marginBottom: 10,
