@@ -737,9 +737,7 @@ const NODE_IMG_MAP = {
   5:  'loc_ramhead_dawn.png',   // 開店前進出登錄（香克斯／日出羊頭甲板）
   6:  'loc_ramhead_night.png', // 打烊後快速登錄（羅／夜晚羊頭甲板）
   7:  'loc_helm.png',          // 今/明日哨表（甚平／舵輪室）
-  // 8（班表查詢／娜美／柑橘園）：loc_orange_grove.png 待咖哩補傳實體檔案後再加進來，
-  // 現在先不加這行——加了但檔案不存在，drawAllCharacters 會直接跳過該節點的浮空角色，
-  // 反而比現狀（顯示待機娜美）還空，等圖到位再補
+  8:  'loc_orange_grove.png',  // 班表查詢（娜美／柑橘園）
 };
 const NODE_IMAGES = {};
 Object.entries(NODE_IMG_MAP).forEach(([nodeId, file]) => {
