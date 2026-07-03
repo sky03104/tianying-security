@@ -200,6 +200,8 @@
   },
   "active": "c697bc00e60ff159",
   "lastOpenFiles": [
+    "brain_map_img/loc_tangerine.png",
+    "brain_map_img/loc_tangerine.png.crdownload",
     "帶班交接_GAS_部署說明.md",
     "帶班交接_GAS.gs",
     "tool_handover.html",
@@ -221,7 +223,6 @@
     "loc_infirmary.png.crdownload",
     "loc_library.png.crdownload",
     "物流車輛統計_GAS_部署說明.md",
-    "物流車輛統計_GAS.gs",
     "01-專案狀態/project-state.md",
     "conflict-files-obsidian-git.md",
     "航海日誌_GAS_部署說明.md",
@@ -244,7 +245,6 @@
     "tianying-monitor/QUICK_REF.md",
     "tianying-monitor/project-snapshots/2026-06-22_v1.md",
     "天鷹保全/監控系統狀態.md",
-    "tpl-car.md",
-    "02-工具開發/tpl-car.md"
+    "tpl-car.md"
   ]
 }
