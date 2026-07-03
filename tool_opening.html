@@ -821,8 +821,8 @@ function fspRow(id,q){
     let html='';
     if(matches.length){
       html+='<div style="padding:4px 10px;font-size:10px;color:var(--gold);border-bottom:1px solid var(--border2)">符合的監工紀錄（點選自動帶入專櫃／樓層）</div>';
-      html+=matches.map(m=>`<div class="ddi" onclick="choseSupWithShop(${id},this)" data-name="${x(m.name)}" data-shop="${x(m.shopName)}" data-floor="${m.floor}">
-        <span class="ddi-name">⭐ ${x(m.name)}</span><span class="ftag">${x(m.shopName)} · ${m.floor}</span>
+      html+=matches.map(m=>`<div class="ddi" onclick="choseSupWithShop(${id},this)" data-name="${x(m.name)}" data-shop="${x(m.shopName)}" data-floor="${x(m.floor)}">
+        <span class="ddi-name">⭐ ${x(m.name)}</span><span class="ftag">${x(m.shopName)} · ${x(m.floor)}</span>
       </div>`).join('');
     }
     if(otherPersons.length){
@@ -1075,11 +1075,13 @@ async function directSubmitToSheet(){
   let inspector=selIns||document.getElementById('insSrch').value.trim();
   let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
   const _af=applyAutoFill(wtype,inspector);
-  if(_af){wtype=_af.wtype;inspector=_af.inspector;showToast('⚡ 自動填入：員工下班／檢查者 '+inspector,'ok');}
+  if(_af){wtype=_af.wtype;inspector=_af.inspector;}
   const _qf=_af?null:applyQuickEntryFill(wtype);
   let entryRaw=document.getElementById('entryTime').value;
   const exitRaw=document.getElementById('exitTime').value;
-  if(_qf){wtype=_qf.wtype;entryRaw=_qf.entryTime;document.getElementById('entryTime').value=_qf.entryTime;showToast('⚡ 快速登記：陳列／進場 '+_qf.entryTime,'ok');}
+  if(_qf){wtype=_qf.wtype;entryRaw=_qf.entryTime;document.getElementById('entryTime').value=_qf.entryTime;}
+  /* 自動填入提示併入最終送出結果的 toast，避免被緊接的「送出中...」瞬間蓋掉 */
+  const autoFillNote=_af?'｜⚡ 自動填入：員工下班／檢查者 '+_af.inspector:(_qf?'｜⚡ 快速登記：陳列／進場 '+_qf.entryTime:'');
   const shared={
     entryTime:fmtTime(entryRaw),exitTime:fmtTime(exitRaw),
     location:document.getElementById('location').value.trim(),
@@ -1110,7 +1112,7 @@ async function directSubmitToSheet(){
     if(d.status==='ok'){
       logWorkflow('opening', 'submit', '已完成');
       shops.forEach(s=>{if(s.isNew)delete s.isNew;});save();
-      showToast('✅ 已直接送出 '+d.added+' 筆！','ok');
+      showToast('✅ 已直接送出 '+d.added+' 筆！'+autoFillNote,'ok');
       resetForm();
     }else showToast('失敗：'+d.msg,'err');
   }catch(err){showToast('網路錯誤','err');}
