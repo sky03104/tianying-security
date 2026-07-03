@@ -116,6 +116,9 @@ function doPost(e) {
     if (action === 'monthScheduleReleased')     return monthScheduleReleasedAction_(e);
     if (action === 'pushTomorrowPost')          return pushTomorrowPostAction_(e);
 
+    if (action === 'notifyNewReport')   return notifyNewReportAction_(e);
+    if (action === 'notifyNewFeedback') return notifyNewFeedbackAction_(e);
+
     return jsonRes({status:'err', msg:'未知 action: ' + action});
   } catch(err) {
     return jsonRes({status:'err', msg:err.toString()});
@@ -1230,6 +1233,23 @@ function getDeptSupervisors_(dept) {
   return list;
 }
 
+// 事故報告/匿名表揚 通知用：不分部門，只看角色（全公司主管+管理員都收）
+function getExecutivesAndAdmins_() {
+  var sh = getUserDbSheet_();
+  var data = sh.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var empId = String(data[r][0]);
+    if (!empId) continue;
+    var role = String(data[r][3]);
+    var status = String(data[r][5] || 'active');
+    if (status !== 'active') continue;
+    if (role !== 'admin' && role !== 'executive') continue;
+    list.push({ empId: empId, name: String(data[r][1]), role: role });
+  }
+  return list;
+}
+
 function getLineUserIdByEmpId_(empId) {
   var sh = getLineBindSheet_();
   var data = sh.getDataRange().getValues();
@@ -1848,6 +1868,82 @@ function notifyScheduleChangeAction_(e) {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// 【事故報告/匿名表揚 LINE 通知】── 新資料送出即推播主管/管理員
+// ════════════════════════════════════════════════════════════
+
+function buildNotifyCardFlex_(headerText, headerColor, rows, buttonLabel, buttonUrl) {
+  var body = [];
+  for (var i = 0; i < rows.length; i++) {
+    body.push({ type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+      { type: 'text', text: rows[i].label, color: '#8A95A8', size: 'sm', flex: 2 },
+      { type: 'text', text: rows[i].value, color: '#F5F5F5', size: 'sm', flex: 6, wrap: true }
+    ]});
+  }
+  return {
+    type: 'bubble', size: 'mega',
+    header: { type: 'box', layout: 'vertical', backgroundColor: headerColor, paddingAll: '16px',
+      contents: [{ type: 'text', text: headerText, color: '#0A0C10', weight: 'bold', size: 'md' }] },
+    body: { type: 'box', layout: 'vertical', backgroundColor: '#111827', paddingAll: '16px', spacing: 'md', contents: body },
+    footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px', backgroundColor: '#0A0C10',
+      contents: [
+        { type: 'button', style: 'primary', color: '#818CF8', height: 'sm',
+          action: { type: 'uri', label: buttonLabel, uri: buttonUrl } },
+        { type: 'text', text: '天鷹保全 · 請儘速查看處理', color: '#6B7280', size: 'xs', align: 'center' }
+      ] }
+  };
+}
+
+function notifyNewReportAction_(e) {
+  try {
+    var d = JSON.parse(e.parameter.data);
+    var execs = getExecutivesAndAdmins_();
+    if (!execs.length) return jsonRes({status:'ok', skipped:'無主管/管理員'});
+    var rows = [
+      { label: '地點', value: d.location || '未填寫' },
+      { label: '類別', value: d.category || '未分類' },
+      { label: '時間', value: (d.date || '') + ' ' + (d.time || '') },
+      { label: '回報人', value: (d.name || '') + '（' + (d.empId || '未登入') + '）' }
+    ];
+    var flex = buildNotifyCardFlex_('🚨 新事故報告', '#F87171', rows, '📋 查看詳情',
+      'https://sky03104.github.io/tianying-security/tool_report.html?mode=admin');
+    var sent = 0;
+    for (var i = 0; i < execs.length; i++) {
+      var lineUserId = getLineUserIdByEmpId_(execs[i].empId);
+      if (lineUserId) { pushLineFlex_(lineUserId, '🚨 新事故報告：' + (d.location || ''), flex); sent++; }
+    }
+    return jsonRes({status:'ok', pushed:sent});
+  } catch (err) {
+    return jsonRes({status:'err', msg:err.toString()});
+  }
+}
+
+function notifyNewFeedbackAction_(e) {
+  try {
+    var d = JSON.parse(e.parameter.data);
+    var execs = getExecutivesAndAdmins_();
+    if (!execs.length) return jsonRes({status:'ok', skipped:'無主管/管理員'});
+    var isPraise = (d.type === 'praise');
+    var headerText = isPraise ? '🎉 新匿名表揚' : '⚠️ 新匿名反應';
+    var headerColor = isPraise ? '#D4A800' : '#FB923C';
+    var rows = [
+      { label: '對象', value: d.target || '未填寫' },
+      { label: '分類', value: d.category || '未分類' },
+      { label: '日期', value: d.date || '' }
+    ];
+    var flex = buildNotifyCardFlex_(headerText, headerColor, rows, '📋 查看詳情',
+      'https://sky03104.github.io/tianying-security/tool_feedback.html?mode=admin');
+    var sent = 0;
+    for (var i = 0; i < execs.length; i++) {
+      var lineUserId = getLineUserIdByEmpId_(execs[i].empId);
+      if (lineUserId) { pushLineFlex_(lineUserId, headerText + '：' + (d.target || ''), flex); sent++; }
+    }
+    return jsonRes({status:'ok', pushed:sent});
+  } catch (err) {
+    return jsonRes({status:'err', msg:err.toString()});
+  }
+}
+
 function notifyScheduleChangeBatchAction_(e) {
   try {
     var list = JSON.parse(e.parameter.data);
@@ -2378,6 +2474,19 @@ function 測試群組哨表推播() {
   else if (code === 400) Logger.log('❌ 400 → groupId 失效（機器人可能已被踢出群組）');
   else if (code === 401) Logger.log('❌ 401 → Token 失效');
   Logger.log('===== 診斷結束 =====');
+}
+
+// ════════════════════════════════════════════════════════════
+// 【診斷】事故報告/匿名表揚 LINE 推播測試 — 在編輯器執行看 Log
+// ════════════════════════════════════════════════════════════
+function 測試事故表揚推播() {
+  var execs = getExecutivesAndAdmins_();
+  Logger.log('主管/管理員清單：' + JSON.stringify(execs));
+  var r = notifyNewReportAction_({ parameter: { data: JSON.stringify({
+    empId: 'TEST', name: '測試員', date: '2026-07-04', time: '10:00',
+    location: 'B1F大廳', category: '設備異常', description: '測試用'
+  }) } });
+  Logger.log('事故報告推播結果：' + r.getContent());
 }
 
 function jsonRes(obj) {

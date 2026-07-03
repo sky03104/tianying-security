@@ -178,7 +178,7 @@ const NODES = [
   { id: 12, title: '請假申請', topic: 'tools', pos: [-1.9919, -0.4, -1.15], note: 'liff_leave + 雲端請假清單' },
 
   // ── 東海／後端 GAS ──
-  { id: 13, title: '事故/表揚 GAS v3.1', topic: 'backend', pos: [1.6891, 1.2961, 0.0], note: 'action 分流 report/feedback/updateStatus/deleteRow/getReports/getFeedback；狀態/處置欄' },
+  { id: 13, title: '事故/表揚 GAS v3.1', topic: 'backend', pos: [1.6891, 1.2961, 0.0], note: 'action 分流 report/feedback/updateStatus/deleteRow/getReports/getFeedback；狀態/處置欄；新資料自動轉發LINE推播給主管/管理員' },
   { id: 14, title: '帳號/請假 GAS', topic: 'backend', pos: [0.8592, 1.9478, 0.6421], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核' },
   { id: 15, title: '打烊/開店 GAS', topic: 'backend', pos: [0.5627, 1.138, 1.9043], note: '進出記錄 + _SharedDB（廠商/監工/檢查者即時同步）' },
   { id: 16, title: '照片上傳處理', topic: 'backend', pos: [1.0723, 1.8817, -0.8901], note: 'saveImages_；公告夾不可寫退回執行帳號夾；setSharing 非致命' },
@@ -376,6 +376,8 @@ const EDGES = [
   [0, 40], [40, 41],
   // 今/明日哨表：帳號/請假 GAS 讀寫獨立的哨表試算表（明日→今日每日快照）
   [14, 42],
+  // 事故/表揚 GAS 無 LINE Token，跨 GAS 轉發給帳號/請假 GAS 代發推播
+  [13, 14],
   // 帶班交接事項：主控台→工具→GAS→試算表
   [0, 135], [135, 43], [43, 65],
 ];

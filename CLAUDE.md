@@ -1223,6 +1223,23 @@ python3 snapshot-generator-simple.py
 
 **部署狀態（2026-07-03）**：GAS 已部署、`/exec` 網址已回填 `tool_handover.html` 的 `BUILT_IN_GAS_URL`，全員（組長以上）自動連線，無需再手動設定 localStorage。之後改 GAS 記得「管理部署→編輯→新版本」。
 
+#### [TODO-19] 事故報告／匿名表揚新資料 → LINE 推播主管與管理員
+- **需求**：`tool_report.html`（事故報告）／`tool_feedback.html`（匿名表揚/反應）送出當下就主動推播 LINE 給 `executive`/`admin`，不用等主管自己點進首頁待審卡片
+- **狀態**：✅ 完成（2026-07-03）
+
+**實作結果（2026-07-03）**：
+
+| 項目 | 值 |
+|------|-----|
+| 架構 | `事故與表揚_後端_GAS_v3.1.gs`（獨立部署，無 LINE Token）→ `UrlFetchApp.fetch(NOTIFY_GAS_URL,...)` 轉發 → `天鷹保全APP_後端_GAS.gs`（有 LINE Channel Access Token）實際推播，仿既有 `notifyScheduleChangeToLine_` 模式 |
+| 送出端新增 | `notifyReportToLine_`/`notifyFeedbackToLine_`：`handleReport_`/`handleFeedback_` 的 `appendRow` 之後、`return` 之前呼叫，try/catch 非致命，LINE 失敗不影響資料寫入成功 |
+| 接收端新增 | `doPost` 路由 `notifyNewReport`/`notifyNewFeedback` → `notifyNewReportAction_`/`notifyNewFeedbackAction_`；`getExecutivesAndAdmins_()`（不分部門，只篩 `role==='admin'||'executive'` 且 `status==='active'`）；`buildNotifyCardFlex_()` 共用 Flex 卡片版型 |
+| 推播對象 | 全公司 `admin`+`executive`（不分部門，跟請假通知的部門篩選邏輯不同——事故/表揚是全公司層級） |
+| 卡片按鈕 | 連去 `tool_report.html?mode=admin` / `tool_feedback.html?mode=admin`（純連結，依賴瀏覽器既有登入 session，同既有哨表通知按鈕慣例） |
+| 測試輔助 | `事故與表揚_後端_GAS_v3.1.gs` 的 `testNotifyReportToLine()`；`天鷹保全APP_後端_GAS.gs` 的 `測試事故表揚推播()` |
+
+**待咖哩手動操作**：兩支 GAS 都要「管理部署→編輯→新版本」（`/exec` 網址不變）；部署後在天鷹保全APP GAS 專案執行一次 `測試事故表揚推播()` 驗證。
+
 ### 🟢 本次（2026-06-27）額外完成
 
 #### [TODO-07] 開店/打烊工具「設定」分頁限管理員
@@ -1477,6 +1494,7 @@ python3 snapshot-generator-simple.py
 | 2.1 | 2026-07-03 | 新增 2026-07-03 技術經驗筆記：GitHub Pages 部署卡死佇列處理（cancel API 一律 409、正確做法是推新 commit 蓋過去 + rerun_failed_jobs，殭屍 queued run 免管會自動過期） |
 | 2.2 | 2026-07-03 | brain_map 即時航跡系統：動作跑者（送出資料由地點角色代跑）、黃金梅利號主控台、海域式節點分散、工具節點地點圖機制（圖書室/醫務室已生效，後續陸續補其他工具）；修正地點圖被每幀清畫布蓋掉的 bug（clearRect 呼叫時機）；新增技術經驗筆記記錄新增地點圖的標準流程 |
 | 2.3 | 2026-07-03 | TODO-18 完成：帶班幹部交接事項工具（`tool_handover.html` + `帶班交接_GAS.gs` + 部署說明，新增/編輯/刪除/狀態切換三態，青綠主題，組長以上雙層權限），GAS 已部署並回填 `BUILT_IN_GAS_URL`；brain_map 新增節點 43~45（工具/GAS/試算表）+ 對應關聯 |
+| 2.4 | 2026-07-03 | TODO-19 完成：事故報告/匿名表揚新資料自動轉發 LINE 推播給主管(executive)/管理員(admin)（`事故與表揚_後端_GAS_v3.1.gs` 新增 `notifyReportToLine_`/`notifyFeedbackToLine_` 轉發、`天鷹保全APP_後端_GAS.gs` 新增 `notifyNewReportAction_`/`notifyNewFeedbackAction_` + `getExecutivesAndAdmins_`/`buildNotifyCardFlex_` 實際推播）；brain_map 新增關聯 `[13,14]`（事故/表揚 GAS 跨 GAS 轉發） |
 
 ---
 

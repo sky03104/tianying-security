@@ -12,6 +12,10 @@
  *        action=getFeedback  → 回匿名表揚/舉報清單（含列號 row、後台工號姓名、狀態）
  *   3. doPost 新增改狀態端點：
  *        action=updateStatus & payload={sheet:'report'|'feedback', row, status}
+ *   4. 新資料送出時自動轉發 LINE 推播給主管(executive)/管理員(admin)：
+ *        由本檔 notifyReportToLine_/notifyFeedbackToLine_ 呼叫「天鷹保全APP」GAS
+ *        （NOTIFY_GAS_URL）代發，因 LINE Channel Access Token 只存在對方的
+ *        指令碼屬性裡，本檔沒有金鑰。
  *
  * 單一 doPost 以 action 分流：
  *   action=report       → 事故報告（綁工號，不匿名）
@@ -30,6 +34,7 @@ var PHOTO_FOLDER_ID  = '1K_RRPUjcWrdNAS2ppcx6OFDtlkfSfAl3';            // 公告
 var SHEET_REPORT     = '事故報告';      // 事故報告分頁
 var SHEET_FEEDBACK   = '匿名表揚檢舉';  // 匿名表揚／舉報分頁（後台含工號姓名）
 var TZ               = 'Asia/Taipei';
+var NOTIFY_GAS_URL   = "https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d8kLcCHbVFiKAK9wyoLwqNkt59PS4vPCY9QfG0_wiDJf2coO3zMcg/exec"; // 天鷹保全APP GAS（LINE推播轉發）
 
 // 狀態白名單（主管畫面四態）
 var STATUS_LIST = ['未讀', '待處理', '已知悉再觀察', '持續追蹤', '已讀', '處理中', '已處理'];
@@ -106,6 +111,7 @@ function handleReport_(d) {
     urls.join('\n'),
     '未讀'                        // 狀態（新增）
   ]);
+  notifyReportToLine_(d);
   return json_({ status: 'ok', msg: '報告與照片已成功儲存', photos: urls.length });
 }
 
@@ -129,7 +135,45 @@ function handleFeedback_(d) {
     '未讀',                       // 狀態（新增）
     ''                            // 處置（主管裁決後寫入）
   ]);
+  notifyFeedbackToLine_(d);
   return json_({ status: 'ok', msg: '提交成功', photos: urls.length });
+}
+
+// ====== 轉發通知：由「天鷹保全APP」GAS 代發 LINE 推播給主管/管理員 ======
+// 本檔沒有 LINE Channel Access Token（存在天鷹保全APP GAS 的指令碼屬性），
+// 故用 UrlFetchApp 打對方 GAS，由對方負責查綁定、組卡片、實際推播。
+function notifyReportToLine_(d) {
+  try {
+    if (!NOTIFY_GAS_URL || NOTIFY_GAS_URL.indexOf('請填入') === 0) return;
+    UrlFetchApp.fetch(NOTIFY_GAS_URL, {
+      method: 'post',
+      payload: { action: 'notifyNewReport', data: JSON.stringify({
+        empId: d.empId || '未登入', name: d.name || '', date: d.date || '',
+        time: d.time || '', location: d.location || '', category: d.category || '',
+        description: d.description || ''
+      }) },
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    console.error('notifyReportToLine_ 失敗：' + err.toString());
+  }
+}
+
+function notifyFeedbackToLine_(d) {
+  try {
+    if (!NOTIFY_GAS_URL || NOTIFY_GAS_URL.indexOf('請填入') === 0) return;
+    UrlFetchApp.fetch(NOTIFY_GAS_URL, {
+      method: 'post',
+      payload: { action: 'notifyNewFeedback', data: JSON.stringify({
+        type: d.type || '', target: d.target || '', category: d.category || '',
+        description: d.description || '', date: d.date || '',
+        empId: d.empId || '未登入', name: d.name || ''
+      }) },
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    console.error('notifyFeedbackToLine_ 失敗：' + err.toString());
+  }
 }
 
 // ====== 主管：修改處理狀態 ======
@@ -332,6 +376,10 @@ function testGetFeedback() {
 }
 function testUpdateStatus() {
   Logger.log(handleUpdateStatus_({ sheet: 'report', row: 2, status: '已處理' }).getContent());
+}
+function testNotifyReportToLine() {
+  notifyReportToLine_({ empId: 'TEST', name: '測試員', date: '2026-07-04', time: '10:00',
+    location: 'B1F大廳', category: '設備異常', description: '測試用（本檔僅轉發，實際推播結果請看天鷹保全APP GAS 的 Log）' });
 }
 
 function testFolder() {
