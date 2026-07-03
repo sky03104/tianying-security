@@ -160,7 +160,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
 
 <script>
 // 建置後填入部署好的 GAS Web App URL；若留空則走 localStorage.hsh_handover_gasUrl（個別測試用）
-const BUILT_IN_GAS_URL = '';
+const BUILT_IN_GAS_URL = 'https://script.google.com/macros/s/AKfycbxllyhJAizfaj8r1wL2QzsAtP4r7AnMFbkOnQf9ostbMPgO1jDogc547YUZ07yVvJdy/exec';
 const ALLOWED_ROLES = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
 
 let gasUrl = BUILT_IN_GAS_URL || localStorage.getItem('hsh_handover_gasUrl') || '';
