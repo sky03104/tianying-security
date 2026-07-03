@@ -781,10 +781,59 @@ function updateRowLabel(id){
   }
 }
 
+// 依監工姓名反查曾登記過的專櫃／樓層（同名可能對應多筆，如設備課跨樓層）
+function findPersonShopMatches(q){
+  const seen=new Set();
+  const matches=[];
+  shops.forEach(s=>{
+    if(!s.emps)return;
+    s.emps.forEach(n=>{
+      if(n.includes(q)){
+        const key=n+'|'+s.n+'|'+s.f;
+        if(!seen.has(key)){seen.add(key);matches.push({name:n,shopName:s.n,floor:s.f});}
+      }
+    });
+  });
+  matches.sort((a,b)=>a.name===b.name?FLOORS.indexOf(a.floor)-FLOORS.indexOf(b.floor):a.name.localeCompare(b.name,'zh-Hant'));
+  return matches;
+}
+function choseSupWithShop(id,el){
+  const name=el.getAttribute('data-name');
+  const shopName=el.getAttribute('data-shop');
+  const floor=el.getAttribute('data-floor');
+  const r=shopRows.find(r=>r.id===id);if(!r)return;
+  r.supervisor=name;r.shopName=shopName;r.floor=floor;
+  r.isNew=!shops.find(s=>s.n===shopName&&s.f===floor);
+  const dd=document.getElementById('spdd'+id);if(dd)dd.classList.remove('open');
+  renderShopRows();
+  showToast('✓ 已自動帶入 '+shopName+'（'+floor+'）','ok');
+}
 function fspRow(id,q){
   const r=shopRows.find(r=>r.id===id);
   if(r)r.supervisor=q;
   const dd=document.getElementById('spdd'+id);
+  // 尚未選定專櫃／樓層：依姓名反查歷史紀錄，自動帶入專櫃＋樓層（重名或跨樓層則列出全部供選擇）
+  if(!(r&&r.shopName&&r.floor)){
+    if(!q.trim()){dd.classList.remove('open');return;}
+    const matches=findPersonShopMatches(q);
+    const matchedNames=new Set(matches.map(m=>m.name));
+    const otherPersons=persons.filter(p=>p.n.includes(q)&&!matchedNames.has(p.n)).slice(0,10);
+    let html='';
+    if(matches.length){
+      html+='<div style="padding:4px 10px;font-size:10px;color:var(--gold);border-bottom:1px solid var(--border2)">符合的監工紀錄（點選自動帶入專櫃／樓層）</div>';
+      html+=matches.map(m=>`<div class="ddi" onclick="choseSupWithShop(${id},this)" data-name="${x(m.name)}" data-shop="${x(m.shopName)}" data-floor="${x(m.floor)}">
+        <span class="ddi-name">⭐ ${x(m.name)}</span><span class="ftag">${x(m.shopName)} · ${x(m.floor)}</span>
+      </div>`).join('');
+    }
+    if(otherPersons.length){
+      if(matches.length) html+='<div style="padding:4px 10px;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border2)">其他人員（尚無專櫃紀錄）</div>';
+      html+=otherPersons.map(p=>`<div class="ddi" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(p.n)}">${x(p.n)}</div>`).join('');
+    }
+    html+=`<div class="ddi" style="color:var(--gold)" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(q)}">📝 "${x(q)}" — 新監工（先填姓名，再選專櫃）</div>`;
+    dd.innerHTML=html;
+    dd.classList.add('open');
+    return;
+  }
   // Find this shop's employee list
   const shopEntry=r&&r.shopName&&r.floor?shops.find(s=>s.n===r.shopName&&s.f===r.floor):null;
   const shopEmps=shopEntry&&shopEntry.emps?shopEntry.emps:[];
@@ -825,6 +874,8 @@ function choseSup(id,name){
   r.supervisor=name;
   const el=document.getElementById('sp'+id);if(el)el.value=name;
   const dd=document.getElementById('spdd'+id);if(dd)dd.classList.remove('open');
+  /* 還沒選專櫃 → 提醒補選（新專櫃/新監工送出時會自動建檔入庫） */
+  if(!r.shopName.trim())showToast('請再選擇專櫃／樓層，送出時會自動建檔','ok');
 }
 
 function addSupToShop(shopName,floor,name){
@@ -960,9 +1011,23 @@ function applyAutoFill(wtype,inspector){
   if(!ins)return null;
   return {wtype:'員工下班',inspector:getGivenName(ins)}; /* 檢查者僅填名，去除姓氏 */
 }
+/* ── 快速登記：只填了專櫃／樓層／監工姓名，時間與施工項目都沒填 → 自動填入場時間=現在、施工項目=陳列 ── */
+function nowHHMM(){
+  const d=new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function applyQuickEntryFill(wtype){
+  const entryV=document.getElementById('entryTime').value;
+  const exitV=document.getElementById('exitTime').value;
+  if(wtype||entryV||exitV)return null; /* 已填施工項目或任一時間 → 不自動填 */
+  return {entryTime:nowHHMM(),wtype:'陳列'};
+}
 
 // ADD TO QUEUE
 function addToQueue(){
+  /* 只填監工沒選專櫃的列 → 擋下送出，要求補選（避免該列被默默丟掉、新監工也不會入庫） */
+  const supOnly=shopRows.filter(r=>r.supervisor.trim()&&!r.shopName.trim());
+  if(supOnly.length){showToast('監工「'+supOnly[0].supervisor.trim()+'」尚未選擇專櫃／樓層！','err');return;}
   const validRows=shopRows.filter(r=>r.shopName.trim());
   if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
   // Check floors
@@ -973,8 +1038,10 @@ function addToQueue(){
   let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
   const _af=applyAutoFill(wtype,inspector);
   if(_af){wtype=_af.wtype;inspector=_af.inspector;}
-  const entryRaw=document.getElementById('entryTime').value;
+  const _qf=_af?null:applyQuickEntryFill(wtype);
+  let entryRaw=document.getElementById('entryTime').value;
   const exitRaw=document.getElementById('exitTime').value;
+  if(_qf){wtype=_qf.wtype;entryRaw=_qf.entryTime;document.getElementById('entryTime').value=_qf.entryTime;}
   const shared={
     entryTime:fmtTime(entryRaw),
     exitTime:fmtTime(exitRaw),
@@ -998,13 +1065,16 @@ function addToQueue(){
   });
 
   save();renderQueue();
-  showToast('✓ 已加入 '+validRows.length+' 筆'+(_af?'｜⚡ 自動填入：員工下班／檢查者 '+_af.inspector:''),'ok');
+  showToast('✓ 已加入 '+validRows.length+' 筆'+(_af?'｜⚡ 自動填入：員工下班／檢查者 '+_af.inspector:'')+(_qf?'｜⚡ 快速登記：陳列／進場 '+_qf.entryTime:''),'ok');
   resetForm();
 }
 
 /* ── 直接送出到試算表（略過清單步驟）── */
 async function directSubmitToSheet(){
   if(!gasUrl){showToast('未設定連線','err');return;}
+  /* 只填監工沒選專櫃的列 → 擋下送出，要求補選（避免該列被默默丟掉、新監工也不會入庫） */
+  const supOnly=shopRows.filter(r=>r.supervisor.trim()&&!r.shopName.trim());
+  if(supOnly.length){showToast('監工「'+supOnly[0].supervisor.trim()+'」尚未選擇專櫃／樓層！','err');return;}
   const validRows=shopRows.filter(r=>r.shopName.trim());
   if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
   const noFloor=validRows.filter(r=>!r.floor);
@@ -1013,9 +1083,13 @@ async function directSubmitToSheet(){
   let inspector=selIns||document.getElementById('insSrch').value.trim();
   let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
   const _af=applyAutoFill(wtype,inspector);
-  if(_af){wtype=_af.wtype;inspector=_af.inspector;showToast('⚡ 自動填入：員工下班／檢查者 '+inspector,'ok');}
-  const entryRaw=document.getElementById('entryTime').value;
+  if(_af){wtype=_af.wtype;inspector=_af.inspector;}
+  const _qf=_af?null:applyQuickEntryFill(wtype);
+  let entryRaw=document.getElementById('entryTime').value;
   const exitRaw=document.getElementById('exitTime').value;
+  if(_qf){wtype=_qf.wtype;entryRaw=_qf.entryTime;document.getElementById('entryTime').value=_qf.entryTime;}
+  /* 自動填入提示併入最終送出結果的 toast，避免被緊接的「送出中...」瞬間蓋掉 */
+  const autoFillNote=_af?'｜⚡ 自動填入：員工下班／檢查者 '+_af.inspector:(_qf?'｜⚡ 快速登記：陳列／進場 '+_qf.entryTime:'');
   const shared={
     entryTime:fmtTime(entryRaw),exitTime:fmtTime(exitRaw),
     location:document.getElementById('location').value.trim(),
@@ -1046,7 +1120,7 @@ async function directSubmitToSheet(){
     if(d.status==='ok'){
       logWorkflow('opening', 'submit', '已完成');
       shops.forEach(s=>{if(s.isNew)delete s.isNew;});save();
-      showToast('✅ 已直接送出 '+d.added+' 筆！','ok');
+      showToast('✅ 已直接送出 '+d.added+' 筆！'+autoFillNote,'ok');
       resetForm();
     }else showToast('失敗：'+d.msg,'err');
   }catch(err){showToast('網路錯誤','err');}
