@@ -730,6 +730,25 @@ Object.entries(CHAR_IMG_MAP).forEach(([role, file]) => {
   CHAR_IMAGES[role] = img;
 });
 
+// 跑步序列幀動畫（2026-07-03 咖哩提供羅賓 F1~F6 跑步稿）：
+// 只有動作跑者（送資料代跑）會播放跑步循環，待機站崗角色維持靜態圖，
+// 沒有列在這裡的角色照舊使用 CHAR_IMAGES 靜態圖
+const RUN_IMG_MAP = {
+  '羅賓': ['run_robin_f1.png','run_robin_f2.png','run_robin_f3.png','run_robin_f4.png','run_robin_f5.png','run_robin_f6.png'],
+};
+const RUN_IMAGES = {};
+Object.entries(RUN_IMG_MAP).forEach(([role, files]) => {
+  RUN_IMAGES[role] = files.map(f => { const img = new Image(); img.src = IMG_DIR + f; return img; });
+});
+const RUN_FRAME_MS = 110; // 每格幀間隔（毫秒），數字越小跑越快
+function getRunFrame(role) {
+  const frames = RUN_IMAGES[role];
+  if (!frames || !frames.length) return null;
+  const idx = Math.floor(performance.now() / RUN_FRAME_MS) % frames.length;
+  const f = frames[idx];
+  return (f && f.complete && f.naturalWidth > 0) ? f : null;
+}
+
 // 節點地點圖（工具節點專屬場景，取代發光球體；未列在這裡的節點照舊顯示球體）
 const NODE_IMG_MAP = {
   3:  'loc_library.png',        // 事故報告工具（羅賓／圖書室）
@@ -819,10 +838,10 @@ const DEFAULT_CHAR_SCALE = 0.6;
 const CHAR_SCALE = { '黃金梅利號': 1.75 };
 
 // extraScale：動態縮放乘數（預設1）。跑動作路線的角色會傳較小值，看起來像在小跑；
-// 未來要升級成真正的跑步序列幀動畫時，這個參數就是掛動畫幀的入口
-function drawCharacter(ctx, x, y, role, count, alpha, extraScale) {
+// animated：true 時若該角色有 RUN_IMG_MAP 序列幀，改播放跑步循環（否則照舊用靜態圖）
+function drawCharacter(ctx, x, y, role, count, alpha, extraScale, animated) {
   const glowColor = CHAR_COLORS[role] || '#D4A800';
-  const img = CHAR_IMAGES[role];
+  const img = (animated && getRunFrame(role)) || CHAR_IMAGES[role];
   const scale = (CHAR_SCALE[role] || DEFAULT_CHAR_SCALE) * (extraScale || 1);
   const boxW = 80 * scale, boxH = 80 * scale; // 顯示框：光暈/名字/計數氣泡都固定用這個尺寸排版
   let iw = boxW, ih = boxH;   // 圖片實際繪製尺寸：依原始長寬比縮放，避免船隻等非正方形圖被拉伸變形
@@ -1199,8 +1218,8 @@ function drawActionRunners(ctx) {
     if (!scr) return;
     if (scr.x < -60 || scr.x > window.innerWidth + 60 || scr.y < -60 || scr.y > window.innerHeight + 60) return;
     // 跑動作路線時縮小顯示（0.55倍），視覺上區分「代跑角色」跟站崗的正常大小角色；
-    // 這個縮放參數就是未來升級成跑步序列幀動畫的掛鉤點
-    drawCharacter(ctx, scr.x, scr.y, r.role, 0, r.alpha, 0.55);
+    // animated=true：有序列幀的角色（目前只有羅賓）在跑路線時播放跑步循環
+    drawCharacter(ctx, scr.x, scr.y, r.role, 0, r.alpha, 0.55, true);
   });
 }
 
