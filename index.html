@@ -17674,6 +17674,11 @@ const css = `
   .alert { background:rgba(212,168,0,.10); border:1px solid rgba(212,168,0,.25);
     border-radius:8px; padding:10px 12px; font-size:12px; color:var(--warn);
     display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .alert-marquee-track { flex:1; overflow:hidden; white-space:nowrap; position:relative; }
+  .alert-marquee-content { display:inline-block; padding-left:100%; animation-name:alertMarquee;
+    animation-timing-function:linear; animation-iteration-count:infinite; }
+  .alert-marquee-track:hover .alert-marquee-content { animation-play-state:paused; }
+  @keyframes alertMarquee { 0% { transform:translateX(0); } 100% { transform:translateX(-100%); } }
 
   .page-header { margin-bottom:16px; }
   .page-header-title { font-size:18px; font-weight:900; }
@@ -19817,13 +19822,12 @@ function App() {
                     _a.label)),
             announcements.length > 0 && (() => {
                 const latest = [...announcements].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (Number(b.id) || 0) - (Number(a.id) || 0))[0]; // 置頂優先，其次最新（id 需轉數字，避免舊資料殘留的非數字id讓排序失真）
+                const marqueeText = (latest.pinned ? '📌 ' : '') + latest.title + '：' + latest.content;
+                const marqueeDuration = Math.max(8, marqueeText.length * 0.22) + 's'; // 依文字長度調整速度，長文不會被壓縮得太趕
                 return (React.createElement("div", { className: "alert", style: { cursor: 'pointer' }, onClick: () => openBulletin() },
                     React.createElement("span", null, "\uD83D\uDCE2"),
-                    React.createElement("span", { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                        latest.pinned ? '📌 ' : '',
-                        latest.title,
-                        "\uFF1A",
-                        latest.content),
+                    React.createElement("div", { className: "alert-marquee-track" },
+                        React.createElement("span", { className: "alert-marquee-content", style: { animationDuration: marqueeDuration } }, marqueeText)),
                     React.createElement("span", { style: { color: 'var(--gold)', fontSize: 11, flexShrink: 0 } }, "\u67E5\u770B\u5168\u90E8 \u203A")));
             })(),
             React.createElement("div", { className: "stat-row" },
