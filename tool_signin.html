@@ -263,7 +263,9 @@ const TYPE_LABEL = { moto:'館內機車 🏍️', car:'館內汽車 🚗', park:
 
 // ===== 狀態 =====
 const params = new URLSearchParams(window.location.search);
-const empId  = params.get('empId') || '';
+let empId = params.get('empId') || '';
+// 網址沒帶工號時退回主程式登入態（同網域共用 localStorage）
+if (!empId) { try { empId = (JSON.parse(localStorage.getItem('hsh_session_user') || '{}').empId) || ''; } catch (e) {} }
 let currentType = 'moto';
 
 // ===== LOGO 注入 =====
