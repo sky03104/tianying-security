@@ -813,7 +813,9 @@ function worldToScreen(vec3) {
 }
 
 // 用角色圖片繪製人物（圖片預載後直接 drawImage）
-// 特定角色的顯示倍率：黃金梅利號是船不是人，該比其他角色明顯大一號
+// 特定角色的顯示倍率：黃金梅利號是船不是人，該比其他角色明顯大一號；
+// 2026-07-03 咖哩要求現有角色先整體縮小（船不動），其餘角色沒特別列出的一律吃 DEFAULT_CHAR_SCALE
+const DEFAULT_CHAR_SCALE = 0.6;
 const CHAR_SCALE = { '黃金梅利號': 1.75 };
 
 // extraScale：動態縮放乘數（預設1）。跑動作路線的角色會傳較小值，看起來像在小跑；
@@ -821,7 +823,7 @@ const CHAR_SCALE = { '黃金梅利號': 1.75 };
 function drawCharacter(ctx, x, y, role, count, alpha, extraScale) {
   const glowColor = CHAR_COLORS[role] || '#D4A800';
   const img = CHAR_IMAGES[role];
-  const scale = (CHAR_SCALE[role] || 1) * (extraScale || 1);
+  const scale = (CHAR_SCALE[role] || DEFAULT_CHAR_SCALE) * (extraScale || 1);
   const boxW = 80 * scale, boxH = 80 * scale; // 顯示框：光暈/名字/計數氣泡都固定用這個尺寸排版
   let iw = boxW, ih = boxH;   // 圖片實際繪製尺寸：依原始長寬比縮放，避免船隻等非正方形圖被拉伸變形
   if (img && img.complete && img.naturalWidth > 0) {
