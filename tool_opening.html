@@ -874,6 +874,8 @@ function choseSup(id,name){
   r.supervisor=name;
   const el=document.getElementById('sp'+id);if(el)el.value=name;
   const dd=document.getElementById('spdd'+id);if(dd)dd.classList.remove('open');
+  /* 還沒選專櫃 → 提醒補選（新專櫃/新監工送出時會自動建檔入庫） */
+  if(!r.shopName.trim())showToast('請再選擇專櫃／樓層，送出時會自動建檔','ok');
 }
 
 function addSupToShop(shopName,floor,name){
@@ -1023,6 +1025,9 @@ function applyQuickEntryFill(wtype){
 
 // ADD TO QUEUE
 function addToQueue(){
+  /* 只填監工沒選專櫃的列 → 擋下送出，要求補選（避免該列被默默丟掉、新監工也不會入庫） */
+  const supOnly=shopRows.filter(r=>r.supervisor.trim()&&!r.shopName.trim());
+  if(supOnly.length){showToast('監工「'+supOnly[0].supervisor.trim()+'」尚未選擇專櫃／樓層！','err');return;}
   const validRows=shopRows.filter(r=>r.shopName.trim());
   if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
   // Check floors
@@ -1067,6 +1072,9 @@ function addToQueue(){
 /* ── 直接送出到試算表（略過清單步驟）── */
 async function directSubmitToSheet(){
   if(!gasUrl){showToast('未設定連線','err');return;}
+  /* 只填監工沒選專櫃的列 → 擋下送出，要求補選（避免該列被默默丟掉、新監工也不會入庫） */
+  const supOnly=shopRows.filter(r=>r.supervisor.trim()&&!r.shopName.trim());
+  if(supOnly.length){showToast('監工「'+supOnly[0].supervisor.trim()+'」尚未選擇專櫃／樓層！','err');return;}
   const validRows=shopRows.filter(r=>r.shopName.trim());
   if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
   const noFloor=validRows.filter(r=>!r.floor);
