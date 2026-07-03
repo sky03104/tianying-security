@@ -65,6 +65,9 @@ tianying-security/
 ├── tool_logistics.html                ← 物流車輛統計（獨立檔，橙色主題，單一獨立GAS）
 ├── 物流車輛統計_GAS.gs                 ← 物流統計後端（登記/查日/查月/改刪/月統計分頁）
 ├── 物流車輛統計_GAS_部署說明.md        ← 物流 GAS 部署指南
+├── tool_handover.html                 ← 帶班交接事項（獨立檔，青綠主題，單一獨立GAS，組長以上）
+├── 帶班交接_GAS.gs                     ← 交接事項後端（新增/編輯/刪除/狀態切換/讀清單）
+├── 帶班交接_GAS_部署說明.md            ← 帶班交接 GAS 部署指南
 │
 └── tianying-monitor/                  ← Main automation system
     ├── README.md                      ← System documentation (English)
@@ -1200,6 +1203,26 @@ python3 snapshot-generator-simple.py
 
 **待咖哩手動操作**：GAS 編輯器「管理部署→編輯→新版本」發布（沿用既有 `/exec` 網址）→ 執行一次 `runSetupTodaySnapshotTrigger` 建立觸發器 → 執行一次 `runSnapshotTodayPostNow` 立即產生今日哨表測試資料。
 
+#### [TODO-18] 帶班幹部交接事項工具 → 獨立檔 + 獨立 GAS + 新試算表
+- **需求**：帶班幹部換班交接用清單；新增/編輯/刪除交接事項；狀態三種（未完成/進行中/已完成，預設未完成）；權限開放組長以上（leader/vicecaptain/captain/executive/admin）
+- **狀態**：🔄 進行中（2026-07-03，前端+GAS+index 串接已完成，待咖哩部署 GAS 並回填網址）
+
+**實作結果（2026-07-03）**：
+
+| 項目 | 值 |
+|------|-----|
+| 工具檔案 | `tool_handover.html`（獨立檔，vanilla JS 非 React，青綠 `#2DD4BF` 主題） |
+| index.html 串接 | `HANDOVER_PAGE_URL` + TOOLS 卡片 `id:19, toolId:"handover"` + 標題 + iframe `src`（仿 opening/logistics 模式） |
+| 權限（雙層） | ① `DEFAULT_PERMS` 只加進 leader/vicecaptain/captain/executive/admin（id19），一般保全員選單看不到卡片；② 工具內 `checkRole()` 讀 `hsh_session_user.role`，非組長以上且非獨立開啟則顯示「權限不足」畫面，防繞過 App 直接開網址 |
+| 分頁 | `交接事項`（A~I 欄），GAS 自動建立 |
+| 主鍵 | 純數字流水號 `max(既有ID)+1`（支援刪除列，不可用列號否則重號） |
+| GAS 端點 | add（新增，狀態預設未完成）／update（編輯內容 and/or 狀態，寫最後修改人/時間）／delete／getAll（讀清單，新的在前） |
+| 稽核欄位 | 建立人工號/姓名/時間（新增當下寫死不再變）＋最後修改人工號/姓名/時間（內容編輯或狀態切換皆更新） |
+| 前端 UI | 頂部新增表單 + 狀態分頁籤（全部/未完成/進行中/已完成）+ 事項卡片（左框色區分狀態：紅/橙/綠）+ 點狀態徽章或編輯鈕開 modal 切換狀態 |
+| GAS 部署說明 | `帶班交接_GAS_部署說明.md` |
+
+**待咖哩手動操作**：依 `帶班交接_GAS_部署說明.md` 新建試算表 → 部署 GAS → 取得 `/exec` 網址 → 回傳給 Claude 寫進 `tool_handover.html` 的 `BUILT_IN_GAS_URL`（或自行貼到瀏覽器 Console 用 `localStorage.setItem('hsh_handover_gasUrl', ...)` 個人測試）。
+
 ### 🟢 本次（2026-06-27）額外完成
 
 #### [TODO-07] 開店/打烊工具「設定」分頁限管理員
@@ -1453,6 +1476,7 @@ python3 snapshot-generator-simple.py
 | 2.0 | 2026-07-03 | TODO-17 完成：明日哨表 → 今/明日哨表雙分頁（`post.html` 今日/明日切換＋尚未更新提示、`天鷹保全APP_後端_GAS.gs` 每日08:00原地快照今日哨表＋`getTodayPost`＋LINE「今日哨點」指令）；brain_map 新增節點42「哨表試算表」+ 補連結 `[7,14]`/`[14,42]` |
 | 2.1 | 2026-07-03 | 新增 2026-07-03 技術經驗筆記：GitHub Pages 部署卡死佇列處理（cancel API 一律 409、正確做法是推新 commit 蓋過去 + rerun_failed_jobs，殭屍 queued run 免管會自動過期） |
 | 2.2 | 2026-07-03 | brain_map 即時航跡系統：動作跑者（送出資料由地點角色代跑）、黃金梅利號主控台、海域式節點分散、工具節點地點圖機制（圖書室/醫務室已生效，後續陸續補其他工具）；修正地點圖被每幀清畫布蓋掉的 bug（clearRect 呼叫時機）；新增技術經驗筆記記錄新增地點圖的標準流程 |
+| 2.3 | 2026-07-03 | TODO-18 新增（進行中）：帶班幹部交接事項工具（`tool_handover.html` + `帶班交接_GAS.gs` + 部署說明，新增/編輯/刪除/狀態切換三態，青綠主題，組長以上雙層權限），待咖哩部署 GAS 回填網址；brain_map 新增節點 43~45（工具/GAS/試算表）+ 對應關聯 |
 
 ---
 

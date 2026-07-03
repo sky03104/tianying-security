@@ -17258,6 +17258,7 @@ const POST_PAGE_URL       = 'https://sky03104.github.io/tianying-security/post.h
 const OPENING_PAGE_URL    = 'https://sky03104.github.io/tianying-security/tool_opening.html'; // 開店前進出快速登錄：獨立檔，iframe 串接（永遠同步最新 tool_opening.html）
 const AI_CHAT_URL         = 'https://sky03104.github.io/tianying-security/tool_ai_chat.html'; // 天鷹 AI 小助手（小天鷹）：獨立檔，iframe 串接（永遠同步最新 tool_ai_chat.html）
 const LOGISTICS_PAGE_URL  = 'https://sky03104.github.io/tianying-security/tool_logistics.html'; // 物流車輛統計：獨立檔，iframe 串接（永遠同步最新 tool_logistics.html）
+const HANDOVER_PAGE_URL   = 'https://sky03104.github.io/tianying-security/tool_handover.html'; // 帶班交接事項：獨立檔，iframe 串接（永遠同步最新 tool_handover.html）
 const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJyA79Cuzdh2IPRnBLUWm2YPEqXn5XJj4GVEUlCnNIv8hgRTJ7Xr198hZxG/exec'; // 事故報告／匿名表揚共用 GAS（主管待審卡片讀清單）
 const TOOL_CAR_HTML       = b64decode('tpl-car');
 // ─── COLOR TOKENS ────────────────────────────────────────────────
@@ -17283,6 +17284,7 @@ const TOOLS = [
     { id: 15, name: "績效報表查看", icon: "📊", category: "待開發" },
     { id: 17, name: "天鷹 AI 小助手", icon: "🦅", category: "核心工具", toolId: "aichat" },
     { id: 18, name: "物流車輛統計", icon: "🚚", category: "門禁管理", toolId: "logistics" },
+    { id: 19, name: "帶班交接事項", icon: "🔄", category: "核心工具", toolId: "handover" },
 ];
 const ROLES = [
     { id: "fulltime", label: "正職保全", color: "#3B82F6" },
@@ -17312,11 +17314,11 @@ const ACCOUNT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe
 const DEFAULT_PERMS = {
     fulltime: [1, 2, 3, 7, 5, 6, 9, 12, 13, 18, 99],
     parttime: [1, 2, 3, 7, 5, 6, 9, 12, 13, 18, 99],
-    leader: [1, 2, 3, 7, 4, 5, 6, 9, 11, 12, 13, 18, 99],
-    vicecaptain: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 18, 99],
-    captain: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 99],
-    executive: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 99],
-    admin: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 17, 18, 99],
+    leader: [1, 2, 3, 7, 4, 5, 6, 9, 11, 12, 13, 18, 19, 99],
+    vicecaptain: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 18, 19, 99],
+    captain: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 19, 99],
+    executive: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 19, 99],
+    admin: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 99],
 };
 const USER_DB = {
     "sky03104": { name: "咖哩", role: "admin", dept: "高雄辦事處", pw: "qaz03104" },
@@ -20201,6 +20203,7 @@ function App() {
                     activeToolId === 'post' && '📋 今/明日哨表',
                     activeToolId === 'aichat' && '🦅 天鷹 AI 小助手',
                     activeToolId === 'logistics' && '🚚 物流車輛統計',
+                    activeToolId === 'handover' && '🔄 帶班交接事項',
                     activeToolId === 'aiwork' && '📋 施工單查詢',
                      activeToolId === 'car' && '🅿️ 停車場車位數計算')),
             activeToolId === 'schedule' && (React.createElement("div", { style: { flex: 1, overflow: 'auto' } },
@@ -20213,6 +20216,7 @@ function App() {
             activeToolId === 'post' && (React.createElement("iframe", { src: POST_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u4ECA/\u660E\u65E5\u54E8\u8868" })),
             activeToolId === 'aichat' && (React.createElement("iframe", { src: AI_CHAT_URL, allow: "microphone", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5929\u9DF9 AI \u5C0F\u52A9\u624B" })),
             activeToolId === 'logistics' && (React.createElement("iframe", { src: LOGISTICS_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7269\u6D41\u8ECA\u8F1B\u7D71\u8A08" })),
+            activeToolId === 'handover' && (React.createElement("iframe", { src: HANDOVER_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5E36\u73ED\u4EA4\u63A5\u4E8B\u9805" })),
             activeToolId === 'aiwork' && (React.createElement("iframe", { src: "https://sky03104.github.io/tianying-security/tool_work.html", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u65BD\u5DE5\u55AE\u67E5\u8A62" })),
             activeToolId === 'car' && (React.createElement("iframe", { srcDoc: TOOL_CAR_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u505C\u8ECA\u5834\u8ECA\u4F4D\u6578\u8A08\u7B97" })))),
         showLeave && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10',
