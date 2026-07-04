@@ -1995,6 +1995,7 @@ function notifyScheduleChangeBatchAction_(e) {
   }
 }
 
+// 改群組推播（不再逐人 push，節省每月200則免費額度）
 function monthScheduleReleasedAction_(e) {
   try {
     var d = JSON.parse(e.parameter.data);
@@ -2003,32 +2004,36 @@ function monthScheduleReleasedAction_(e) {
     var cfg = SCHEDULE_SHEETS_[shiftType];
     if (!cfg) return jsonRes({status:'err', msg:'未知班別:' + shiftType});
 
-    var sh = getScheduleSheet_(shiftType);
-    if (!sh) return jsonRes({status:'err', msg:'找不到' + cfg.label + '班表分頁'});
+    var msg = '📅 ' + ym + ' 班表已發佈，輸入「本月班表」即可查詢完整內容。';
 
-    var data = sh.getDataRange().getValues();
-    var msg = '📅 ' + cfg.label + ' ' + ym + ' 班表已發佈，輸入「本月班表」即可查詢完整內容。';
+    var groupId = readSettingStr_('tomorrowPostGroupId', '');
+    if (!groupId) return jsonRes({status:'err', msg:'尚未設定群組ID，請先把機器人加入群組'});
 
-    var pushed = 0;
-    for (var r = 0; r < data.length; r++) {
-      var name = String(data[r][1] || '').trim();
-      if (!name) continue;
+    var code = pushTextToGroup_(groupId, msg);
+    if (code !== 200) return jsonRes({status:'err', msg:'群組推播失敗 HTTP ' + code});
 
-      var empInfo = getEmpInfoByName_(name);
-      if (!empInfo) continue;
-      var lineUserId = getLineUserIdByEmpId_(empInfo.empId);
-      if (!lineUserId) continue;
-
-      pushLineMessage_(lineUserId, msg);
-      pushed++;
-
-      if (pushed % 10 === 0) Utilities.sleep(150);
-    }
-
-    return jsonRes({status:'ok', shiftType: shiftType, ym: ym, pushed: pushed});
+    return jsonRes({status:'ok', shiftType: shiftType, ym: ym});
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString()});
   }
+}
+
+// 推播純文字到群組（回傳 HTTP 碼）
+function pushTextToGroup_(groupId, text) {
+  var token = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+  if (!token || !groupId) return -1;
+  var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + token },
+    payload: JSON.stringify({
+      to: groupId,
+      messages: [{ type: 'text', text: text }]
+    }),
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 200) console.error('群組文字推播失敗 HTTP ' + code + '：' + resp.getContentText());
+  return code;
 }
 
 function onScheduleEdit_(e) {
