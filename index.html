@@ -19280,6 +19280,13 @@ function App() {
                 if (sess && sess.empId && sess.role) sessionUser = sess;
             }
             if (!sessionUser) return;
+            /* 帳號已被停用 → 不自動登入，並清除登入態（停用只在雲端設定，靠 getUserDB 同步回本機） */
+            const dbRec = userDb[sessionUser.empId];
+            if (dbRec && dbRec.status === 'inactive') {
+                localStorage.removeItem('hsh_remember_user');
+                localStorage.removeItem('hsh_session_user');
+                return;
+            }
             setCurrentUser(sessionUser);
             localStorage.setItem('hsh_session_user', JSON.stringify(sessionUser));
                 try { if (typeof logWorkflow === 'function') logWorkflow('app', 'login', '上線'); } catch (e) {}
@@ -19312,6 +19319,10 @@ function App() {
         }
         if (rec.pw !== loginForm.pw) {
             showToast("❌ 密碼錯誤");
+            return;
+        }
+        if (rec.status === 'inactive') {
+            showToast("❌ 此帳號已被停用，請聯絡管理員");
             return;
         }
         const sessionUser = { name: rec.name, role: rec.role, dept: rec.dept, empId: loginForm.id.trim() };
@@ -19538,10 +19549,12 @@ function App() {
     // 1. 雲端有、本地沒有 → 新增（新核准帳號同步，讓新員工能在自己裝置登入）
     // 2. 本地已有但「從未被本機App修改過」（即仍等於原始 USER_DB[id]）→ 用雲端版本覆蓋（管理員雲端改密碼/角色/部門即時生效）
     // 3. 本地已有且「已被本機App修改過」（與原始 USER_DB[id] 不同）→ 保留本機版本（不被雲端覆蓋）
+    // ★ 改用 getUserDB（含停用帳號）：原本的 getApprovedUsers 會把 inactive 過濾掉，
+    //   手機端永遠拿不到「已停用」狀態，停用的人照樣登入
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch(ACCOUNT_GAS_URL + '?action=getApprovedUsers');
+                const res = await fetch(ACCOUNT_GAS_URL + '?action=getUserDB');
                 const d = await res.json();
                 if (d.status === 'ok' && d.users && typeof d.users === 'object') {
                     setUserDb(prev => {
@@ -19557,6 +19570,11 @@ function App() {
                                 // 班別永遠以雲端為準（班別僅在雲端管理，不受本機修改影響）
                                 if (cloudRec.shift && merged[id].shift !== cloudRec.shift) {
                                     merged[id] = { ...merged[id], shift: cloudRec.shift };
+                                    changed = true;
+                                }
+                                // 帳號狀態（啟用/停用）永遠以雲端為準：管理員在任一裝置停用，全部裝置生效
+                                if (cloudRec.status && merged[id].status !== cloudRec.status) {
+                                    merged[id] = { ...merged[id], status: cloudRec.status };
                                     changed = true;
                                 }
                                 const seedRec = USER_DB[id];
@@ -19587,6 +19605,20 @@ function App() {
             catch (e) { /* 離線時略過，使用本地帳號資料 */ }
         })();
     }, []);
+    // 停用帳號即時登出：雲端同步回來發現「目前登入者」已被停用 → 強制登出並清除登入態
+    useEffect(() => {
+        if (!currentUser) return;
+        const rec = userDb[currentUser.empId];
+        if (rec && rec.status === 'inactive') {
+            try {
+                localStorage.removeItem('hsh_remember_user');
+                localStorage.removeItem('hsh_session_user');
+            } catch (e) { }
+            setCurrentUser(null);
+            setPage('login');
+            showToast('❌ 此帳號已被停用，請聯絡管理員');
+        }
+    }, [userDb, currentUser]);
     const handleRegister = () => {
         if (regStep === 1) {
             if (!regForm.name || !regForm.id || !regForm.dept) {
