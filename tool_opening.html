@@ -329,7 +329,7 @@ select.txt{-webkit-appearance:none;}
     <button class="preview-link" style="flex:none;width:auto;padding:11px 14px;margin-bottom:0;cursor:pointer;border:none;" onclick="refreshPreview()">🔄 刷新</button>
   </div>
   <iframe class="preview-frame" id="previewFrame"
-    src="https://docs.google.com/spreadsheets/d/1mxCRUxbuPBuReP1gWK3unFbjtOkAuSkBakQeaH9Rdyc/gviz/tq?tqx=out:html&gid=921725644"
+    src="https://docs.google.com/spreadsheets/d/1mxCRUxbuPBuReP1gWK3unFbjtOkAuSkBakQeaH9Rdyc/gviz/tq?tqx=out:html&gid=921725644&range=A2:I"
     frameborder="0"></iframe>
 </div>
 
@@ -2050,7 +2050,7 @@ init();
 /* ── 預覽用 gviz/tq 資料查詢端點（依 gid 精準吐出該分頁表格，不會像 /preview 那樣抓錯分頁）── */
 let currentPreviewGid='921725644';
 function previewUrl(gid){
-  return 'https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/gviz/tq?tqx=out:html&gid='+gid+'&t='+Date.now();
+  return 'https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/gviz/tq?tqx=out:html&gid='+gid+'&range=A2:I&t='+Date.now();
 }
 function refreshPreview(silent){
   const frame = document.getElementById('previewFrame');
