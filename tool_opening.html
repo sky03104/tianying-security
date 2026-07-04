@@ -1841,6 +1841,7 @@ function switchTab(t){
   document.getElementById('nav-'+t).classList.add('active');
   if(t==='db'){renderDBShops();renderDBPersons();renderDBInspectors();if(gasUrl&&syncStatus!=='loading')syncDBFromGAS();}
   if(t==='today'&&gasUrl&&todayRecords.length===0){loadTodayRecords();}
+  if(t==='preview'){refreshPreview(true);}
 }
 function closeMo(id){document.getElementById(id).classList.remove('open');}
 function setTedIns(el){document.getElementById('tedIns').value=el.getAttribute('data-n');}
@@ -2047,9 +2048,9 @@ function conQuickSend(idx, type) {
 init();
 
 /* ── 刷新預覽 iframe ── */
-function refreshPreview(){
+function refreshPreview(silent){
   const frame = document.getElementById('previewFrame');
-  if(frame){ const src=frame.src; frame.src=''; frame.src=src; showToast('🔄 預覽已刷新','ok'); }
+  if(frame){ const src=frame.src; frame.src=''; frame.src=src; if(!silent)showToast('🔄 預覽已刷新','ok'); }
 }
 
 /* ── 切換預覽分頁（開店前 / B1F餐廳區 / 4F餐廳區）── */
