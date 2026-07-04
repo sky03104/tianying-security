@@ -329,7 +329,7 @@ select.txt{-webkit-appearance:none;}
     <button class="preview-link" style="flex:none;width:auto;padding:11px 14px;margin-bottom:0;cursor:pointer;border:none;" onclick="refreshPreview()">🔄 刷新</button>
   </div>
   <iframe class="preview-frame" id="previewFrame"
-    src="https://docs.google.com/spreadsheets/d/1mxCRUxbuPBuReP1gWK3unFbjtOkAuSkBakQeaH9Rdyc/preview?gid=921725644"
+    src="https://docs.google.com/spreadsheets/d/1mxCRUxbuPBuReP1gWK3unFbjtOkAuSkBakQeaH9Rdyc/gviz/tq?tqx=out:html&gid=921725644"
     frameborder="0"></iframe>
 </div>
 
@@ -2047,11 +2047,14 @@ function conQuickSend(idx, type) {
 
 init();
 
-/* ── 刷新預覽 iframe（加時間戳記強制不吃快取，確保每次都是最新資料）── */
+/* ── 預覽用 gviz/tq 資料查詢端點（依 gid 精準吐出該分頁表格，不會像 /preview 那樣抓錯分頁）── */
 let currentPreviewGid='921725644';
+function previewUrl(gid){
+  return 'https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/gviz/tq?tqx=out:html&gid='+gid+'&t='+Date.now();
+}
 function refreshPreview(silent){
   const frame = document.getElementById('previewFrame');
-  if(frame){ frame.src='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/preview?gid='+currentPreviewGid+'&t='+Date.now(); if(!silent)showToast('🔄 預覽已刷新','ok'); }
+  if(frame){ frame.src=previewUrl(currentPreviewGid); if(!silent)showToast('🔄 預覽已刷新','ok'); }
 }
 
 /* ── 切換預覽分頁（開店前 / B1F餐廳區 / 4F餐廳區）── */
@@ -2059,7 +2062,7 @@ const PREVIEW_SS_ID='1mxCRUxbuPBuReP1gWK3unFbjtOkAuSkBakQeaH9Rdyc';
 function switchPreviewSheet(gid, btn){
   currentPreviewGid=gid;
   const frame=document.getElementById('previewFrame');
-  if(frame) frame.src='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/preview?gid='+gid+'&t='+Date.now();
+  if(frame) frame.src=previewUrl(gid);
   const lk=document.getElementById('prevOpenLink');
   if(lk) lk.href='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/edit?gid='+gid+'#gid='+gid;
   document.querySelectorAll('.prev-tab').forEach(b=>b.classList.remove('active'));
