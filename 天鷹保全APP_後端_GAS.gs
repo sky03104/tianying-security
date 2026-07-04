@@ -2884,36 +2884,32 @@ function tomorrowPostGroupCore_(doPush) {
   return result;
 }
 
-function tomorrowPostCore_(doPush) {
+// 明日哨點：僅供預覽/診斷用（哪些人有排班、有無綁定LINE），不再逐人 push（額度吃太兇，改用群組版 tomorrowPostGroupCore_）
+function tomorrowPostCore_() {
   var parsed = parsePostSheet_();
   if (parsed.error) return { status: 'err', msg: parsed.error };
 
   var di = parsed.dateInfo;
   var dm = checkDateMatch_(di, 1);
 
-  var sent = [], unbound = [], detail = [];
+  var unbound = [], detail = [];
   for (var empId in parsed.hit) {
     var h = parsed.hit[empId];
     var lineUserId = getLineUserIdByEmpId_(empId);
     detail.push({ empId: empId, name: h.name, posts: h.posts, bound: !!lineUserId });
-    if (!lineUserId) { unbound.push(h.name + '(' + empId + ')'); continue; }
-    if (doPush) {
-      pushLineFlex_(lineUserId, '📍 您的明日哨點 ' + (di.label || ''), buildTomorrowPostFlex_(h.name, di.label, h.posts));
-      sent.push(h.name);
-      if (sent.length % 10 === 0) Utilities.sleep(150);
-    }
+    if (!lineUserId) unbound.push(h.name + '(' + empId + ')');
   }
   return {
     status: 'ok',
     dateLabel: di.label, dateMatch: dm.match, tomorrow: dm.label,
-    totalHit: detail.length, pushed: doPush ? sent.length : 0,
+    totalHit: detail.length,
     unboundCount: unbound.length, unbound: unbound,
     noEmpId: parsed.noEmpId, detail: detail
   };
 }
 
 function previewTomorrowPost(e) {
-  try { return jsonRes(tomorrowPostCore_(false)); }
+  try { return jsonRes(tomorrowPostCore_()); }
   catch (err) { return jsonRes({ status: 'err', msg: err.toString() }); }
 }
 
@@ -3032,12 +3028,8 @@ function runSetupTomorrowPostTrigger() {
   setupTomorrowPostTrigger_();
 }
 
-function runPushTomorrowPost() {
-  Logger.log(JSON.stringify(tomorrowPostCore_(true)));
-}
-
 function runPreviewTomorrowPost() {
-  Logger.log(JSON.stringify(tomorrowPostCore_(false)));
+  Logger.log(JSON.stringify(tomorrowPostCore_()));
 }
 
 function runSetupTodaySnapshotTrigger() {
