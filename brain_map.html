@@ -141,81 +141,208 @@ const TOPICS = {
   todo:     { name: '待辦/規劃',  color: '#F87171' }, // 紅
 };
 
-// pos 座標建議範圍 ±3.5，各主題像不同「海域」一樣分開，中心距原點約 2.5：
-//   core:  中央樞紐 距原點約 0.75，x∈[-0.4,0.4] y∈[-0.3,0.4] z∈[0.6,0.9]
-//   tools: 東方海域 x 多在 1.7~3.2（主控台右側）
-//   backend:西方海域 x 多在 -3.1~-1.9（主控台左側）
-//   data:  南方海域 y 多在 -3.2~-1.6（下方）
-//   infra: 遠方海域 z 多在 -3.4~-0.8（後方）
-//   todo:  北方海域 y 多在 1.5~2.2（上方）
-// 新增節點時：先抓該主題任一既有節點座標當基準，在其附近 ±0.3~0.5 微調，
-// 不要拉回原點附近，否則會跟 core 或其他海域擠在一起
+// 海賊王世界地圖式佈局（2026-07-03 改版）：
+//   core:  正中心三角形，半徑 0.45（CORE_R），三點 90°/210°/330°，y=0
+//   tools: 環繞核心的直立雙圈（紅土大陸意象），半徑 2.3（RING_R，2026-07-03再調整：
+//          原0.45→加大到2.3，核心到工具環間距拉開一倍），
+//          A排 y=+0.4 角度0/60/120/180/240/300，B排 y=-0.4 角度30/90/150/210/270/330
+//          （軸心＝Y軸，兩排錯開30°＋上下更明顯分開才不會擠成一團；
+//          注意此半徑已逼近海域最內圈真實節點(~2.13)，兩者刻意留一點點交界感）
+//   四海域（backend/data/infra/todo）：半徑帶 2.0~3.0，φ/θ球座標象限，
+//          北海=data(左上,X<0,Y>0) 東海=backend(右上,X>0,Y>0)
+//          西海=todo(左下,X<0,Y<0) 南海=infra(右下,X>0,Y<0)
+//          每海域30格：真實節點排前面(k小,離核心近)，空節點填外圍(k大)
+//          用 R2 低差異序列(α1=1/ψ, α2=1/ψ², ψ=1.3247179572...)算θ/φ，
+//          radius_k = R_MIN+(R_MAX-R_MIN)·sqrt((k+0.5)/30) 等面積分布
+// 重要：NODES 陣列必須嚴格依 id 升冪排列（NODES[i].id===i），因為下面
+// EDGES 渲染是直接用陣列 index 取值（不是查 .id），順序錯掉連線就會畫錯位置
+// 新增真實節點：優先「認領」對應海域裡的空節點（改 title/note，pos 微調即可，
+// 記得同步改 title 讓它不再以「空節點」開頭，否則會被判定成暗化樣式）
 const NODES = [
+
   // ── 主控台核心 ──
-  { id: 0,  title: '主控台 index.html', topic: 'core',    pos: [ 0.0, -0.0, 0.88], note: '主選單/登入/公告/工具權限/首頁卡片，編譯後 React.createElement（非 JSX）' },
-  { id: 1,  title: '登入與角色系統',     topic: 'core',    pos: [ -0.39, 0.39, 0.65], note: 'localStorage hsh_session_user；CAN_MANAGE_ROLES 控管理職可見' },
-  { id: 2,  title: '首頁待審卡片',       topic: 'core',    pos: [ 0.39, -0.31, 0.73], note: '待審請假/帳號/報告/表揚反應；報告、表揚兩格限 executive/admin' },
+  { id: 0, title: '主控台 index.html', topic: 'core', pos: [0.0, 0.0, 0.45], note: '主選單/登入/公告/工具權限/首頁卡片，編譯後 React.createElement（非 JSX）' },
+  { id: 1, title: '登入與角色系統', topic: 'core', pos: [-0.3897, 0.0, -0.225], note: 'localStorage hsh_session_user；CAN_MANAGE_ROLES 控管理職可見' },
+  { id: 2, title: '首頁待審卡片', topic: 'core', pos: [0.3897, 0.0, -0.225], note: '待審請假/帳號/報告/表揚反應；報告、表揚兩格限 executive/admin' },
 
-  // ── 前端工具 ──
-  { id: 3,  title: '事故報告工具',       topic: 'tools',   pos: [ 2.03, 1.1, 0.86], note: 'tool_report.html；?mode=admin 主管審閱（未讀/待處理/已處理）' },
-  { id: 4,  title: '匿名表揚/反應',      topic: 'tools',   pos: [ 2.62, 0.7, 0.47], note: 'tool_feedback.html；前台匿名，主管裁決寫「處置」欄' },
-  { id: 5,  title: '開店前進出登錄',     topic: 'tools',   pos: [ 3.01, 0.11, -0.13], note: 'tool_opening.html 獨立檔，雙 GAS（共用 _SharedDB）' },
-  { id: 6,  title: '打烊後快速登錄',     topic: 'tools',   pos: [ 2.43, -0.38, 0.67], note: 'index 內嵌 tpl-closing（base64）' },
-  { id: 7,  title: '明日哨表',           topic: 'tools',   pos: [ 3.22, 1.18, 0.37], note: 'post.html，iframe src 串接' },
-  { id: 8,  title: '班表查詢',           topic: 'tools',   pos: [ 3.12, -0.28, 0.96], note: 'ScheduleApp；SHIFT_TYPES 班別代號（早/晚班）' },
-  { id: 9,  title: '緊急聯絡清單',       topic: 'tools',   pos: [ 1.74, 1.39, 0.08], note: 'tpl-emergency；normalizePhone 補回開頭 0' },
-  { id: 10, title: '資料上傳工具',       topic: 'tools',   pos: [ 2.83, 1.28, -0.32], note: 'tpl-upload（base64 內嵌）；施工單/班表/哨表，SheetJS 解析 Excel；獨立版見 cec-up(id32)' },
-  { id: 11, title: '簽到/車輛/工作',     topic: 'tools',   pos: [ 1.74, -0.09, -0.32], note: 'tool_signin / tool_car / tool_work' },
-  { id: 12, title: '請假申請',           topic: 'tools',   pos: [ 2.52, 0.11, 1.15], note: 'liff_leave + 雲端請假清單' },
+  // ── 前端工具（直立雙圈環繞核心） ──
+  { id: 3, title: '事故報告工具', topic: 'tools', pos: [2.3, 0.4, 0.0], note: 'tool_report.html；?mode=admin 主管審閱（未讀/待處理/已處理）' },
+  { id: 4, title: '匿名表揚/反應', topic: 'tools', pos: [1.15, 0.4, 1.9919], note: 'tool_feedback.html；前台匿名，主管裁決寫「處置」欄' },
+  { id: 5, title: '開店前進出登錄', topic: 'tools', pos: [-1.15, 0.4, 1.9919], note: 'tool_opening.html 獨立檔，雙 GAS（共用 _SharedDB）' },
+  { id: 6, title: '打烊後快速登錄', topic: 'tools', pos: [-2.3, 0.4, 0.0], note: 'index 內嵌 tpl-closing（base64）' },
+  { id: 7, title: '今/明日哨表', topic: 'tools', pos: [-1.15, 0.4, -1.9919], note: 'post.html，iframe src 串接；今日/明日切換鈕，未更新顯示「尚未更新」；每日08:00自動快照明日哨表→今日哨表（gid不變、完全靜默）' },
+  { id: 8, title: '班表查詢', topic: 'tools', pos: [1.15, 0.4, -1.9919], note: 'ScheduleApp；SHIFT_TYPES 班別代號（早/晚班）' },
+  { id: 9, title: '緊急聯絡清單', topic: 'tools', pos: [1.9919, -0.4, 1.15], note: 'tpl-emergency；normalizePhone 補回開頭 0' },
+  { id: 10, title: '資料上傳工具', topic: 'tools', pos: [0.0, -0.4, 2.3], note: 'tpl-upload（base64 內嵌）；施工單/班表/哨表，SheetJS 解析 Excel；獨立版見 cec-up(id32)' },
+  { id: 11, title: '簽到/車輛/工作', topic: 'tools', pos: [-1.9919, -0.4, 1.15], note: 'tool_signin / tool_car / tool_work；施工單查詢(id9)新增正職/兼職個人白名單(workAllowedIds)，組長以上不受影響，tool_work.html 自帶檢查防貼網址繞過' },
+  { id: 12, title: '請假申請', topic: 'tools', pos: [-1.9919, -0.4, -1.15], note: 'liff_leave + 雲端請假清單' },
 
-  // ── 後端 GAS ──
-  { id: 13, title: '事故/表揚 GAS v3.1', topic: 'backend', pos: [ -2.42, 0.39, 0.68], note: 'action 分流 report/feedback/updateStatus/deleteRow/getReports/getFeedback；狀態/處置欄' },
-  { id: 14, title: '帳號/請假 GAS',      topic: 'backend', pos: [ -2.95, 0.83, 0.15], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核' },
-  { id: 15, title: '打烊/開店 GAS',      topic: 'backend', pos: [ -3.12, -0.14, 0.5], note: '進出記錄 + _SharedDB（廠商/監工/檢查者即時同步）' },
-  { id: 16, title: '照片上傳處理',       topic: 'backend', pos: [ -2.33, -0.4, -0.04], note: 'saveImages_；公告夾不可寫退回執行帳號夾；setSharing 非致命' },
+  // ── 東海／後端 GAS ──
+  { id: 13, title: '事故/表揚 GAS v3.1', topic: 'backend', pos: [1.6891, 1.2961, 0.0], note: 'action 分流 report/feedback/updateStatus/deleteRow/getReports/getFeedback；狀態/處置欄；新資料自動轉發LINE推播給主管/管理員' },
+  { id: 14, title: '帳號/請假 GAS', topic: 'backend', pos: [0.8592, 1.9478, 0.6421], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核' },
+  { id: 15, title: '打烊/開店 GAS', topic: 'backend', pos: [0.5627, 1.138, 1.9043], note: '進出記錄 + _SharedDB（廠商/監工/檢查者即時同步）' },
+  { id: 16, title: '照片上傳處理', topic: 'backend', pos: [1.0723, 1.8817, -0.8901], note: 'saveImages_；公告夾不可寫退回執行帳號夾；setSharing 非致命' },
 
-  // ── 資料儲存 ──
-  { id: 17, title: '主試算表',           topic: 'data',    pos: [ -0.77, -2.58, 0.46], note: '事故報告 / 匿名表揚檢舉 分頁；主鍵純數字列號' },
-  { id: 18, title: '打烊資料庫',         topic: 'data',    pos: [ -1.65, -2.76, 0.11], note: '廠商/監工/檢查者/施工類型（開店打烊共用）' },
-  { id: 19, title: '開店試算表',         topic: 'data',    pos: [ 0.63, -2.76, 0.29], note: '開店前/B1F餐廳/4F餐廳 分頁' },
-  { id: 20, title: '班表資料',           topic: 'data',    pos: [ 1.52, -2.48, 0.46], note: '班別代號 SHIFT_TYPES / WORK_SHIFT / OFF_TYPES' },
-  { id: 21, title: 'localStorage 本地',  topic: 'data',    pos: [ -0.07, -2.32, 1.0], note: 'hsh_session_user / hsh_favs / hsh_shops 等' },
-  { id: 22, title: 'Drive 公告資料夾',   topic: 'data',    pos: [ -1.82, -2.22, -0.42], note: '照片統一存放（1K_RR…）；共用政策可能擋公開連結' },
+  // ── 北海／資料儲存 ──
+  { id: 17, title: '主試算表', topic: 'data', pos: [-1.6891, 1.2961, -0.0], note: '事故報告 / 匿名表揚檢舉 分頁；主鍵純數字列號' },
+  { id: 18, title: '打烊資料庫', topic: 'data', pos: [-0.8592, 1.9478, -0.6421], note: '廠商/監工/檢查者/施工類型（開店打烊共用）' },
+  { id: 19, title: '開店試算表', topic: 'data', pos: [-0.5627, 1.138, -1.9043], note: '開店前/B1F餐廳/4F餐廳 分頁' },
+  { id: 20, title: '班表資料', topic: 'data', pos: [-1.0723, 1.8817, 0.8901], note: '班別代號 SHIFT_TYPES / WORK_SHIFT / OFF_TYPES' },
+  { id: 21, title: 'localStorage 本地', topic: 'data', pos: [-2.2085, 0.8995, 0.1129], note: 'hsh_session_user / hsh_favs / hsh_shops 等' },
+  { id: 22, title: 'Drive 公告資料夾', topic: 'data', pos: [-1.4062, 1.7406, -0.9428], note: '照片統一存放（1K_RR…）；共用政策可能擋公開連結' },
 
-  // ── 部署/監控 ──
-  { id: 23, title: 'GitHub Pages 部署',  topic: 'infra',   pos: [ -0.16, 0.39, -2.35], note: 'sky03104.github.io/tianying-security；正式 APP 跑 main' },
-  { id: 24, title: 'Git 版本控制',       topic: 'infra',   pos: [ -0.86, -0.14, -2.7], note: 'main + 功能分支；raw.githack + SHA 預覽' },
-  { id: 25, title: '監控自動化系統',     topic: 'infra',   pos: [ 0.75, -0.19, -2.61], note: 'tianying-monitor（失敗紀錄/技能迭代/回歸測試）' },
+  // ── 南海／部署監控 ──
+  { id: 23, title: 'GitHub Pages 部署', topic: 'infra', pos: [1.6891, -1.2961, 0.0], note: 'sky03104.github.io/tianying-security；正式 APP 跑 main' },
+  { id: 24, title: 'Git 版本控制', topic: 'infra', pos: [1.7295, -0.532, 1.2924], note: 'main + 功能分支；raw.githack + SHA 預覽' },
+  { id: 25, title: '監控自動化系統', topic: 'infra', pos: [0.4572, -1.6235, 1.547], note: 'tianying-monitor（失敗紀錄/技能迭代/回歸測試）' },
 
-  // ── 待辦/規劃 ──
-  { id: 26, title: 'TODO-11 角色 Agents',topic: 'todo',    pos: [ -0.49, 2.5, 0.3], note: '✅ 完成（2026-06-28）：11 Agent + 工作流程檔落地成 .claude/agents/*.md' },
-  { id: 27, title: 'TODO-12 哨表自動化', topic: 'todo',    pos: [ 0.49, 2.66, -0.02], note: '排班自動產表/輪值/衝突檢查' },
-  { id: 28, title: 'TODO-13 對話助手',   topic: 'todo',    pos: [ 0.0, 2.33, -0.51], note: '✅ 已完成：天鷹 AI 小助手（小天鷹）J.A.R.V.I.S. 風格' },
+  // ── 西海／待辦規劃 ──
+  { id: 26, title: 'TODO-11 角色 Agents', topic: 'todo', pos: [-1.6891, -1.2961, -0.0], note: '✅ 完成（2026-06-28）：11 Agent + 工作流程檔落地成 .claude/agents/*.md' },
+  { id: 27, title: 'TODO-12 哨表自動化', topic: 'todo', pos: [-1.7295, -0.532, -1.2924], note: '排班自動產表/輪值/衝突檢查' },
+  { id: 28, title: 'TODO-13 對話助手', topic: 'todo', pos: [-0.4572, -1.6235, -1.547], note: '✅ 已完成：天鷹 AI 小助手（小天鷹）J.A.R.V.I.S. 風格' },
 
-  // ── cec-up 獨立部署（2026-06-30）──
-  { id: 32, title: 'cec-up 獨立上傳工具', topic: 'infra',   pos: [ 0.23, 0.49, -3.07], note: 'sky03104/cec-up；GitHub Pages 獨立版上傳工具；早/晚班切換已與 tpl-upload 同步（2026-06-30）' },
+  // ── 前端工具（直立雙圈環繞核心） ──
+  { id: 29, title: '天鷹 AI 小助手', topic: 'tools', pos: [-0.0, -0.4, -2.3], note: 'tool_ai_chat.html；J.A.R.V.I.S. 風格 LOGO 光環＋語音輸入/輸出；個人化習慣記憶 hsh_ai_profile；admin 控制台調禁止規則' },
 
-  // ── AI 小助手（小天鷹，2026-06-29）──
-  { id: 29, title: '天鷹 AI 小助手',     topic: 'tools',   pos: [ 2.03, -0.88, 0.18], note: 'tool_ai_chat.html；J.A.R.V.I.S. 風格 LOGO 光環＋語音輸入/輸出；個人化習慣記憶 hsh_ai_profile；admin 控制台調禁止規則' },
-  { id: 30, title: '小天鷹 GAS Proxy',   topic: 'backend', pos: [ -2.77, -0.85, 0.24], note: '天鷹AI助手_GAS.gs；Gemini Proxy，藏 API Key；依 role/vocabLevel 組 system prompt；getConfig/saveConfig' },
-  { id: 31, title: 'Gemini 1.5 Flash',   topic: 'infra',   pos: [ -2.52, -0.92, -1.39], note: '外部 AI 服務（免費額度）；API Key 存 GAS Script Properties' },
+  // ── 東海／後端 GAS ──
+  { id: 30, title: '小天鷹 GAS Proxy', topic: 'backend', pos: [2.2085, 0.8995, -0.1129], note: '天鷹AI助手_GAS.gs；Gemini Proxy，藏 API Key；依 role/vocabLevel 組 system prompt；getConfig/saveConfig' },
 
-  // ── obsidian-second-brain（咖哩個人第二大腦，2026-07-01）── 非員工功能，Claude Code 開發工具
-  { id: 33, title: 'obsidian-second-brain skill', topic: 'infra', pos: [ -0.7, 0.85, -2.42], note: '.claude/skills/obsidian-second-brain；44 個 /obsidian-* 指令，AI-first 讀寫規則；只給咖哩本人在 Claude Code 用，非 APP 員工功能' },
-  { id: 34, title: '第二大腦 Vault',      topic: 'data',  pos: [ 0.28, -2.04, 1.43], note: 'obsidian-vault/；_CLAUDE.md 操作手冊 + index.md + Logs/ + Bases/；咖哩私人筆記，與天鷹 APP 資料分開' },
-  { id: 35, title: 'SessionStart Hook',   topic: 'infra', pos: [ -1.21, 0.65, -2.35], note: '.claude/settings.json：OBSIDIAN_VAULT_PATH + load_vault_context.py；只在 cwd 進入 vault 目錄才注入 _CLAUDE.md，不影響其他 session' },
+  // ── 南海／部署監控 ──
+  { id: 31, title: 'Gemini 1.5 Flash', topic: 'infra', pos: [1.6761, -0.8591, -1.3913], note: '外部 AI 服務（免費額度）；API Key 存 GAS Script Properties' },
+  { id: 32, title: 'cec-up 獨立上傳工具', topic: 'infra', pos: [1.4393, -1.9032, -0.0736], note: 'sky03104/cec-up；GitHub Pages 獨立版上傳工具；早/晚班切換已與 tpl-upload 同步（2026-06-30）' },
+  { id: 33, title: 'obsidian-second-brain skill', topic: 'infra', pos: [1.7604, -1.1848, 1.1803], note: '.claude/skills/obsidian-second-brain；44 個 /obsidian-* 指令，AI-first 讀寫規則；只給咖哩本人在 Claude Code 用，非 APP 員工功能' },
 
-  // ── 車牌辨識（過夜車輛登記，2026-07-02）──
-  { id: 36, title: '車牌辨識 GAS',        topic: 'backend', pos: [ -2.24, -0.22, 0.76], note: '車牌辨識_後端_GAS.gs（獨立部署）；recognizePlate Gemini Vision 辨識＋台灣車牌格式正規化、vehicleReg 寫車輛登記試算表 1K46ZEq…；Key 存指令碼屬性；每日 08:00 自動寄晚班登記摘要 email（SUMMARY_EMAILS）' },
+  // ── 北海／資料儲存 ──
+  { id: 34, title: '第二大腦 Vault', topic: 'data', pos: [-0.7926, 0.6153, -2.252], note: 'obsidian-vault/；_CLAUDE.md 操作手冊 + index.md + Logs/ + Bases/；咖哩私人筆記，與天鷹 APP 資料分開' },
 
-  // ── 物流車輛統計（2026-07-02）──
-  { id: 37, title: '物流車輛統計',        topic: 'tools',   pos: [ 2.13, 0.6, -0.61], note: 'tool_logistics.html 獨立檔（iframe src）；三分類(1.9噸/3.5噸/8噸以上)登記＋快捷一鍵送出＋單日查詢＋整月統計；可修改/刪除；全員開放(id18)，快捷管理限 admin' },
-  { id: 38, title: '物流統計 GAS',        topic: 'backend', pos: [ -1.98, 0.13, 0.24], note: '物流車輛統計_GAS.gs（獨立部署）；add/update/delete/getDay/getMonth/exportMonth＋getShortcuts/addShortcut/updateShortcut/deleteShortcut；時間戳伺服器端蓋、主鍵 max(ID)+1' },
-  { id: 39, title: '物流試算表',          topic: 'data',    pos: [ 1.08, -2.93, -0.15], note: '新建試算表；物流車輛紀錄分頁(A~H)＋快捷設定分頁(A~C)＋YYYY-MM 月統計分頁（exportMonth 產生）；工號欄純文字保開頭0' },
+  // ── 南海／部署監控 ──
+  { id: 35, title: 'SessionStart Hook', topic: 'infra', pos: [0.4025, -2.1468, 1.1435], note: '.claude/settings.json：OBSIDIAN_VAULT_PATH + load_vault_context.py；只在 cwd 進入 vault 目錄才注入 _CLAUDE.md，不影響其他 session' },
 
-  // ── 航海日誌即時航跡（2026-07-02）──
-  { id: 40, title: '航海日誌 GAS',        topic: 'backend', pos: [ -1.98, 1.0, 0.33], note: '航海日誌_GAS.gs v2.0；logTask/getActive/checkKick/forceLogout；CacheService 快取 10 秒 + 30 天自動清理；brain_map 每 10 秒輪詢畫即時人物' },
-  { id: 41, title: '航海日誌試算表',      topic: 'data',    pos: [ -1.03, -2.13, -0.15], note: '工作日誌分頁：時間/工號/姓名/工具/節點/角色/動作/狀態/備註；只留 30 天' },
+  // ── 東海／後端 GAS ──
+  { id: 36, title: '車牌辨識 GAS', topic: 'backend', pos: [1.4062, 1.7406, 0.9428], note: '車牌辨識_後端_GAS.gs（獨立部署）；recognizePlate Gemini Vision 辨識＋台灣車牌格式正規化、vehicleReg 寫車輛登記試算表 1K46ZEq…；Key 存指令碼屬性；每日 08:00 自動寄晚班登記摘要 email（SUMMARY_EMAILS）' },
+
+  // ── 前端工具（直立雙圈環繞核心） ──
+  { id: 37, title: '物流車輛統計', topic: 'tools', pos: [1.9919, -0.4, -1.15], note: 'tool_logistics.html 獨立檔（iframe src）；三分類(1.9噸/3.5噸/8噸以上)登記＋快捷一鍵送出＋單日查詢＋整月統計；可修改/刪除；全員開放(id18)，快捷管理限 admin' },
+
+  // ── 東海／後端 GAS ──
+  { id: 38, title: '物流統計 GAS', topic: 'backend', pos: [0.7926, 0.6153, 2.252], note: '物流車輛統計_GAS.gs（獨立部署）；add/update/delete/getDay/getMonth/exportMonth＋getShortcuts/addShortcut/updateShortcut/deleteShortcut；時間戳伺服器端蓋、主鍵 max(ID)+1' },
+
+  // ── 北海／資料儲存 ──
+  { id: 39, title: '物流試算表', topic: 'data', pos: [-1.4474, 1.543, 1.332], note: '新建試算表；物流車輛紀錄分頁(A~H)＋快捷設定分頁(A~C)＋YYYY-MM 月統計分頁（exportMonth 產生）；工號欄純文字保開頭0' },
+
+  // ── 東海／後端 GAS ──
+  { id: 40, title: '航海日誌 GAS', topic: 'backend', pos: [1.4474, 1.543, -1.332], note: '航海日誌_GAS.gs v2.0；logTask/getActive/checkKick/forceLogout；CacheService 快取 10 秒 + 30 天自動清理；brain_map 每 10 秒輪詢畫即時人物' },
+
+  // ── 北海／資料儲存 ──
+  { id: 41, title: '航海日誌試算表', topic: 'data', pos: [-1.1915, 2.2311, 0.1222], note: '工作日誌分頁：時間/工號/姓名/工具/節點/角色/動作/狀態/備註；只留 30 天' },
+  { id: 42, title: '哨表試算表', topic: 'data', pos: [-1.8958, 1.2979, -1.1353], note: '獨立於主試算表；分頁：明日哨表(員工手動更新)/今日哨表(每日08:00原地快照，gid固定)/歷史哨表(補位用)' },
+
+  // ── 東海／後端 GAS ──
+  // ↳ 空節點（預留，外圍）
+  { id: 43, title: '交接事項 GAS', topic: 'backend', pos: [1.1915, 2.2311, -0.1222], note: '帶班交接_GAS.gs（獨立部署）；add/update/delete/getAll；建立人+建立時間、最後修改人+時間伺服器端蓋章，主鍵 max(ID)+1' },
+  { id: 44, title: '空節點 #44', topic: 'backend', pos: [1.8958, 1.2979, 1.1353], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 45, title: '空節點 #45', topic: 'backend', pos: [0.5772, 2.099, 1.4062], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 46, title: '空節點 #46', topic: 'backend', pos: [1.6916, 1.0127, -1.7242], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 47, title: '空節點 #47', topic: 'backend', pos: [1.8028, 1.916, -0.2784], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 48, title: '空節點 #48', topic: 'backend', pos: [2.2774, 0.6941, 1.2103], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 49, title: '空節點 #49', topic: 'backend', pos: [0.8967, 1.686, 1.902], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 50, title: '空節點 #50', topic: 'backend', pos: [0.8356, 2.409, -0.9436], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 51, title: '空節點 #51', topic: 'backend', pos: [2.3002, 1.4137, -0.4766], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 52, title: '空節點 #52', topic: 'backend', pos: [1.4467, 2.2556, 0.6765], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 53, title: '空節點 #53', topic: 'backend', pos: [1.2071, 1.1043, 2.2541], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 54, title: '空節點 #54', topic: 'backend', pos: [1.1936, 2.0529, -1.4953], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 55, title: '空節點 #55', topic: 'backend', pos: [2.6332, 0.7637, -0.6875], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 56, title: '空節點 #56', topic: 'backend', pos: [2.0394, 1.8043, 0.8296], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 57, title: '空節點 #57', topic: 'backend', pos: [0.6722, 2.5535, 1.1144], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 58, title: '空節點 #58', topic: 'backend', pos: [1.4322, 1.514, -1.9951], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 59, title: '空節點 #59', topic: 'backend', pos: [1.5756, 2.3876, -0.4986], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 60, title: '空節點 #60', topic: 'backend', pos: [2.5213, 1.187, 0.8784], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 61, title: '空節點 #61', topic: 'backend', pos: [1.1086, 2.1719, 1.6421], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 62, title: '空節點 #62', topic: 'backend', pos: [1.5355, 0.8294, -2.3876], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 63, title: '空節點 #63', topic: 'backend', pos: [2.1363, 1.9099, -0.7981], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 64, title: '空節點 #64', topic: 'backend', pos: [1.2766, 2.6797, 0.3729], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+
+  // ── 北海／資料儲存 ──
+  // ↳ 空節點（預留，外圍）
+  { id: 65, title: '交接事項試算表', topic: 'data', pos: [-0.5772, 2.099, -1.4062], note: '新建試算表；交接事項分頁(A~I)：事項ID/內容/狀態/建立人工號/姓名/時間/最後修改人工號/姓名/時間' },
+  { id: 66, title: '空節點 #66', topic: 'data', pos: [-1.6916, 1.0127, 1.7242], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 67, title: '空節點 #67', topic: 'data', pos: [-1.8028, 1.916, 0.2784], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 68, title: '空節點 #68', topic: 'data', pos: [-2.2774, 0.6941, -1.2103], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 69, title: '空節點 #69', topic: 'data', pos: [-0.8967, 1.686, -1.902], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 70, title: '空節點 #70', topic: 'data', pos: [-0.8356, 2.409, 0.9436], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 71, title: '空節點 #71', topic: 'data', pos: [-2.3002, 1.4137, 0.4766], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 72, title: '空節點 #72', topic: 'data', pos: [-1.4467, 2.2556, -0.6765], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 73, title: '空節點 #73', topic: 'data', pos: [-1.2071, 1.1043, -2.2541], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 74, title: '空節點 #74', topic: 'data', pos: [-1.1936, 2.0529, 1.4953], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 75, title: '空節點 #75', topic: 'data', pos: [-2.6332, 0.7637, 0.6875], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 76, title: '空節點 #76', topic: 'data', pos: [-2.0394, 1.8043, -0.8296], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 77, title: '空節點 #77', topic: 'data', pos: [-0.6722, 2.5535, -1.1144], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 78, title: '空節點 #78', topic: 'data', pos: [-1.4322, 1.514, 1.9951], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 79, title: '空節點 #79', topic: 'data', pos: [-1.5756, 2.3876, 0.4986], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 80, title: '空節點 #80', topic: 'data', pos: [-2.5213, 1.187, -0.8784], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 81, title: '空節點 #81', topic: 'data', pos: [-1.1086, 2.1719, -1.6421], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 82, title: '空節點 #82', topic: 'data', pos: [-1.5355, 0.8294, 2.3876], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 83, title: '空節點 #83', topic: 'data', pos: [-2.1363, 1.9099, 0.7981], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 84, title: '空節點 #84', topic: 'data', pos: [-1.2766, 2.6797, -0.3729], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+
+  // ── 南海／部署監控 ──
+  // ↳ 空節點（預留，外圍）
+  { id: 85, title: '空節點 #85', topic: 'infra', pos: [1.4713, -1.5006, -1.354], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 86, title: '空節點 #86', topic: 'infra', pos: [2.4522, -0.5795, -0.2514], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 87, title: '空節點 #87', topic: 'infra', pos: [1.5663, -1.7985, 0.938], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 88, title: '空節點 #88', topic: 'infra', pos: [0.9193, -0.925, 2.2396], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 89, title: '空節點 #89', topic: 'infra', pos: [1.1228, -2.071, -1.1445], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 90, title: '空節點 #90', topic: 'infra', pos: [2.2956, -1.2662, -0.3545], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 91, title: '空節點 #91', topic: 'infra', pos: [1.1815, -2.3115, 0.6279], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 92, title: '空節點 #92', topic: 'infra', pos: [0.9266, -1.5947, 1.9653], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 93, title: '空節點 #93', topic: 'infra', pos: [1.7589, -0.5939, -1.9863], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 94, title: '空節點 #94', topic: 'infra', pos: [1.9325, -1.9031, -0.4004], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 95, title: '空節點 #95', topic: 'infra', pos: [2.348, -0.9589, 1.098], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 96, title: '空節點 #96', topic: 'infra', pos: [0.816, -2.1841, 1.5237], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 97, title: '空節點 #97', topic: 'infra', pos: [1.546, -1.3167, -1.9368], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 98, title: '空節點 #98', topic: 'infra', pos: [1.3953, -2.4311, -0.3643], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 99, title: '空節點 #99', topic: 'infra', pos: [2.1422, -1.6597, 0.8714], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 100, title: '空節點 #100', topic: 'infra', pos: [1.4479, -0.5962, 2.4005], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 101, title: '空節點 #101', topic: 'infra', pos: [1.2234, -1.9804, -1.7044], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 102, title: '空節點 #102', topic: 'infra', pos: [2.6065, -0.9783, -0.8248], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 103, title: '空節點 #103', topic: 'infra', pos: [1.7353, -2.2718, 0.6046], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 104, title: '空節點 #104', topic: 'infra', pos: [1.4608, -1.3516, 2.1638], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 105, title: '空節點 #105', topic: 'infra', pos: [0.8308, -2.5273, -1.2918], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 106, title: '空節點 #106', topic: 'infra', pos: [2.2811, -1.7085, -0.8522], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 107, title: '空節點 #107', topic: 'infra', pos: [2.815, -0.5911, 0.8222], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+
+  // ── 西海／待辦規劃 ──
+  // ↳ 空節點（預留，外圍）
+  { id: 108, title: '空節點 #108', topic: 'todo', pos: [-1.6761, -0.8591, 1.3913], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 109, title: '空節點 #109', topic: 'todo', pos: [-1.4393, -1.9032, 0.0736], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 110, title: '空節點 #110', topic: 'todo', pos: [-1.7604, -1.1848, -1.1803], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 111, title: '空節點 #111', topic: 'todo', pos: [-0.4025, -2.1468, -1.1435], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 112, title: '空節點 #112', topic: 'todo', pos: [-1.4713, -1.5006, 1.354], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 113, title: '空節點 #113', topic: 'todo', pos: [-2.4522, -0.5795, 0.2514], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 114, title: '空節點 #114', topic: 'todo', pos: [-1.5663, -1.7985, -0.938], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 115, title: '空節點 #115', topic: 'todo', pos: [-0.9193, -0.925, -2.2396], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 116, title: '空節點 #116', topic: 'todo', pos: [-1.1228, -2.071, 1.1445], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 117, title: '空節點 #117', topic: 'todo', pos: [-2.2956, -1.2662, 0.3545], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 118, title: '空節點 #118', topic: 'todo', pos: [-1.1815, -2.3115, -0.6279], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 119, title: '空節點 #119', topic: 'todo', pos: [-0.9266, -1.5947, -1.9653], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 120, title: '空節點 #120', topic: 'todo', pos: [-1.7589, -0.5939, 1.9863], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 121, title: '空節點 #121', topic: 'todo', pos: [-1.9325, -1.9031, 0.4004], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 122, title: '空節點 #122', topic: 'todo', pos: [-2.348, -0.9589, -1.098], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 123, title: '空節點 #123', topic: 'todo', pos: [-0.816, -2.1841, -1.5237], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 124, title: '空節點 #124', topic: 'todo', pos: [-1.546, -1.3167, 1.9368], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 125, title: '空節點 #125', topic: 'todo', pos: [-1.3953, -2.4311, 0.3643], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 126, title: '空節點 #126', topic: 'todo', pos: [-2.1422, -1.6597, -0.8714], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 127, title: '空節點 #127', topic: 'todo', pos: [-1.4479, -0.5962, -2.4005], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 128, title: '空節點 #128', topic: 'todo', pos: [-1.2234, -1.9804, 1.7044], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 129, title: '空節點 #129', topic: 'todo', pos: [-2.6065, -0.9783, 0.8248], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 130, title: '空節點 #130', topic: 'todo', pos: [-1.7353, -2.2718, -0.6046], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 131, title: '空節點 #131', topic: 'todo', pos: [-1.4608, -1.3516, -2.1638], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 132, title: '空節點 #132', topic: 'todo', pos: [-0.8308, -2.5273, 1.2918], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 133, title: '空節點 #133', topic: 'todo', pos: [-2.2811, -1.7085, 0.8522], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+  { id: 134, title: '空節點 #134', topic: 'todo', pos: [-2.815, -0.5911, -0.8222], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
+
+  // ── 帶班交接事項（2026-07-03）── tools 雙圈 12 格已滿，外加第三圈（半徑2.6，y=0赤道面）
+  { id: 135, title: '帶班交接事項', topic: 'tools', pos: [1.839, 0.0, 1.839], note: 'tool_handover.html 獨立檔（iframe src）；新增/編輯/刪除交接事項，狀態未完成/進行中/已完成；組長以上可見(id19)，工具內 checkRole() 二次把關' },
 ];
 
 const EDGES = [
@@ -226,7 +353,7 @@ const EDGES = [
   // 登入讀本地、首頁卡片讀 GAS
   [1, 21], [2, 13], [2, 14],
   // 工具 → 後端 GAS
-  [3, 13], [4, 13], [5, 15], [6, 15], [12, 14],
+  [3, 13], [4, 13], [5, 15], [6, 15], [12, 14], [7, 14],
   // 後端內部與照片流
   [13, 16], [16, 22],
   // 後端 → 資料
@@ -247,6 +374,12 @@ const EDGES = [
   [0, 37], [37, 38], [38, 39],
   // 航海日誌：APP 回報事件 → GAS → 試算表
   [0, 40], [40, 41],
+  // 今/明日哨表：帳號/請假 GAS 讀寫獨立的哨表試算表（明日→今日每日快照）
+  [14, 42],
+  // 事故/表揚 GAS 無 LINE Token，跨 GAS 轉發給帳號/請假 GAS 代發推播
+  [13, 14],
+  // 帶班交接事項：主控台→工具→GAS→試算表
+  [0, 135], [135, 43], [43, 65],
 ];
 
 // === BRAIN_MAP_DATA_END ===
@@ -290,7 +423,7 @@ renderer.setClearColor(0x0A0C10, 1);
 
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.01, 200);
-const sph    = { theta: 0.35, phi: 1.22, r: 8.5 };
+const sph    = { theta: 0.35, phi: 1.22, r: 15 };
 
 function applySph() {
   camera.position.set(
@@ -341,6 +474,68 @@ Object.keys(TOPICS).forEach(k => { glowTex[k] = buildGlowTex(TOPICS[k].color); }
   })));
 })();
 
+// ── 無風帶星雲（偉大的航道，銀河雲海視覺）────────────────────────
+// 2026-07-03 美化：改用柔光貼圖（借 buildGlowTex）取代硬邊方塊點，
+// 並分「主霧層＋亮點層」兩層、粒子聚集成雲團而非均勻亂數散佈，
+// 避免看起來像規則點陣
+(function buildNebula() {
+  const innerR = 3.4, outerR = 7.5, thicknessMax = 0.8, spiralTwist = 0.5;
+  const warm = { r: 1.00, g: 0.85, b: 0.92 }; // 粉白：近赤道/內圈
+  const cool = { r: 0.42, g: 0.32, b: 0.88 }; // 藍紫：外圈/遠離赤道
+  const nebulaTex = buildGlowTex('#FFFFFF', 128); // 柔和放射狀白光，vertexColors 再上色
+
+  // 雲團中心：粒子優先聚在這些點附近，做出「一坨一坨」的雲霧感而非噪點
+  const CLUMP_N = 14;
+  const clumps = [];
+  for (let c = 0; c < CLUMP_N; c++) {
+    const rad   = innerR + Math.random() * (outerR - innerR);
+    const angle = Math.random() * Math.PI * 2 + rad * spiralTwist;
+    const y     = ((Math.random() + Math.random() + Math.random() - 1.5) / 1.5) * thicknessMax * 0.6;
+    clumps.push({ x: rad * Math.cos(angle), y, z: rad * Math.sin(angle) });
+  }
+
+  function colorFor(rad, y) {
+    const t = Math.min(1, Math.max(0,
+      (rad - innerR) / (outerR - innerR) * 0.6 + Math.abs(y) / thicknessMax * 0.4
+    ));
+    return { r: warm.r + (cool.r - warm.r) * t, g: warm.g + (cool.g - warm.g) * t, b: warm.b + (cool.b - warm.b) * t };
+  }
+
+  // clumpRatio：粒子落在雲團附近的機率（其餘完全隨機散開，避免雲團間太空）
+  function buildLayer(N, spread, sizeVal, opacityVal, clumpRatio, brightBias) {
+    const pos = new Float32Array(N * 3), cols = new Float32Array(N * 3);
+    const jitter = () => (Math.random() + Math.random() - 1) * spread; // 三角分布，中心密邊緣疏
+    for (let i = 0; i < N; i++) {
+      let x, y, z, rad;
+      if (Math.random() < clumpRatio) {
+        const c = clumps[(Math.random() * CLUMP_N) | 0];
+        x = c.x + jitter(); y = c.y + jitter() * 0.6; z = c.z + jitter();
+        rad = Math.hypot(x, z);
+      } else {
+        rad = innerR + Math.random() * (outerR - innerR);
+        const angle = Math.random() * Math.PI * 2 + rad * spiralTwist;
+        x = rad * Math.cos(angle);
+        z = rad * Math.sin(angle);
+        y = ((Math.random() + Math.random() + Math.random() - 1.5) / 1.5) * thicknessMax;
+      }
+      pos[i*3] = x; pos[i*3+1] = y; pos[i*3+2] = z;
+      let col = colorFor(rad, y);
+      if (brightBias) col = { r: col.r * 0.5 + 0.5, g: col.g * 0.5 + 0.45, b: col.b * 0.5 + 0.5 }; // 亮點層偏暖白
+      cols[i*3] = col.r; cols[i*3+1] = col.g; cols[i*3+2] = col.b;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(cols, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+      map: nebulaTex, size: sizeVal, vertexColors: true, transparent: true, opacity: opacityVal,
+      sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    })));
+  }
+
+  buildLayer(6000, 1.0,  0.22, 0.35, 0.8, false); // 主霧層：大顆、淡、大範圍聚集+部分隨機補空
+  buildLayer(2500, 0.35, 0.06, 0.9,  1.0, true);  // 亮點層：小顆、亮、緊貼雲團中心
+})();
+
 // ── 節點建立 ─────────────────────────────────────────────────
 const SCALE      = 2.1;
 const nodeGroup  = new THREE.Group();
@@ -354,8 +549,9 @@ const worldPos = NODES.map(n =>
 NODES.forEach((node, i) => {
   const tp = TOPICS[node.topic] || { color: '#ffffff' };
   const wp = worldPos[i];
+  const isEmpty = node.title.startsWith('空節點'); // 預留節點：核心球/光暈都調暗調小，一眼分辨真假內容
 
-  // 命中球（不可見）
+  // 命中球（不可見，空節點命中範圍維持不縮小，方便滑過看說明）
   const hit = new THREE.Mesh(
     new THREE.SphereGeometry(0.22, 8, 8),
     new THREE.MeshBasicMaterial({ visible: false })
@@ -367,21 +563,26 @@ NODES.forEach((node, i) => {
 
   // 核心球（可見）
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.058, 20, 20),
-    new THREE.MeshBasicMaterial({ color: hex2num(tp.color) })
+    new THREE.SphereGeometry(isEmpty ? 0.032 : 0.058, 20, 20),
+    new THREE.MeshBasicMaterial({
+      color: hex2num(tp.color),
+      transparent: isEmpty, opacity: isEmpty ? 0.45 : 1,
+    })
   );
   core.position.copy(wp);
   nodeGroup.add(core);
   coreMeshes.push(core);
 
-  // 輝光 Sprite
+  // 輝光 Sprite（isEmpty 存進 userData，animate loop 的呼吸動畫要看這個調暗調小）
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({
     map: glowTex[node.topic] || glowTex[Object.keys(TOPICS)[0]],
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    opacity: isEmpty ? 0.4 : 1,
   }));
   sp.position.copy(wp);
-  sp.scale.set(0.56, 0.56, 1);
+  sp.scale.set(isEmpty ? 0.30 : 0.56, isEmpty ? 0.30 : 0.56, 1);
   sp.userData.highlighted = false;
+  sp.userData.isEmpty = isEmpty;
   nodeGroup.add(sp);
   glowSprites.push(sp);
 });
@@ -458,7 +659,7 @@ function moveDrag(x, y)  {
   applySph();
 }
 function endDrag()  { isDragging = false; canvas.style.cursor = 'grab'; autoTimer = setTimeout(() => { autoRotate = true; }, 5000); }
-function doZoom(d)  { sph.r = Math.max(2.2, Math.min(24, sph.r + d * 0.0025)); applySph(); }
+function doZoom(d)  { sph.r = Math.max(2.2, Math.min(40, sph.r + d * 0.0025)); applySph(); }
 
 canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
 window.addEventListener('mousemove', e => {
@@ -504,6 +705,10 @@ const CHAR_COLORS = {
   '弗蘭奇':'#06B6D4',
   '甚平':  '#0D9488',
   '黃金梅利號':'#F0C040',
+  '香克斯':'#DC2626', // 紅髮
+  '羅':    '#38BDF8', // 特拉法爾加·羅（Heart Pirates 藍）
+  '克比':  '#3B82F6', // 海軍藍
+  '佩羅娜':'#F472B6', // 幽靈粉
 };
 
 // 角色圖片（預載）
@@ -514,6 +719,9 @@ const CHAR_IMG_MAP = {
   '烏索普':'usopp.png','山治': 'sanji.png',   '喬巴': 'chopper.png',
   '羅賓': 'robin.png', '弗蘭奇':'franky.png', '布魯克':'brook.png',
   '甚平': 'jinbe.png', '黃金梅利號':'godenmerry.png',
+  // 新增盟友角色（2026-07-03 擴編，13個前端工具角色不夠用）：
+  // 圖檔尚未上傳，Image() 404 會靜默失敗，不影響其他角色渲染，等咖哩傳圖再補進 brain_map_img/
+  '香克斯':'shanks.png', '羅':'law.png', '克比':'coby.png', '佩羅娜':'perona.png',
 };
 const CHAR_IMAGES = {};
 Object.entries(CHAR_IMG_MAP).forEach(([role, file]) => {
@@ -522,10 +730,33 @@ Object.entries(CHAR_IMG_MAP).forEach(([role, file]) => {
   CHAR_IMAGES[role] = img;
 });
 
+// 跑步序列幀動畫（2026-07-03 咖哩提供羅賓 F1~F6 跑步稿）：
+// 只有動作跑者（送資料代跑）會播放跑步循環，待機站崗角色維持靜態圖，
+// 沒有列在這裡的角色照舊使用 CHAR_IMAGES 靜態圖
+const RUN_IMG_MAP = {
+  '羅賓': ['run_robin_f1.png','run_robin_f2.png','run_robin_f3.png','run_robin_f4.png','run_robin_f5.png','run_robin_f6.png'],
+};
+const RUN_IMAGES = {};
+Object.entries(RUN_IMG_MAP).forEach(([role, files]) => {
+  RUN_IMAGES[role] = files.map(f => { const img = new Image(); img.src = IMG_DIR + f; return img; });
+});
+const RUN_FRAME_MS = 110; // 每格幀間隔（毫秒），數字越小跑越快
+function getRunFrame(role) {
+  const frames = RUN_IMAGES[role];
+  if (!frames || !frames.length) return null;
+  const idx = Math.floor(performance.now() / RUN_FRAME_MS) % frames.length;
+  const f = frames[idx];
+  return (f && f.complete && f.naturalWidth > 0) ? f : null;
+}
+
 // 節點地點圖（工具節點專屬場景，取代發光球體；未列在這裡的節點照舊顯示球體）
 const NODE_IMG_MAP = {
-  3:  'loc_library.png',    // 事故報告工具（羅賓／圖書室）
-  4:  'loc_infirmary.png',  // 匿名表揚/反應（喬巴／醫務室）
+  3:  'loc_library.png',        // 事故報告工具（羅賓／圖書室）
+  4:  'loc_infirmary.png',      // 匿名表揚/反應（喬巴／醫務室）
+  5:  'loc_ramhead_dawn.png',   // 開店前進出登錄（香克斯／日出羊頭甲板）
+  6:  'loc_ramhead_night.png', // 打烊後快速登錄（羅／夜晚羊頭甲板）
+  7:  'loc_helm.png',          // 今/明日哨表（甚平／舵輪室）
+  8:  'loc_orange_grove.png',  // 班表查詢（娜美／柑橘園）
 };
 const NODE_IMAGES = {};
 Object.entries(NODE_IMG_MAP).forEach(([nodeId, file]) => {
@@ -535,18 +766,24 @@ Object.entries(NODE_IMG_MAP).forEach(([nodeId, file]) => {
 });
 
 // 節點 → 角色映射（地盤）
+// 2026-07-03 重新分配：前端工具擴編到 13 個，原本路飛(開店+打烊+主控台)、
+// 甚平(哨表+物流)都身兼兩份差，改成每個工具各配一位唯一角色，不夠的向草帽一夥
+// 交情好的盟友借人（香克斯/羅/克比/佩羅娜，圖檔待補）。已有圖+地點圖的節點不動。
 const NODE_CHAR = {
   0:  '黃金梅利號', // 主控台（草帽一夥的船，全船的家）
-  1:  '烏索普', // 登入與角色系統
   3:  '羅賓',   // 事故報告工具
   4:  '喬巴',   // 匿名表揚/反應
-  6:  '路飛',   // 打烊後快速登錄（原站主控台，改站船長該顧的收工崗位）
-  7:  '甚平',   // 明日哨表
-  8:  '娜美',   // 班表查詢
+  5:  '香克斯', // 開店前進出登錄（日出甲板，紅髮迎日出）
+  6:  '羅',     // 打烊後快速登錄（夜晚甲板，Law 的夜色調性）
+  7:  '甚平',   // 今/明日哨表（舵輪室，老船長掌舵）
+  8:  '娜美',   // 班表查詢（柑橘園）
+  9:  '烏索普', // 緊急聯絡清單
   10: '弗蘭奇', // 資料上傳工具
   11: '索隆',   // 簽到/車輛/工作
   12: '山治',   // 請假申請
   29: '布魯克', // AI 小助手
+  37: '佩羅娜', // 物流車輛統計（原本甚平身兼兩職，改派）
+  135:'克比',   // 帶班交接事項（海軍紀律，交班回報）
 };
 
 // 活躍角色狀態（從航海日誌讀來）
@@ -595,15 +832,17 @@ function worldToScreen(vec3) {
 }
 
 // 用角色圖片繪製人物（圖片預載後直接 drawImage）
-// 特定角色的顯示倍率：黃金梅利號是船不是人，該比其他角色明顯大一號
+// 特定角色的顯示倍率：黃金梅利號是船不是人，該比其他角色明顯大一號；
+// 2026-07-03 咖哩要求現有角色先整體縮小（船不動），其餘角色沒特別列出的一律吃 DEFAULT_CHAR_SCALE
+const DEFAULT_CHAR_SCALE = 0.6;
 const CHAR_SCALE = { '黃金梅利號': 1.75 };
 
 // extraScale：動態縮放乘數（預設1）。跑動作路線的角色會傳較小值，看起來像在小跑；
-// 未來要升級成真正的跑步序列幀動畫時，這個參數就是掛動畫幀的入口
-function drawCharacter(ctx, x, y, role, count, alpha, extraScale) {
+// animated：true 時若該角色有 RUN_IMG_MAP 序列幀，改播放跑步循環（否則照舊用靜態圖）
+function drawCharacter(ctx, x, y, role, count, alpha, extraScale, animated) {
   const glowColor = CHAR_COLORS[role] || '#D4A800';
-  const img = CHAR_IMAGES[role];
-  const scale = (CHAR_SCALE[role] || 1) * (extraScale || 1);
+  const img = (animated && getRunFrame(role)) || CHAR_IMAGES[role];
+  const scale = (CHAR_SCALE[role] || DEFAULT_CHAR_SCALE) * (extraScale || 1);
   const boxW = 80 * scale, boxH = 80 * scale; // 顯示框：光暈/名字/計數氣泡都固定用這個尺寸排版
   let iw = boxW, ih = boxH;   // 圖片實際繪製尺寸：依原始長寬比縮放，避免船隻等非正方形圖被拉伸變形
   if (img && img.complete && img.naturalWidth > 0) {
@@ -654,12 +893,12 @@ function drawCharacter(ctx, x, y, role, count, alpha, extraScale) {
 }
 // 每格畫面更新人物
 function drawAllCharacters() {
-  charCtx.clearRect(0, 0, charCanvas.width, charCanvas.height);
   const now = Date.now();
 
   // 無論有無日誌，在各節點固定地盤顯示淡淡待機人物
   Object.entries(NODE_CHAR).forEach(([nodeIdStr, role]) => {
     const nodeId = parseInt(nodeIdStr);
+    if (NODE_IMG_MAP[nodeId]) return; // 有地點圖的節點改由 drawNodeLocations 統一畫（圖+名字+計數），不重複疊角色浮空圖
     const nodeIdx = NODES.findIndex(n => n.id === nodeId);
     if (nodeIdx < 0) return;
 
@@ -679,7 +918,8 @@ function drawAllCharacters() {
   });
 }
 
-// 工具節點的地點圖（取代發光球體；圖片還沒到位的節點自動略過，照舊顯示 Three.js 球體）
+// 工具節點的地點圖（取代發光球體＋取代角色浮空圖，兩者合一變成節點唯一的圖；
+// 圖片還沒到位的節點自動略過，照舊顯示 Three.js 球體／角色浮空圖）
 function drawNodeLocations() {
   Object.entries(NODE_IMG_MAP).forEach(([nodeIdStr, file]) => {
     const nodeId = parseInt(nodeIdStr);
@@ -697,16 +937,68 @@ function drawNodeLocations() {
     const ratio = img.naturalWidth / img.naturalHeight;
     let iw = boxW, ih = boxH;
     if (ratio >= 1) { ih = boxW / ratio; } else { iw = boxH * ratio; }
-    charCtx.drawImage(img, scr.x - iw / 2, scr.y - ih / 2, iw, ih);
+    const ix = scr.x - iw / 2, iy = scr.y - ih / 2;
+    charCtx.drawImage(img, ix, iy, iw, ih);
+
+    // 補回角色名字＋活動計數氣泡（原本畫在角色浮空圖上，現在地點圖取代了角色圖，
+    // 這兩樣資訊還是要留著，不然節點失去角色識別跟活動度資訊）
+    const role = NODE_CHAR[nodeId];
+    if (role) {
+      const labelY = iy + ih + 4;
+      charCtx.save();
+      charCtx.fillStyle = '#F5F5F5'; charCtx.strokeStyle = '#00000099'; charCtx.lineWidth = 3;
+      charCtx.font = "bold 12px 'Microsoft JhengHei', sans-serif";
+      charCtx.textAlign = 'center'; charCtx.textBaseline = 'top';
+      charCtx.strokeText(role, scr.x, labelY);
+      charCtx.fillText(role, scr.x, labelY);
+
+      const activity = activeChars[nodeId];
+      const count = activity ? activity.count : 0;
+      if (count > 0) {
+        const bx = ix + iw * 0.92, bby = iy + 2;
+        charCtx.fillStyle = '#D4A800'; charCtx.strokeStyle = '#0A0C10'; charCtx.lineWidth = 1.5;
+        charCtx.beginPath(); charCtx.arc(bx, bby, 10, 0, Math.PI * 2); charCtx.fill(); charCtx.stroke();
+        charCtx.fillStyle = '#0A0C10'; charCtx.font = 'bold 9px sans-serif';
+        charCtx.textAlign = 'center'; charCtx.textBaseline = 'middle';
+        charCtx.fillText(count > 99 ? '99+' : String(count), bx, bby);
+      }
+      charCtx.restore();
+
+      // 角色小頭像徽章：貼地點圖右下角，不疊在場景中間（縮小版角色識別，圓形裁切＋色框）
+      const charImg = CHAR_IMAGES[role];
+      if (charImg && charImg.complete && charImg.naturalWidth > 0) {
+        const avatarR = 20;
+        const acx = ix + iw - avatarR * 0.6, acy = iy + ih - avatarR * 0.6;
+        charCtx.save();
+        charCtx.beginPath();
+        charCtx.arc(acx, acy, avatarR, 0, Math.PI * 2);
+        charCtx.closePath();
+        charCtx.clip();
+        const scale2 = Math.max((avatarR * 2) / charImg.naturalWidth, (avatarR * 2) / charImg.naturalHeight);
+        const aw = charImg.naturalWidth * scale2, ah = charImg.naturalHeight * scale2;
+        charCtx.drawImage(charImg, acx - aw / 2, acy - ah / 2, aw, ah);
+        charCtx.restore();
+        charCtx.beginPath();
+        charCtx.arc(acx, acy, avatarR, 0, Math.PI * 2);
+        charCtx.strokeStyle = CHAR_COLORS[role] || '#D4A800';
+        charCtx.lineWidth = 2.5;
+        charCtx.stroke();
+      }
+    }
   });
 }
 
 // ═══════════════════════════════════════════════════════════
 // 即時航跡人物層：線上使用者顯示 + 沿線移動 + 強制登出
-// 只有 executive/admin 登入者（同瀏覽器登入過 APP）看得到
+// 預設只有 executive/admin 登入者（同瀏覽器登入過 APP）看得到；
+// EXTRA_VIEWER_EMPIDS 是額外個別開放的工號白名單，不受角色限制
 // ═══════════════════════════════════════════════════════════
 const SESSION_USER = (() => { try { return JSON.parse(localStorage.getItem('hsh_session_user') || 'null'); } catch (e) { return null; } })();
-const CAN_VIEW_USERS = !!(SESSION_USER && ['executive', 'admin'].includes(SESSION_USER.role));
+const EXTRA_VIEWER_EMPIDS = ['015732']; // 謝志遠
+const CAN_VIEW_USERS = !!(SESSION_USER && (
+  ['executive', 'admin'].includes(SESSION_USER.role) ||
+  EXTRA_VIEWER_EMPIDS.includes(String(SESSION_USER.empId))
+));
 
 // 工具 → 巡航路線（工具節點 → 後端 GAS → 資料表）；送出資料時沿路線跑一圈回來
 const TOOL_ROUTE = {
@@ -926,8 +1218,8 @@ function drawActionRunners(ctx) {
     if (!scr) return;
     if (scr.x < -60 || scr.x > window.innerWidth + 60 || scr.y < -60 || scr.y > window.innerHeight + 60) return;
     // 跑動作路線時縮小顯示（0.55倍），視覺上區分「代跑角色」跟站崗的正常大小角色；
-    // 這個縮放參數就是未來升級成跑步序列幀動畫的掛鉤點
-    drawCharacter(ctx, scr.x, scr.y, r.role, 0, r.alpha, 0.55);
+    // animated=true：有序列幀的角色（目前只有羅賓）在跑路線時播放跑步循環
+    drawCharacter(ctx, scr.x, scr.y, r.role, 0, r.alpha, 0.55, true);
   });
 }
 
@@ -1020,7 +1312,7 @@ const TOOL_LABEL = {
   app: '主控台', schedule: '班表查詢', work: '施工單', aiwork: '施工單', signin: '簽到',
   car: '車輛', closing: '打烊登錄', opening: '開店登錄', report: '事故報告',
   feedback: '表揚/反應', leave: '請假', upload: '資料上傳', aichat: 'AI 小助手',
-  emergency: '緊急聯絡', post: '明日哨表', hailing: '明日哨表', logistics: '物流統計',
+  emergency: '緊急聯絡', post: '今/明日哨表', hailing: '今/明日哨表', logistics: '物流統計',
 };
 
 let userMenuEl = null;
@@ -1116,7 +1408,8 @@ function animate() {
 
   glowSprites.forEach((sp, i) => {
     const hl = sp.userData.highlighted;
-    const s  = (hl ? 0.95 : 0.54) + Math.sin(t * (hl ? 2.2 : 1.3) + i * 0.68) * (hl ? 0.16 : 0.07);
+    const dim = sp.userData.isEmpty ? 0.53 : 1; // 空節點呼吸動畫等比縮小，不被每幀覆寫回原尺寸
+    const s  = ((hl ? 0.95 : 0.54) + Math.sin(t * (hl ? 2.2 : 1.3) + i * 0.68) * (hl ? 0.16 : 0.07)) * dim;
     sp.scale.set(s, s, 1);
   });
   coreMeshes.forEach((core, i) => {
@@ -1155,7 +1448,10 @@ function animate() {
     fetchWorkflowData();
   }
 
-  // 畫工具節點地點圖（背景場景，先畫）→ 再畫角色人物（疊在場景上）
+  // 整張 2D 疊層畫布每幀只清一次，畫工具節點地點圖（背景場景，先畫）→
+  // 再畫角色人物（疊在場景上）；順序不能顛倒，也不能各自清畫布，
+  // 不然後畫的會把先畫的清掉（地點圖曾因此完全被蓋掉，見此處修復）
+  charCtx.clearRect(0, 0, charCanvas.width, charCanvas.height);
   drawNodeLocations();
   drawAllCharacters();
 

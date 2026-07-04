@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>天鷹保全｜帶班交接事項</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Share+Tech+Mono&display=swap');
+:root{
+  --bg:#0A0C10;--surface:#0D0F14;--surface2:#131720;--surface3:#1a1f2a;
+  --border:rgba(45,212,191,.2);--border2:rgba(255,255,255,.07);
+  --accent:#2DD4BF;--accent2:#5EEAD4;--accent-dim:rgba(45,212,191,.12);
+  --danger:#F87171;--danger-dim:rgba(239,68,68,.12);
+  --warn:#FB923C;--warn-dim:rgba(251,146,60,.12);
+  --green:#4ADE80;--green-dim:rgba(34,197,94,.1);
+  --indigo:#818CF8;--indigo-dim:rgba(99,102,241,.12);
+  --text:#F5F5F5;--text2:#9CA3AF;--text3:#4B5563;
+  --radius:12px;--rsm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;min-height:100vh;padding-bottom:40px;font-size:16px;}
+/* HEADER */
+.hdr{background:rgba(13,15,20,.97);border-bottom:1px solid var(--border);padding:9px 13px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;backdrop-filter:blur(12px);}
+.hdr-brand{display:flex;align-items:center;gap:9px;}
+.hdr-logo{width:32px;height:32px;background:var(--accent-dim);border:1px solid rgba(45,212,191,.45);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.hdr-title{font-size:14px;font-weight:900;color:var(--accent);line-height:1.2;text-shadow:0 0 15px rgba(45,212,191,.4);}
+.hdr-sub{font-size:10px;color:var(--text3);}
+.hdr-time{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-align:right;line-height:1.5;}
+/* NO PERM */
+.noperm{padding:60px 24px;text-align:center;color:var(--text2);}
+.noperm-ico{font-size:48px;margin-bottom:14px;}
+.noperm h2{font-size:18px;color:var(--danger);margin-bottom:8px;}
+.noperm p{font-size:14px;line-height:1.7;}
+/* TABS (status filter) */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{flex:1;min-width:70px;padding:11px 6px;text-align:center;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;transition:color .2s;white-space:nowrap;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-cnt{font-family:'Share Tech Mono',monospace;margin-left:3px;}
+/* MAIN */
+.wrap{max-width:560px;margin:0 auto;padding:14px 14px 30px;}
+/* ADD FORM */
+.add-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:13px;margin-bottom:16px;}
+.add-title{font-size:15px;font-weight:900;color:var(--accent2);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+.add-ta{width:100%;min-height:64px;padding:11px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--text);font-size:15px;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;outline:none;resize:vertical;}
+.add-ta:focus{border-color:var(--accent);}
+.add-btn{width:100%;margin-top:10px;padding:14px;background:linear-gradient(135deg,rgba(45,212,191,.3),rgba(45,212,191,.14));border:1px solid rgba(45,212,191,.65);border-radius:var(--radius);color:var(--accent);font-size:16px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;letter-spacing:.04em;text-shadow:0 0 12px rgba(45,212,191,.5);transition:all .15s;}
+.add-btn:active{opacity:.85;}
+.add-btn:disabled{opacity:.5;cursor:default;}
+/* LIST */
+.list-title{font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.swipe-hint{font-size:13px;color:var(--text2);margin-bottom:9px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.swipe-hint b{font-weight:900;}
+.swipe-hint .hint-done{color:var(--green);}
+.swipe-hint .hint-progress{color:var(--warn);}
+.item-swipe{position:relative;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;}
+.swipe-bg{position:absolute;inset:0;display:flex;align-items:center;border-radius:var(--radius);font-size:15px;font-weight:900;opacity:0;z-index:1;padding:0 22px;}
+.swipe-bg-progress{justify-content:flex-start;background:var(--warn-dim);color:var(--warn);}
+.swipe-bg-done{justify-content:flex-end;background:var(--green-dim);color:var(--green);}
+.item-card{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:13px;margin-bottom:10px;position:relative;z-index:2;touch-action:pan-y;}
+.item-swipe .item-card{margin-bottom:0;}
+.item-card.st-未完成{border-left:3px solid var(--danger);}
+.item-card.st-進行中{border-left:3px solid var(--warn);}
+.item-card.st-已完成{border-left:3px solid var(--green);opacity:.8;}
+.item-content{font-size:16px;line-height:1.6;white-space:pre-wrap;margin-bottom:10px;word-break:break-word;}
+.item-meta{font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.6;}
+.item-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.badge{padding:5px 12px;border-radius:20px;font-size:13px;font-weight:900;cursor:pointer;border:1px solid;white-space:nowrap;}
+.badge.st-未完成{background:var(--danger-dim);color:var(--danger);border-color:rgba(248,113,113,.4);}
+.badge.st-進行中{background:var(--warn-dim);color:var(--warn);border-color:rgba(251,146,60,.4);}
+.badge.st-已完成{background:var(--green-dim);color:var(--green);border-color:rgba(74,222,128,.4);}
+.item-acts{margin-left:auto;display:flex;gap:6px;}
+.item-btn{width:38px;height:38px;border-radius:var(--rsm);border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.item-edit{background:var(--indigo-dim);color:var(--indigo);}
+.item-del{background:var(--danger-dim);color:var(--danger);}
+.status-menu{display:none;gap:6px;margin-top:9px;flex-wrap:wrap;}
+.status-menu.open{display:flex;}
+.status-opt{flex:1;min-width:80px;padding:9px 6px;border-radius:var(--rsm);border:1px solid var(--border2);background:var(--surface3);color:var(--text2);font-size:13px;font-weight:700;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;text-align:center;}
+.status-opt.cur{opacity:.5;cursor:default;}
+.status-opt.st-未完成:not(.cur){border-color:rgba(248,113,113,.4);color:var(--danger);}
+.status-opt.st-進行中:not(.cur){border-color:rgba(251,146,60,.4);color:var(--warn);}
+.status-opt.st-已完成:not(.cur){border-color:rgba(74,222,128,.4);color:var(--green);}
+.empty-note{text-align:center;color:var(--text3);font-size:15px;padding:36px 0;}
+.empty-ico{font-size:38px;margin-bottom:10px;}
+/* MODAL */
+.moverlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:none;align-items:flex-end;}
+.moverlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:16px;width:100%;max-height:88vh;overflow-y:auto;}
+.modal-title{font-size:15px;font-weight:900;margin-bottom:12px;color:var(--accent);}
+.modal-lbl{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px;}
+.macts{display:flex;gap:8px;margin-top:14px;}
+.mbtn{flex:1;padding:13px;border-radius:var(--radius);font-size:15px;font-weight:900;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;cursor:pointer;border:none;transition:all .15s;}
+.mbtn-s{background:var(--accent-dim);border:1px solid rgba(45,212,191,.5);color:var(--accent);}
+.mbtn-c{background:var(--surface2);color:var(--text2);border:1px solid var(--border2);}
+.mbtn-d{background:var(--danger-dim);border:1px solid rgba(248,113,113,.4);color:var(--danger);}
+/* TOAST */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--surface3);border:1px solid var(--border2);border-radius:12px;padding:13px 20px;font-size:15px;font-weight:700;z-index:900;opacity:0;pointer-events:none;transition:all .25s;max-width:92vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.ok{border-color:rgba(74,222,128,.5);color:var(--green);background:rgba(20,35,25,.97);}
+.toast.err{border-color:rgba(248,113,113,.5);color:var(--danger);background:rgba(40,18,18,.97);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-logo">🔄</div>
+    <div><div class="hdr-title">帶班交接事項</div><div class="hdr-sub">天鷹保全・漢神巨蛋</div></div>
+  </div>
+  <div class="hdr-time" id="hdrTime"></div>
+</div>
+
+<div id="noPermView" class="noperm" style="display:none">
+  <div class="noperm-ico">🔒</div>
+  <h2>權限不足</h2>
+  <p>此工具僅開放組長以上人員使用。<br>如有需要請洽帶班幹部或管理員。</p>
+</div>
+
+<div id="mainView" style="display:none">
+  <div class="tabs">
+    <div class="tab active" id="tab-all" onclick="switchFilter('all')">全部</div>
+    <div class="tab" id="tab-未完成" onclick="switchFilter('未完成')">未完成</div>
+    <div class="tab" id="tab-進行中" onclick="switchFilter('進行中')">進行中</div>
+    <div class="tab" id="tab-已完成" onclick="switchFilter('已完成')">已完成</div>
+  </div>
+
+  <div class="wrap">
+    <div class="add-card">
+      <div class="add-title">➕ 新增交接事項</div>
+      <textarea class="add-ta" id="newContent" placeholder="輸入要交接給下一班的事項..."></textarea>
+      <button class="add-btn" id="addBtn" onclick="submitAdd()">送出</button>
+    </div>
+
+    <div class="list-title">事項清單</div>
+    <div class="swipe-hint">⬅️ <b class="hint-done">左滑完成</b>　➡️ <b class="hint-progress">右滑進行中</b></div>
+    <div id="itemList"></div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="moverlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title">✏️ 編輯交接事項</div>
+    <input type="hidden" id="eId">
+    <div class="modal-lbl">事項內容</div>
+    <textarea class="add-ta" id="eContent" style="margin-bottom:12px"></textarea>
+    <div class="modal-lbl">狀態</div>
+    <div class="status-menu open" id="eStatusMenu"></div>
+    <div class="macts">
+      <button class="mbtn mbtn-c" onclick="closeMo('editModal')">取消</button>
+      <button class="mbtn mbtn-s" onclick="saveEdit()">✅ 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="moverlay" id="delModal">
+  <div class="modal">
+    <div class="modal-title">🗑️ 刪除交接事項</div>
+    <input type="hidden" id="dId">
+    <p style="font-size:14px;color:var(--text2);line-height:1.7">確定要刪除這筆事項嗎？此動作無法復原。</p>
+    <div class="macts">
+      <button class="mbtn mbtn-c" onclick="closeMo('delModal')">取消</button>
+      <button class="mbtn mbtn-d" onclick="confirmDelete()">刪除</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// 建置後填入部署好的 GAS Web App URL；若留空則走 localStorage.hsh_handover_gasUrl（個別測試用）
+const BUILT_IN_GAS_URL = 'https://script.google.com/macros/s/AKfycbxllyhJAizfaj8r1wL2QzsAtP4r7AnMFbkOnQf9ostbMPgO1jDogc547YUZ07yVvJdy/exec';
+const ALLOWED_ROLES = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
+
+let gasUrl = BUILT_IN_GAS_URL || localStorage.getItem('hsh_handover_gasUrl') || '';
+
+const WORKFLOW_GAS_URL = 'https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec';
+function logWorkflow(tool, actionType, status) {
+  const u = getSessionUser();
+  if (!u.empId) return;
+  try { fetch(WORKFLOW_GAS_URL, { method:'POST', body: JSON.stringify({ action:'logTask', tool, empId:u.empId, userName:u.name||'未知', actionType, status:status||'已完成' }) }); } catch(e) {}
+}
+let items = [];
+let curFilter = 'all';
+let submitting = false;
+
+function getSessionUser() {
+  try { return JSON.parse(localStorage.getItem('hsh_session_user') || '{}'); } catch (e) { return {}; }
+}
+
+function checkRole() {
+  const u = getSessionUser();
+  const isTop = window.self === window.top; // 獨立開啟（非 App 內嵌）時允許，供部署測試用
+  const allowed = isTop || ALLOWED_ROLES.includes(u.role);
+  if (!allowed) {
+    document.getElementById('noPermView').style.display = 'block';
+    document.getElementById('mainView').style.display = 'none';
+    return false;
+  }
+  document.getElementById('noPermView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'block';
+  return true;
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('hdrTime').textContent =
+    now.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) + '\n' +
+    now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000 * 30);
+updateClock();
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  setTimeout(() => { t.className = 'toast'; }, 2200);
+}
+
+function x(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function apiCall(method, params) {
+  if (!gasUrl) { showToast('尚未設定 GAS 連線網址', 'err'); return { status: 'error', msg: '未設定 GAS URL' }; }
+  try {
+    let res;
+    if (method === 'GET') {
+      const qs = new URLSearchParams(params).toString();
+      res = await fetch(gasUrl + '?' + qs);
+    } else {
+      res = await fetch(gasUrl, { method: 'POST', body: new URLSearchParams(params) });
+    }
+    return await res.json();
+  } catch (e) {
+    return { status: 'error', msg: '連線失敗: ' + e.message };
+  }
+}
+
+async function loadItems() {
+  const r = await apiCall('GET', { action: 'getAll' });
+  if (r.status === 'ok') {
+    items = r.items || [];
+    renderList();
+  } else {
+    showToast(r.msg || '讀取失敗', 'err');
+  }
+}
+
+function switchFilter(f) {
+  curFilter = f;
+  ['all', '未完成', '進行中', '已完成'].forEach(k => {
+    document.getElementById('tab-' + k).classList.toggle('active', k === f);
+  });
+  renderList();
+}
+
+function renderList() {
+  const box = document.getElementById('itemList');
+  const filtered = curFilter === 'all' ? items : items.filter(it => it.status === curFilter);
+  if (!filtered.length) {
+    box.innerHTML = '<div class="empty-note"><div class="empty-ico">📋</div>目前沒有' + (curFilter === 'all' ? '' : x(curFilter)) + '交接事項</div>';
+    return;
+  }
+  box.innerHTML = filtered.map(it => `
+    <div class="item-swipe" data-id="${x(it.id)}">
+      <div class="swipe-bg swipe-bg-progress"><span>🔄 進行中</span></div>
+      <div class="swipe-bg swipe-bg-done"><span>✅ 已完成</span></div>
+      <div class="item-card st-${x(it.status)}">
+        <div class="item-content">${x(it.content)}</div>
+        <div class="item-meta">
+          建立：${x(it.creatorName || it.creatorEmpId)}・${x(it.createTime)}<br>
+          最後修改：${x(it.editorName || it.editorEmpId)}・${x(it.editTime)}
+        </div>
+        <div class="item-row">
+          <span class="badge st-${x(it.status)}" onclick="openEdit('${it.id}')">${x(it.status)}</span>
+          <div class="item-acts">
+            <button class="item-btn item-edit" onclick="openEdit('${it.id}')">✏️</button>
+            <button class="item-btn item-del" onclick="openDelete('${it.id}')">🗑️</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  attachSwipeHandlers();
+}
+
+let swipeState = null;
+
+function attachSwipeHandlers() {
+  document.querySelectorAll('.item-swipe').forEach(el => {
+    el.addEventListener('touchstart', onSwipeStart, { passive: true });
+    el.addEventListener('touchmove', onSwipeMove, { passive: false });
+    el.addEventListener('touchend', onSwipeEnd);
+    el.addEventListener('touchcancel', onSwipeCancel);
+  });
+}
+
+function onSwipeStart(e) {
+  const t = e.touches[0];
+  swipeState = { el: e.currentTarget, id: e.currentTarget.dataset.id, startX: t.clientX, startY: t.clientY, dx: 0, locked: null };
+}
+
+function onSwipeMove(e) {
+  if (!swipeState || swipeState.el !== e.currentTarget) return;
+  const t = e.touches[0];
+  const dx = t.clientX - swipeState.startX;
+  const dy = t.clientY - swipeState.startY;
+  if (swipeState.locked === null) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    swipeState.locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+  }
+  if (swipeState.locked !== 'h') return;
+  e.preventDefault();
+  const max = 110;
+  const clamped = Math.max(-max, Math.min(max, dx));
+  swipeState.dx = clamped;
+  const card = swipeState.el.querySelector('.item-card');
+  card.style.transform = `translateX(${clamped}px)`;
+  const progress = Math.min(1, Math.abs(clamped) / max);
+  swipeState.el.querySelector('.swipe-bg-done').style.opacity = clamped < 0 ? progress : 0;
+  swipeState.el.querySelector('.swipe-bg-progress').style.opacity = clamped > 0 ? progress : 0;
+}
+
+function onSwipeEnd() {
+  if (!swipeState || swipeState.locked !== 'h') { swipeState = null; return; }
+  const { el, dx, id } = swipeState;
+  const card = el.querySelector('.item-card');
+  const threshold = 60;
+  card.style.transition = 'transform .2s';
+  card.style.transform = 'translateX(0)';
+  el.querySelector('.swipe-bg-done').style.opacity = 0;
+  el.querySelector('.swipe-bg-progress').style.opacity = 0;
+  setTimeout(() => { card.style.transition = ''; }, 200);
+  if (dx <= -threshold) {
+    swipeSetStatus(id, '已完成');
+  } else if (dx >= threshold) {
+    swipeSetStatus(id, '進行中');
+  }
+  swipeState = null;
+}
+
+function onSwipeCancel() {
+  if (swipeState && swipeState.el) {
+    const card = swipeState.el.querySelector('.item-card');
+    card.style.transition = 'transform .2s';
+    card.style.transform = 'translateX(0)';
+    swipeState.el.querySelector('.swipe-bg-done').style.opacity = 0;
+    swipeState.el.querySelector('.swipe-bg-progress').style.opacity = 0;
+  }
+  swipeState = null;
+}
+
+async function swipeSetStatus(id, status) {
+  const it = items.find(x2 => String(x2.id) === String(id));
+  if (!it || it.status === status) return;
+  const prevStatus = it.status;
+  it.status = status;
+  renderList();
+  const u = getSessionUser();
+  const r = await apiCall('POST', { action: 'update', id, content: it.content, status, empId: u.empId || '', name: u.name || '未知' });
+  if (r.status === 'ok') {
+    showToast('已切換為「' + status + '」', 'ok');
+  } else {
+    it.status = prevStatus;
+    renderList();
+    showToast(r.msg || '狀態更新失敗', 'err');
+  }
+}
+
+async function submitAdd() {
+  if (submitting) return;
+  const content = document.getElementById('newContent').value.trim();
+  if (!content) { showToast('請輸入事項內容', 'err'); return; }
+  submitting = true;
+  document.getElementById('addBtn').disabled = true;
+  const u = getSessionUser();
+  const r = await apiCall('POST', { action: 'add', content, empId: u.empId || '', name: u.name || '未知' });
+  submitting = false;
+  document.getElementById('addBtn').disabled = false;
+  if (r.status === 'ok') {
+    document.getElementById('newContent').value = '';
+    showToast('新增成功', 'ok');
+    try { logWorkflow('handover', 'submit', '已完成'); } catch(e) {}
+    loadItems();
+  } else {
+    showToast(r.msg || '新增失敗', 'err');
+  }
+}
+
+const STATUSES = ['未完成', '進行中', '已完成'];
+
+function openEdit(id) {
+  const it = items.find(x2 => String(x2.id) === String(id));
+  if (!it) return;
+  document.getElementById('eId').value = it.id;
+  document.getElementById('eContent').value = it.content;
+  document.getElementById('eStatusMenu').innerHTML = STATUSES.map(s =>
+    `<div class="status-opt st-${s} ${s === it.status ? 'cur' : ''}" data-s="${s}" onclick="pickStatus('${s}')">${s}</div>`
+  ).join('');
+  document.getElementById('editModal').classList.add('open');
+}
+
+function pickStatus(s) {
+  document.getElementById('eStatusMenu').querySelectorAll('.status-opt').forEach(el => {
+    el.classList.toggle('cur', el.dataset.s === s);
+  });
+}
+
+async function saveEdit() {
+  const id = document.getElementById('eId').value;
+  const content = document.getElementById('eContent').value.trim();
+  if (!content) { showToast('事項內容不可空白', 'err'); return; }
+  const curEl = document.getElementById('eStatusMenu').querySelector('.status-opt.cur');
+  const status = curEl ? curEl.dataset.s : STATUSES[0];
+  const u = getSessionUser();
+  const r = await apiCall('POST', { action: 'update', id, content, status, empId: u.empId || '', name: u.name || '未知' });
+  if (r.status === 'ok') {
+    closeMo('editModal');
+    showToast('已儲存', 'ok');
+    loadItems();
+  } else {
+    showToast(r.msg || '儲存失敗', 'err');
+  }
+}
+
+function openDelete(id) {
+  document.getElementById('dId').value = id;
+  document.getElementById('delModal').classList.add('open');
+}
+
+async function confirmDelete() {
+  const id = document.getElementById('dId').value;
+  const r = await apiCall('POST', { action: 'delete', id });
+  if (r.status === 'ok') {
+    closeMo('delModal');
+    showToast('已刪除', 'ok');
+    loadItems();
+  } else {
+    showToast(r.msg || '刪除失敗', 'err');
+  }
+}
+
+function closeMo(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+(function init() {
+  if (checkRole()) loadItems();
+})();
+</script>
+</body>
+</html>

@@ -27,18 +27,21 @@ const WORKFLOW_MAP = {
   'aiwork':     { nodeId: 11, role: '索隆' },      // 施工單（AI 助手開啟）
   'signin':     { nodeId: 11, role: '索隆' },      // 簽到
   'car':        { nodeId: 11, role: '索隆' },      // 車輛
-  'closing':    { nodeId: 6,  role: '路飛' },      // 打烊
-  'opening':    { nodeId: 5,  role: '路飛' },      // 開店
+  'closing':    { nodeId: 6,  role: '羅' },        // 打烊（夜晚甲板）
+  'opening':    { nodeId: 5,  role: '香克斯' },    // 開店（日出甲板）
   'report':     { nodeId: 3,  role: '羅賓' },      // 事故報告
   'feedback':   { nodeId: 4,  role: '喬巴' },      // 表揚/反應
   'leave':      { nodeId: 12, role: '山治' },      // 請假
   'upload':     { nodeId: 10, role: '弗蘭奇' },    // 資料上傳
   'aichat':     { nodeId: 29, role: '布魯克' },    // AI 小助手
   'emergency':  { nodeId: 9,  role: '烏索普' },    // 緊急聯絡
-  'post':       { nodeId: 7,  role: '甚平' },      // 明日哨表
+  'post':       { nodeId: 7,  role: '甚平' },      // 明日哨表（舵輪室）
   'hailing':    { nodeId: 7,  role: '甚平' },      // 明日哨表（舊名相容）
-  'logistics':  { nodeId: 37, role: '甚平' },      // 物流車輛統計（老司機甚平，掌舵經驗豐富）
+  'logistics':  { nodeId: 37, role: '佩羅娜' },    // 物流車輛統計（原甚平身兼兩職，2026-07-03改派）
+  'handover':   { nodeId: 135,role: '克比' },      // 帶班交接事項（2026-07-03新增，海軍紀律配交班回報）
 };
+// 2026-07-03 角色重新分配備註：13個前端工具擴編後，路飛/甚平原本各身兼兩職，
+// 已改成每工具唯一角色；新增盟友 香克斯/羅/克比/佩羅娜（brain_map.html 圖檔待補）。
 
 // ── 試算表初始化 ─────────────────────────────────────────────────────
 function initializeSheet() {

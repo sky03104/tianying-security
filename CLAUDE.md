@@ -65,6 +65,9 @@ tianying-security/
 ├── tool_logistics.html                ← 物流車輛統計（獨立檔，橙色主題，單一獨立GAS）
 ├── 物流車輛統計_GAS.gs                 ← 物流統計後端（登記/查日/查月/改刪/月統計分頁）
 ├── 物流車輛統計_GAS_部署說明.md        ← 物流 GAS 部署指南
+├── tool_handover.html                 ← 帶班交接事項（獨立檔，青綠主題，單一獨立GAS，組長以上）
+├── 帶班交接_GAS.gs                     ← 交接事項後端（新增/編輯/刪除/狀態切換/讀清單）
+├── 帶班交接_GAS_部署說明.md            ← 帶班交接 GAS 部署指南
 │
 └── tianying-monitor/                  ← Main automation system
     ├── README.md                      ← System documentation (English)
@@ -1200,6 +1203,62 @@ python3 snapshot-generator-simple.py
 
 **技術筆記（可複用）**：GAS 判斷儲存格是否為 Date 型別時 `instanceof Date` 在部署環境會誤判 `false`（跨 realm 問題），改用 `Object.prototype.toString.call(v) === '[object Date]'`；此坑於 2026-07-02 物流統計除錯中發現，已寫入下方技術經驗筆記區。
 
+#### [TODO-17] 明日哨表 → 今/明日哨表雙分頁切換
+- **需求**：原本只有「明日哨表」單一畫面，改成今日／明日雙分頁切換；每天 08:00 自動把當時的明日哨表內容搬到今日哨表；明日哨表若還沒更新要顯示「尚未更新」而非舊資料；同步處理試算表與 LINE 機器人
+- **狀態**：✅ 完成（2026-07-03）
+
+**實作結果（2026-07-03）**：
+
+| 項目 | 值 |
+|------|-----|
+| 資料來源 | `POST_SHEET_ID` 試算表既有的 `今日哨表` 分頁（gid=466253701，原為預留空白）；不新建/不刪分頁，gid 永久不變 |
+| 快照機制 | 新增 `snapshotTodayPostScheduled_`：每日 08:00（Asia/Taipei）`dst.clear()` + `Range.copyTo()` 原地覆寫 `今日哨表`（含格式/合併儲存格），`明日哨表` 分頁不受影響；完全靜默無推播無通知 |
+| 觸發器 | `setupTodaySnapshotTrigger_`（08:00 daily），部署後需手動執行一次 `runSetupTodaySnapshotTrigger` + `runSnapshotTodayPostNow`（後者立即產生首份今日哨表，否則要等隔天才有資料） |
+| 後端 API | `parsePostSheet_`/`parsePostFullList_` 改吃 `sheetName` 參數（預設明日哨表）；新增 `getTodayPost`；`getTomorrowPost`/`getTodayPost` 皆用新增的 `checkDateMatch_` 比對日期，不符回傳 `status:'notyet'`（不是 err），前端顯示「尚未更新/尚未產生」而非舊資料或紅色錯誤 |
+| 前端 | `post.html` 新增今日/明日切換鈕（金色=今日、靛色=明日，沿用天鷹色系）；預設顯示今日；新增 `#state-empty` 中性提示狀態（🕒 圖示，非驚嘆號錯誤語氣）；切換時忽略舊分頁的過期回應（防競態） |
+| LINE 機器人 | 新增「今日哨點」文字指令 → `handleMyTodayPost_`（複用 `parsePostSheet_(POST_TODAY_SHEET_NAME)`）；`今日哨點` 判斷順序放在既有 `哨點` 判斷之前，避免字串包含誤判；既有 21:00 群組推播與「哨點」單人查詢完全不動 |
+| App 殼層 | `index.html` 工具名稱「明日哨表」→「今/明日哨表」（`toolId` 維持 `post` 不變，不影響權限與 AI 助手路由）；`tool_ai_chat.html` TOOL_MAP 名稱同步 |
+| brain_map | 節點 7 改名「今/明日哨表」+ 更新說明；新增節點 42「哨表試算表」（data 主題）；新增關聯 `[7,14]`（工具→帳號/請假GAS，原本漏連）、`[14,42]`（GAS→哨表試算表） |
+
+**待咖哩手動操作**：GAS 編輯器「管理部署→編輯→新版本」發布（沿用既有 `/exec` 網址）→ 執行一次 `runSetupTodaySnapshotTrigger` 建立觸發器 → 執行一次 `runSnapshotTodayPostNow` 立即產生今日哨表測試資料。
+
+#### [TODO-18] 帶班幹部交接事項工具 → 獨立檔 + 獨立 GAS + 新試算表
+- **需求**：帶班幹部換班交接用清單；新增/編輯/刪除交接事項；狀態三種（未完成/進行中/已完成，預設未完成）；權限開放組長以上（leader/vicecaptain/captain/executive/admin）
+- **狀態**：✅ 完成（2026-07-03，GAS 已部署、網址已回填 `BUILT_IN_GAS_URL`）
+
+**實作結果（2026-07-03）**：
+
+| 項目 | 值 |
+|------|-----|
+| 工具檔案 | `tool_handover.html`（獨立檔，vanilla JS 非 React，青綠 `#2DD4BF` 主題） |
+| index.html 串接 | `HANDOVER_PAGE_URL` + TOOLS 卡片 `id:19, toolId:"handover"` + 標題 + iframe `src`（仿 opening/logistics 模式） |
+| 權限（雙層） | ① `DEFAULT_PERMS` 只加進 leader/vicecaptain/captain/executive/admin（id19），一般保全員選單看不到卡片；② 工具內 `checkRole()` 讀 `hsh_session_user.role`，非組長以上且非獨立開啟則顯示「權限不足」畫面，防繞過 App 直接開網址 |
+| 分頁 | `交接事項`（A~I 欄），GAS 自動建立 |
+| 主鍵 | 純數字流水號 `max(既有ID)+1`（支援刪除列，不可用列號否則重號） |
+| GAS 端點 | add（新增，狀態預設未完成）／update（編輯內容 and/or 狀態，寫最後修改人/時間）／delete／getAll（讀清單，新的在前） |
+| 稽核欄位 | 建立人工號/姓名/時間（新增當下寫死不再變）＋最後修改人工號/姓名/時間（內容編輯或狀態切換皆更新） |
+| 前端 UI | 頂部新增表單 + 狀態分頁籤（全部/未完成/進行中/已完成）+ 事項卡片（左框色區分狀態：紅/橙/綠）+ 點狀態徽章或編輯鈕開 modal 切換狀態 |
+| GAS 部署說明 | `帶班交接_GAS_部署說明.md` |
+
+**部署狀態（2026-07-03）**：GAS 已部署、`/exec` 網址已回填 `tool_handover.html` 的 `BUILT_IN_GAS_URL`，全員（組長以上）自動連線，無需再手動設定 localStorage。之後改 GAS 記得「管理部署→編輯→新版本」。
+
+#### [TODO-19] 事故報告／匿名表揚新資料 → LINE 推播主管與管理員
+- **需求**：`tool_report.html`（事故報告）／`tool_feedback.html`（匿名表揚/反應）送出當下就主動推播 LINE 給 `executive`/`admin`，不用等主管自己點進首頁待審卡片
+- **狀態**：✅ 完成（2026-07-03）
+
+**實作結果（2026-07-03）**：
+
+| 項目 | 值 |
+|------|-----|
+| 架構 | `事故與表揚_後端_GAS_v3.1.gs`（獨立部署，無 LINE Token）→ `UrlFetchApp.fetch(NOTIFY_GAS_URL,...)` 轉發 → `天鷹保全APP_後端_GAS.gs`（有 LINE Channel Access Token）實際推播，仿既有 `notifyScheduleChangeToLine_` 模式 |
+| 送出端新增 | `notifyReportToLine_`/`notifyFeedbackToLine_`：`handleReport_`/`handleFeedback_` 的 `appendRow` 之後、`return` 之前呼叫，try/catch 非致命，LINE 失敗不影響資料寫入成功 |
+| 接收端新增 | `doPost` 路由 `notifyNewReport`/`notifyNewFeedback` → `notifyNewReportAction_`/`notifyNewFeedbackAction_`；`getExecutivesAndAdmins_()`（不分部門，只篩 `role==='admin'||'executive'` 且 `status==='active'`）；`buildNotifyCardFlex_()` 共用 Flex 卡片版型 |
+| 推播對象 | 全公司 `admin`+`executive`（不分部門，跟請假通知的部門篩選邏輯不同——事故/表揚是全公司層級） |
+| 卡片按鈕 | 連去 `tool_report.html?mode=admin` / `tool_feedback.html?mode=admin`（純連結，依賴瀏覽器既有登入 session，同既有哨表通知按鈕慣例） |
+| 測試輔助 | `事故與表揚_後端_GAS_v3.1.gs` 的 `testNotifyReportToLine()`；`天鷹保全APP_後端_GAS.gs` 的 `測試事故表揚推播()` |
+
+**待咖哩手動操作**：兩支 GAS 都要「管理部署→編輯→新版本」（`/exec` 網址不變）；部署後在天鷹保全APP GAS 專案執行一次 `測試事故表揚推播()` 驗證。
+
 ### 🟢 本次（2026-06-27）額外完成
 
 #### [TODO-07] 開店/打烊工具「設定」分頁限管理員
@@ -1230,6 +1289,32 @@ python3 snapshot-generator-simple.py
 ## 🧠 技術經驗筆記 / Lessons Learned
 
 > 此區累積實作中踩過的坑與解法，供未來 AI 與工程師快速避雷。每次大更新後補充。
+
+### 📅 2026-07-03：brain_map 地點圖被每幀清畫布蓋掉 + 新增地點圖的標準流程
+
+- **症狀**：`brain_map.html` 幫工具節點（事故報告=圖書室、表揚反應=醫務室）接上場景圖後，咖哩回報「還是舊的發光球體，看不到場景圖」。換兩台不同瀏覽器、強制重新整理（含 `?v=` cache-buster）都一樣 → **先排除快取，鎖定是程式碼問題**。
+- **根因**：`drawNodeLocations()`（畫地點圖）跟 `drawAllCharacters()`（畫角色）依序在 animate loop 呼叫，但 `drawAllCharacters()` 開頭就 `charCtx.clearRect(...)` 清整張畫布——把剛畫好的地點圖立刻清掉，只留角色跟底下 Three.js 發光球體。地點圖**從未真正顯示過**，不是部署或快取延遲。
+- **修法**：`clearRect` 只能在 animate loop 每幀呼叫「一次」，放在所有 2D 疊層繪製函數（`drawNodeLocations`、`drawAllCharacters`、之後任何新的 draw 函數）**之前**，不要讓個別繪製函數各自清畫布。
+- **除錯技巧**：使用者回報「圖沒更新」時，若「不同瀏覽器 + 強制重新整理都重現同樣結果」，可直接排除快取／部署延遲，轉向查程式邏輯（尤其是共用畫布/共用狀態的清除時機）。
+
+**給未來 AI／自己的提醒（咖哩接下來幾天會陸續上傳其他工具的地點圖）**：新增一張地點圖的標準流程——
+1. 咖哩傳圖 → 用 Python Pillow 壓縮：`resize` 寬 400~500px（`Image.LANCZOS`）+ `quantize(colors=~200, method=Image.FASTOCTREE)` 降色，壓到 60~100KB 上下（跟角色圖檔案大小一致）
+2. 存進 `brain_map_img/`，檔名延續 `loc_*.png` 慣例（如 `loc_kitchen.png`）
+3. 在 `brain_map.html` 的 `NODE_IMG_MAP` 加一行 `節點id: '檔名.png'`（該常數在 `IMG_DIR`/`CHAR_IMG_MAP` 附近，不在 `BRAIN_MAP_DATA_START/END` 資料區內，是渲染層設定，可直接改）
+4. **不要動 `drawNodeLocations`/`drawAllCharacters`/`clearRect` 的呼叫順序**（本篇教訓的根因），新增地點圖只需要改 `NODE_IMG_MAP` 一行
+5. `node --check` 驗證 → commit → PR → 咖哩確認再合併
+
+### 📅 2026-07-03：GitHub Pages 部署卡死佇列 — 取消失敗的正確應對
+
+- **症狀**：GitHub Pages 部署（`pages build and deployment`）累積 **9 筆卡在 `queued`**，最舊一筆卡了超過 12 小時；網頁上的 Cancel 按鈕、API 呼叫全部失敗。
+- **根因**：GitHub 平台端問題（runner 沒被分配到這批 run），**不是 repo 或程式碼壞掉**。可先查 [githubstatus.com](https://www.githubstatus.com/) 確認有無事故公告。
+- **關鍵發現：卡住的 queued run 無法取消**。呼叫 cancel API 一律回 `409 Cannot cancel a workflow re-run that has not yet queued.`，網頁按鈕也是同一個內部錯誤，**不用再重試**。
+- **正確做法（不是取消，是蓋過去）**：
+  1. GitHub Pages 只認**最新一次成功部署**，不需要把佇列裡的殭屍逐筆清掉。
+  2. 直接推一個新 commit（哪怕是空 commit：`git commit-tree <tree> -p <parent> -m "..."`）觸發全新的部署 run。
+  3. 新 run 若卡在最後一步報錯 `##[error]Deployment failed, try again later.`（GitHub 服務端暫時性問題，日誌可用 `mcp__github__get_job_logs` 查），**用 `actions_run_trigger` 的 `rerun_failed_jobs` 重跑該次 run 即可成功**，不必再開新 commit。
+  4. 舊的殭屍 `queued` run 放著不用管，GitHub 會在逾時（最長 72 小時）後自動標記失敗並清掉，不影響網站也不影響新部署。
+- **教訓**：遇到「取消/刪除卡住的雲端資源」一直失敗時，先想「有沒有辦法繞過去（用新資源蓋過舊的）」，不要在明知會 409 的操作上重試消耗時間。
 
 ### 📅 2026-07-02：GAS `instanceof Date` 會誤判 false（物流統計除錯實錄）
 
@@ -1424,7 +1509,12 @@ python3 snapshot-generator-simple.py
 | 1.8 | 2026-06-30 | TODO-05/06/15 完成；cec-up 早班切換同步；brain_map 新增 cec-up 節點(id32)；補 2026-06-30 技術筆記 |
 | 1.9 | 2026-07-02 | TODO-16 完成：物流車輛統計工具（`tool_logistics.html` + 獨立 GAS + 部署說明，三分類登記/日查/月統計/月分頁匯出，全員開放 id18）；brain_map 同步節點 37~39 |
 | 1.7 | 2026-06-29 | TODO-13 完成：天鷹 AI 小助手（小天鷹）上線（`tool_ai_chat.html` + `天鷹AI助手_GAS.gs`，Gemini Proxy、語音、個人化、管理員控制台、資料問題自動彈真實畫面）；brain_map 同步 AI 節點；新增 2026-06-29 技術經驗筆記（Gemini 模型/額度坑、麥克風授權、LLM 導航不當資料庫、git checkout 覆蓋教訓）；7 PR 迭代上線 main |
-| 2.0 | 2026-07-03 | 補登 2026-07-02~07-03 已上線 main 但未記錄的完成項目：施工單監工姓名遮蔽、車牌辨識每日摘要 email、公告欄未讀/置頂/排序連環修正、LINE 明日哨表推播顏色修正、簽到/公告/車輛三筆資料完整性修正；brain_map 大改版（黃金梅利號進駐、動作跑者系統、地點圖、海域式節點分散、名字圍繞排列） |
+| 2.0 | 2026-07-03 | TODO-17 完成：明日哨表 → 今/明日哨表雙分頁（`post.html` 今日/明日切換＋尚未更新提示、`天鷹保全APP_後端_GAS.gs` 每日08:00原地快照今日哨表＋`getTodayPost`＋LINE「今日哨點」指令）；brain_map 新增節點42「哨表試算表」+ 補連結 `[7,14]`/`[14,42]` |
+| 2.1 | 2026-07-03 | 新增 2026-07-03 技術經驗筆記：GitHub Pages 部署卡死佇列處理（cancel API 一律 409、正確做法是推新 commit 蓋過去 + rerun_failed_jobs，殭屍 queued run 免管會自動過期） |
+| 2.2 | 2026-07-03 | brain_map 即時航跡系統：動作跑者（送出資料由地點角色代跑）、黃金梅利號主控台、海域式節點分散、工具節點地點圖機制（圖書室/醫務室已生效，後續陸續補其他工具）；修正地點圖被每幀清畫布蓋掉的 bug（clearRect 呼叫時機）；新增技術經驗筆記記錄新增地點圖的標準流程 |
+| 2.3 | 2026-07-03 | TODO-18 完成：帶班幹部交接事項工具（`tool_handover.html` + `帶班交接_GAS.gs` + 部署說明，新增/編輯/刪除/狀態切換三態，青綠主題，組長以上雙層權限），GAS 已部署並回填 `BUILT_IN_GAS_URL`；brain_map 新增節點 43~45（工具/GAS/試算表）+ 對應關聯 |
+| 2.4 | 2026-07-03 | TODO-19 完成：事故報告/匿名表揚新資料自動轉發 LINE 推播給主管(executive)/管理員(admin)（`事故與表揚_後端_GAS_v3.1.gs` 新增 `notifyReportToLine_`/`notifyFeedbackToLine_` 轉發、`天鷹保全APP_後端_GAS.gs` 新增 `notifyNewReportAction_`/`notifyNewFeedbackAction_` + `getExecutivesAndAdmins_`/`buildNotifyCardFlex_` 實際推播）；brain_map 新增關聯 `[13,14]`（事故/表揚 GAS 跨 GAS 轉發） |
+| 2.5 | 2026-07-03 | 補登 2026-07-02~07-03 已上線 main 但未記錄的完成項目：施工單監工姓名遮蔽、車牌辨識每日摘要 email、公告欄未讀/置頂/排序連環修正、LINE 明日哨表推播顏色修正、簽到/公告/車輛三筆資料完整性修正 |
 
 ---
 

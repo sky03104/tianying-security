@@ -298,6 +298,7 @@ input[type=date]{color-scheme:dark}
 var SHEET_ID = '1QuNkwu9zgPidUfSgWpqyT1M9X683IU-0LhXTc23hw-A';
 var SN = { con: '施工單查詢', hot: '動火申請查詢' };
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbyv3H-sB6vVKocrXF7zi53-6upic1Hn5qTOfrTcn_DXNBF4kvgBBaZfXJ0ZnIGhox8XdQ/exec'; // ← 填入 GAS Web App 部署網址
+var ACCOUNT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d8kLcCHbVFiKAK9wyoLwqNkt59PS4vPCY9QfG0_wiDJf2coO3zMcg/exec'; // 天鷹保全APP 帳號/設定 GAS（讀取正職/兼職白名單用）
 
 /* ══════════════════════════════════════════
    STATE
@@ -989,8 +990,55 @@ async function loadAll(){
   }
 }
 
+/* ══════════════════════════════════════════
+   權限檢查（正職/兼職 施工單查詢個別白名單，防止直接貼網址繞過首頁卡片鎖）
+══════════════════════════════════════════ */
+function getSessionUser(){
+  try { return JSON.parse(localStorage.getItem('hsh_session_user') || 'null'); } catch(e){ return null; }
+}
+
+function showNoPerm(msg){
+  clearTimeout(fallback);
+  var sp = document.getElementById('splash');
+  if(sp) sp.classList.add('out');
+  var app = document.getElementById('app');
+  if(app) app.style.display = 'none';
+  var div = document.createElement('div');
+  div.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg);z-index:9998';
+  div.innerHTML = '<div class="errbox" style="max-width:360px"><i class="ti ti-lock"></i><div>'+msg+'</div></div>';
+  document.body.appendChild(div);
+}
+
+async function checkWorkPermission(){
+  var u = getSessionUser();
+  if(!u || !u.empId){
+    showNoPerm('請從天鷹保全 App 登入後開啟本工具');
+    return false;
+  }
+  var openRoles = ['leader','vicecaptain','captain','executive','admin'];
+  if(openRoles.indexOf(u.role) > -1) return true;
+  if(u.role !== 'fulltime' && u.role !== 'parttime') return true; // 非既定角色不受此白名單規則影響
+  var allowed = null;
+  try {
+    var raw = localStorage.getItem('tianying_work_allowed_ids');
+    allowed = raw ? JSON.parse(raw) : null;
+  } catch(e){ allowed = null; }
+  try {
+    var res = await fetch(ACCOUNT_GAS_URL + '?action=getSettings');
+    var d = await res.json();
+    if(d && Array.isArray(d.workAllowedIds)){
+      allowed = d.workAllowedIds;
+      try { localStorage.setItem('tianying_work_allowed_ids', JSON.stringify(allowed)); } catch(e){}
+    }
+  } catch(e){ /* 拿不到最新值，退回本機快取 */ }
+  if(allowed === null) return true; // 未設定＝不限制（正職/兼職全員可用，現狀）
+  if(allowed.indexOf(u.empId) > -1) return true;
+  showNoPerm('目前尚無使用權限，請洽管理員開通');
+  return false;
+}
+
 /* 啟動 */
-loadAll();
+checkWorkPermission().then(function(ok){ if(ok) loadAll(); });
 </script>
 </body>
 </html>

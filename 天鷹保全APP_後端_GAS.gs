@@ -58,6 +58,7 @@ var POST_SHEET_ID   = "1sIcdAhw0mz5iM3F5fulDNPOda2pv-t7xUhT6XXf9X7Q"; // 每日�
 var POST_SHEET_NAME = "明日哨表";
 var POST_PAGE_URL   = "https://sky03104.github.io/tianying-security/post.html"; // 整張明日哨表瀏覽頁
 var POST_HISTORY_SHEET_NAME = "歷史哨表"; // 結構化哨表，用於補回視覺表解析不到的哨位
+var POST_TODAY_SHEET_NAME = "今日哨表"; // 每日08:00由 明日哨表 原地快照而來（gid固定不變）
 
 var SHIFT_INFO_ = {
   'B':    { label: 'B班',    time: '20:00-08:00', color: '#60A5FA' },
@@ -115,6 +116,9 @@ function doPost(e) {
     if (action === 'monthScheduleReleased')     return monthScheduleReleasedAction_(e);
     if (action === 'pushTomorrowPost')          return pushTomorrowPostAction_(e);
 
+    if (action === 'notifyNewReport')   return notifyNewReportAction_(e);
+    if (action === 'notifyNewFeedback') return notifyNewFeedbackAction_(e);
+
     return jsonRes({status:'err', msg:'未知 action: ' + action});
   } catch(err) {
     return jsonRes({status:'err', msg:err.toString()});
@@ -144,6 +148,7 @@ function doGet(e) {
     if (action === 'resolveEmp')        return resolveEmp(e);
     if (action === 'previewTomorrowPost') return previewTomorrowPost(e);
     if (action === 'getTomorrowPost')     return getTomorrowPost(e);
+    if (action === 'getTodayPost')        return getTodayPost(e);
 
     return jsonRes({status:'ok', msg:'天鷹保全APP API 正常 ✓'});
   } catch(err) {
@@ -1079,6 +1084,8 @@ function handleLineWebhook_(e) {
         }
       } else if (text.indexOf('請假') !== -1 || text === '排休' || text === '我要請假') {
         replyLineFlex_(replyToken, '📝 請假申請', buildLeaveEntryFlex_());
+      } else if (text.indexOf('今日哨點') !== -1) {
+        handleMyTodayPost_(lineUserId, replyToken);
       } else if (text.indexOf('哨點') !== -1 || text.indexOf('上哪') !== -1) {
         handleMyTomorrowPost_(lineUserId, replyToken);
       } else if (handleScheduleQuery_(text, lineUserId, replyToken)) {
@@ -1089,7 +1096,7 @@ function handleLineWebhook_(e) {
           '🔗 綁定帳號：請至 APP「設定」→「綁定 LINE 通知」產生6位數驗證碼，並於5分鐘內輸入此處完成綁定。\n\n' +
           '📅 班表查詢：輸入「本週班表」「本月班表」「今日班表」「明日班表」\n\n' +
           '📝 請假申請：輸入「請假」開啟線上請假表單。\n\n' +
-          '📍 明日哨點：輸入「哨點」查詢您隔天的執勤位置。\n\n' +
+          '📍 今日／明日哨點：輸入「今日哨點」或「哨點」查詢執勤位置。\n\n' +
           '🔓 解除綁定：輸入「解除綁定」即可解除目前 LINE 帳號與工號的連結。');
       }
     }
@@ -1222,6 +1229,23 @@ function getDeptSupervisors_(dept) {
     if ((role === 'admin' || role === 'executive') || udept === dept) {
       list.push({ empId: empId, name: String(data[r][1]), role: role });
     }
+  }
+  return list;
+}
+
+// 事故報告/匿名表揚 通知用：不分部門，只看角色（全公司主管+管理員都收）
+function getExecutivesAndAdmins_() {
+  var sh = getUserDbSheet_();
+  var data = sh.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var empId = String(data[r][0]);
+    if (!empId) continue;
+    var role = String(data[r][3]);
+    var status = String(data[r][5] || 'active');
+    if (status !== 'active') continue;
+    if (role !== 'admin' && role !== 'executive') continue;
+    list.push({ empId: empId, name: String(data[r][1]), role: role });
   }
   return list;
 }
@@ -1844,6 +1868,82 @@ function notifyScheduleChangeAction_(e) {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// 【事故報告/匿名表揚 LINE 通知】── 新資料送出即推播主管/管理員
+// ════════════════════════════════════════════════════════════
+
+function buildNotifyCardFlex_(headerText, headerColor, rows, buttonLabel, buttonUrl) {
+  var body = [];
+  for (var i = 0; i < rows.length; i++) {
+    body.push({ type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+      { type: 'text', text: rows[i].label, color: '#8A95A8', size: 'sm', flex: 2 },
+      { type: 'text', text: rows[i].value, color: '#F5F5F5', size: 'sm', flex: 6, wrap: true }
+    ]});
+  }
+  return {
+    type: 'bubble', size: 'mega',
+    header: { type: 'box', layout: 'vertical', backgroundColor: headerColor, paddingAll: '16px',
+      contents: [{ type: 'text', text: headerText, color: '#0A0C10', weight: 'bold', size: 'md' }] },
+    body: { type: 'box', layout: 'vertical', backgroundColor: '#111827', paddingAll: '16px', spacing: 'md', contents: body },
+    footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px', backgroundColor: '#0A0C10',
+      contents: [
+        { type: 'button', style: 'primary', color: '#818CF8', height: 'sm',
+          action: { type: 'uri', label: buttonLabel, uri: buttonUrl } },
+        { type: 'text', text: '天鷹保全 · 請儘速查看處理', color: '#6B7280', size: 'xs', align: 'center' }
+      ] }
+  };
+}
+
+function notifyNewReportAction_(e) {
+  try {
+    var d = JSON.parse(e.parameter.data);
+    var execs = getExecutivesAndAdmins_();
+    if (!execs.length) return jsonRes({status:'ok', skipped:'無主管/管理員'});
+    var rows = [
+      { label: '地點', value: d.location || '未填寫' },
+      { label: '類別', value: d.category || '未分類' },
+      { label: '時間', value: (d.date || '') + ' ' + (d.time || '') },
+      { label: '回報人', value: (d.name || '') + '（' + (d.empId || '未登入') + '）' }
+    ];
+    var flex = buildNotifyCardFlex_('🚨 新事故報告', '#F87171', rows, '📋 查看詳情',
+      'https://sky03104.github.io/tianying-security/tool_report.html?mode=admin');
+    var sent = 0;
+    for (var i = 0; i < execs.length; i++) {
+      var lineUserId = getLineUserIdByEmpId_(execs[i].empId);
+      if (lineUserId) { pushLineFlex_(lineUserId, '🚨 新事故報告：' + (d.location || ''), flex); sent++; }
+    }
+    return jsonRes({status:'ok', pushed:sent});
+  } catch (err) {
+    return jsonRes({status:'err', msg:err.toString()});
+  }
+}
+
+function notifyNewFeedbackAction_(e) {
+  try {
+    var d = JSON.parse(e.parameter.data);
+    var execs = getExecutivesAndAdmins_();
+    if (!execs.length) return jsonRes({status:'ok', skipped:'無主管/管理員'});
+    var isPraise = (d.type === 'praise');
+    var headerText = isPraise ? '🎉 新匿名表揚' : '⚠️ 新匿名反應';
+    var headerColor = isPraise ? '#D4A800' : '#FB923C';
+    var rows = [
+      { label: '對象', value: d.target || '未填寫' },
+      { label: '分類', value: d.category || '未分類' },
+      { label: '日期', value: d.date || '' }
+    ];
+    var flex = buildNotifyCardFlex_(headerText, headerColor, rows, '📋 查看詳情',
+      'https://sky03104.github.io/tianying-security/tool_feedback.html?mode=admin');
+    var sent = 0;
+    for (var i = 0; i < execs.length; i++) {
+      var lineUserId = getLineUserIdByEmpId_(execs[i].empId);
+      if (lineUserId) { pushLineFlex_(lineUserId, headerText + '：' + (d.target || ''), flex); sent++; }
+    }
+    return jsonRes({status:'ok', pushed:sent});
+  } catch (err) {
+    return jsonRes({status:'err', msg:err.toString()});
+  }
+}
+
 function notifyScheduleChangeBatchAction_(e) {
   try {
     var list = JSON.parse(e.parameter.data);
@@ -1895,6 +1995,7 @@ function notifyScheduleChangeBatchAction_(e) {
   }
 }
 
+// 改群組推播（不再逐人 push，節省每月200則免費額度）
 function monthScheduleReleasedAction_(e) {
   try {
     var d = JSON.parse(e.parameter.data);
@@ -1903,32 +2004,36 @@ function monthScheduleReleasedAction_(e) {
     var cfg = SCHEDULE_SHEETS_[shiftType];
     if (!cfg) return jsonRes({status:'err', msg:'未知班別:' + shiftType});
 
-    var sh = getScheduleSheet_(shiftType);
-    if (!sh) return jsonRes({status:'err', msg:'找不到' + cfg.label + '班表分頁'});
+    var msg = '📅 ' + ym + ' 班表已發佈，輸入「本月班表」即可查詢完整內容。';
 
-    var data = sh.getDataRange().getValues();
-    var msg = '📅 ' + cfg.label + ' ' + ym + ' 班表已發佈，輸入「本月班表」即可查詢完整內容。';
+    var groupId = readSettingStr_('tomorrowPostGroupId', '');
+    if (!groupId) return jsonRes({status:'err', msg:'尚未設定群組ID，請先把機器人加入群組'});
 
-    var pushed = 0;
-    for (var r = 0; r < data.length; r++) {
-      var name = String(data[r][1] || '').trim();
-      if (!name) continue;
+    var code = pushTextToGroup_(groupId, msg);
+    if (code !== 200) return jsonRes({status:'err', msg:'群組推播失敗 HTTP ' + code});
 
-      var empInfo = getEmpInfoByName_(name);
-      if (!empInfo) continue;
-      var lineUserId = getLineUserIdByEmpId_(empInfo.empId);
-      if (!lineUserId) continue;
-
-      pushLineMessage_(lineUserId, msg);
-      pushed++;
-
-      if (pushed % 10 === 0) Utilities.sleep(150);
-    }
-
-    return jsonRes({status:'ok', shiftType: shiftType, ym: ym, pushed: pushed});
+    return jsonRes({status:'ok', shiftType: shiftType, ym: ym});
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString()});
   }
+}
+
+// 推播純文字到群組（回傳 HTTP 碼）
+function pushTextToGroup_(groupId, text) {
+  var token = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+  if (!token || !groupId) return -1;
+  var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + token },
+    payload: JSON.stringify({
+      to: groupId,
+      messages: [{ type: 'text', text: text }]
+    }),
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 200) console.error('群組文字推播失敗 HTTP ' + code + '：' + resp.getContentText());
+  return code;
 }
 
 function onScheduleEdit_(e) {
@@ -2376,6 +2481,19 @@ function 測試群組哨表推播() {
   Logger.log('===== 診斷結束 =====');
 }
 
+// ════════════════════════════════════════════════════════════
+// 【診斷】事故報告/匿名表揚 LINE 推播測試 — 在編輯器執行看 Log
+// ════════════════════════════════════════════════════════════
+function 測試事故表揚推播() {
+  var execs = getExecutivesAndAdmins_();
+  Logger.log('主管/管理員清單：' + JSON.stringify(execs));
+  var r = notifyNewReportAction_({ parameter: { data: JSON.stringify({
+    empId: 'TEST', name: '測試員', date: '2026-07-04', time: '10:00',
+    location: 'B1F大廳', category: '設備異常', description: '測試用'
+  }) } });
+  Logger.log('事故報告推播結果：' + r.getContent());
+}
+
 function jsonRes(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -2515,10 +2633,11 @@ function fillUnmarkedList_(items, dateInfo) {
   }
 }
 
-function parsePostSheet_() {
+function parsePostSheet_(sheetName) {
+  sheetName = sheetName || POST_SHEET_NAME;
   var ss = SpreadsheetApp.openById(POST_SHEET_ID);
-  var sh = ss.getSheetByName(POST_SHEET_NAME);
-  if (!sh) return { error: '找不到分頁：' + POST_SHEET_NAME };
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) return { error: '找不到分頁：' + sheetName };
   var values = sh.getDataRange().getValues();
   values = fillMergedCells_(sh, values);
   var nameMap = buildEmpNameMap_();
@@ -2556,10 +2675,11 @@ function parsePostSheet_() {
   return { hit: hit, noEmpId: Object.keys(noEmpId), dateInfo: dateInfo };
 }
 
-function parsePostFullList_() {
+function parsePostFullList_(sheetName) {
+  sheetName = sheetName || POST_SHEET_NAME;
   var ss = SpreadsheetApp.openById(POST_SHEET_ID);
-  var sh = ss.getSheetByName(POST_SHEET_NAME);
-  if (!sh) return { error: '找不到分頁：' + POST_SHEET_NAME, early: [], late: [] };
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) return { error: '找不到分頁：' + sheetName, early: [], late: [] };
   var values = sh.getDataRange().getValues();
   values = fillMergedCells_(sh, values);
   var nameMap = buildEmpNameMap_();
@@ -2586,17 +2706,39 @@ function parsePostFullList_() {
   return { early: early, late: late, dateInfo: dateInfo };
 }
 
+// 比對某解析出的哨表日期，是否等於「今天+offsetDays」（Asia/Taipei）
+function checkDateMatch_(dateInfo, offsetDays) {
+  var target = new Date(Date.now() + offsetDays * 86400000);
+  var m = Number(Utilities.formatDate(target, 'Asia/Taipei', 'M'));
+  var d = Number(Utilities.formatDate(target, 'Asia/Taipei', 'd'));
+  return { match: (dateInfo.month === m && dateInfo.day === d), label: (m + '/' + d) };
+}
+
 function getTomorrowPost(e) {
   try {
-    var full = parsePostFullList_();
-    if (full.error) return jsonRes({ status: 'err', msg: full.error, early: [], late: [] });
+    var full = parsePostFullList_(POST_SHEET_NAME);
+    if (full.error) return jsonRes({ status: 'notyet', msg: full.error, early: [], late: [] });
+    var dm = checkDateMatch_(full.dateInfo, 1);
+    if (!dm.match) return jsonRes({ status: 'notyet', msg: '明日哨表尚未更新', date: full.dateInfo.label, early: [], late: [] });
     return jsonRes({ status: 'ok', date: full.dateInfo.label, early: full.early, late: full.late });
   } catch (err) {
     return jsonRes({ status: 'err', msg: err.toString(), early: [], late: [] });
   }
 }
 
-function buildTomorrowPostFlex_(name, dateLabel, posts) {
+function getTodayPost(e) {
+  try {
+    var full = parsePostFullList_(POST_TODAY_SHEET_NAME);
+    if (full.error) return jsonRes({ status: 'notyet', msg: '今日哨表尚未產生', early: [], late: [] });
+    var dm = checkDateMatch_(full.dateInfo, 0);
+    if (!dm.match) return jsonRes({ status: 'notyet', msg: '今日哨表尚未更新', date: full.dateInfo.label, early: [], late: [] });
+    return jsonRes({ status: 'ok', date: full.dateInfo.label, early: full.early, late: full.late });
+  } catch (err) {
+    return jsonRes({ status: 'err', msg: err.toString(), early: [], late: [] });
+  }
+}
+
+function buildTomorrowPostFlex_(name, dateLabel, posts, titlePrefix) {
   var body = [{ type: 'text', text: name + ' 您好', color: '#F5F5F5', size: 'sm', weight: 'bold' }];
   for (var i = 0; i < posts.length; i++) {
     if (i > 0) body.push({ type: 'separator', color: '#1F2937' });
@@ -2617,7 +2759,7 @@ function buildTomorrowPostFlex_(name, dateLabel, posts) {
   return {
     type: 'bubble', size: 'mega',
     header: { type: 'box', layout: 'vertical', backgroundColor: '#D4A800', paddingAll: '16px',
-      contents: [{ type: 'text', text: '📍 明日哨點　' + (dateLabel || ''), color: '#0A0C10', weight: 'bold', size: 'md' }] },
+      contents: [{ type: 'text', text: (titlePrefix || '📍 明日哨點　') + (dateLabel || ''), color: '#0A0C10', weight: 'bold', size: 'md' }] },
     body: { type: 'box', layout: 'vertical', backgroundColor: '#111827', paddingAll: '16px', spacing: 'md', contents: body },
     footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px', backgroundColor: '#0A0C10',
       contents: [
@@ -2721,16 +2863,13 @@ function tomorrowPostGroupCore_(doPush) {
   if (full.error) return { status: 'err', msg: full.error };
 
   var di = full.dateInfo;
-  var tomorrow = new Date(Date.now() + 86400000);
-  var tMonth = Number(Utilities.formatDate(tomorrow, 'Asia/Taipei', 'M'));
-  var tDay = Number(Utilities.formatDate(tomorrow, 'Asia/Taipei', 'd'));
-  var dateMatch = (di.month === tMonth && di.day === tDay);
+  var dm = checkDateMatch_(di, 1);
 
   var groupId = readSettingStr_('tomorrowPostGroupId', '');
 
   var result = {
     status: 'ok',
-    dateLabel: di.label, dateMatch: dateMatch, tomorrow: (tMonth + '/' + tDay),
+    dateLabel: di.label, dateMatch: dm.match, tomorrow: dm.label,
     earlyCount: full.early.length, lateCount: full.late.length,
     groupId: groupId ? (groupId.substring(0, 10) + '…') : '（未設定）',
     pushed: false, httpCode: null
@@ -2745,39 +2884,32 @@ function tomorrowPostGroupCore_(doPush) {
   return result;
 }
 
-function tomorrowPostCore_(doPush) {
+// 明日哨點：僅供預覽/診斷用（哪些人有排班、有無綁定LINE），不再逐人 push（額度吃太兇，改用群組版 tomorrowPostGroupCore_）
+function tomorrowPostCore_() {
   var parsed = parsePostSheet_();
   if (parsed.error) return { status: 'err', msg: parsed.error };
 
   var di = parsed.dateInfo;
-  var tomorrow = new Date(Date.now() + 86400000);
-  var tMonth = Number(Utilities.formatDate(tomorrow, 'Asia/Taipei', 'M'));
-  var tDay = Number(Utilities.formatDate(tomorrow, 'Asia/Taipei', 'd'));
-  var dateMatch = (di.month === tMonth && di.day === tDay);
+  var dm = checkDateMatch_(di, 1);
 
-  var sent = [], unbound = [], detail = [];
+  var unbound = [], detail = [];
   for (var empId in parsed.hit) {
     var h = parsed.hit[empId];
     var lineUserId = getLineUserIdByEmpId_(empId);
     detail.push({ empId: empId, name: h.name, posts: h.posts, bound: !!lineUserId });
-    if (!lineUserId) { unbound.push(h.name + '(' + empId + ')'); continue; }
-    if (doPush) {
-      pushLineFlex_(lineUserId, '📍 您的明日哨點 ' + (di.label || ''), buildTomorrowPostFlex_(h.name, di.label, h.posts));
-      sent.push(h.name);
-      if (sent.length % 10 === 0) Utilities.sleep(150);
-    }
+    if (!lineUserId) unbound.push(h.name + '(' + empId + ')');
   }
   return {
     status: 'ok',
-    dateLabel: di.label, dateMatch: dateMatch, tomorrow: (tMonth + '/' + tDay),
-    totalHit: detail.length, pushed: doPush ? sent.length : 0,
+    dateLabel: di.label, dateMatch: dm.match, tomorrow: dm.label,
+    totalHit: detail.length,
     unboundCount: unbound.length, unbound: unbound,
     noEmpId: parsed.noEmpId, detail: detail
   };
 }
 
 function previewTomorrowPost(e) {
-  try { return jsonRes(tomorrowPostCore_(false)); }
+  try { return jsonRes(tomorrowPostCore_()); }
   catch (err) { return jsonRes({ status: 'err', msg: err.toString() }); }
 }
 
@@ -2823,6 +2955,32 @@ function setupTomorrowPostTrigger_() {
   Logger.log('已建立明日哨點每日21:00推播觸發器');
 }
 
+// 每日08:00：把當時的 明日哨表 內容原地覆寫進 今日哨表（保留分頁gid不變，完全靜默無推播）
+function snapshotTodayPostScheduled_() {
+  try {
+    var ss = SpreadsheetApp.openById(POST_SHEET_ID);
+    var src = ss.getSheetByName(POST_SHEET_NAME);
+    var dst = ss.getSheetByName(POST_TODAY_SHEET_NAME);
+    if (!src) { console.error('快照今日哨表失敗：找不到分頁 ' + POST_SHEET_NAME); return; }
+    if (!dst) { console.error('快照今日哨表失敗：找不到分頁 ' + POST_TODAY_SHEET_NAME + '（請確認試算表分頁存在）'); return; }
+    dst.clear();
+    var srcRange = src.getDataRange();
+    srcRange.copyTo(dst.getRange(1, 1, srcRange.getNumRows(), srcRange.getNumColumns()));
+  } catch (err) {
+    console.error('snapshotTodayPostScheduled_ 失敗：' + err.toString());
+  }
+}
+
+function setupTodaySnapshotTrigger_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'snapshotTodayPostScheduled_') ScriptApp.deleteTrigger(triggers[i]);
+  }
+  ScriptApp.newTrigger('snapshotTodayPostScheduled_')
+    .timeBased().everyDays(1).atHour(8).inTimezone('Asia/Taipei').create();
+  Logger.log('已建立今日哨表每日08:00快照觸發器');
+}
+
 function handleMyTomorrowPost_(lineUserId, replyToken) {
   var bound = getEmpIdByLineUserId_(lineUserId);
   if (!bound) {
@@ -2840,6 +2998,23 @@ function handleMyTomorrowPost_(lineUserId, replyToken) {
   replyLineFlex_(replyToken, '📍 您的明日哨點 ' + (parsed.dateInfo.label || ''), buildTomorrowPostFlex_(name, parsed.dateInfo.label, h.posts));
 }
 
+function handleMyTodayPost_(lineUserId, replyToken) {
+  var bound = getEmpIdByLineUserId_(lineUserId);
+  if (!bound) {
+    replyLineMessage_(replyToken, '⚠️ 您尚未綁定工號，請至 APP「設定」→「綁定 LINE 通知」完成綁定後再查詢。');
+    return;
+  }
+  var name = getEmpNameByEmpId_(bound.empId) || bound.name;
+  var parsed = parsePostSheet_(POST_TODAY_SHEET_NAME);
+  if (parsed.error) { replyLineMessage_(replyToken, '⚠️ 今日哨表尚未產生，請稍後再試。'); return; }
+  var h = parsed.hit[bound.empId];
+  if (!h || !h.posts.length) {
+    replyLineMessage_(replyToken, '📍 今日哨表（' + (parsed.dateInfo.label || '') + '）查無您（' + name + '）的排班，如有疑問請洽帶班幹部。');
+    return;
+  }
+  replyLineFlex_(replyToken, '📍 您的今日哨點 ' + (parsed.dateInfo.label || ''), buildTomorrowPostFlex_(name, parsed.dateInfo.label, h.posts, '📍 今日哨點　'));
+}
+
 // 手動執行用包裝函式（無底線結尾，選單才會顯示）
 function runSetupScheduleNotifyTriggers() {
   setupScheduleNotifyTriggers_();
@@ -2853,10 +3028,15 @@ function runSetupTomorrowPostTrigger() {
   setupTomorrowPostTrigger_();
 }
 
-function runPushTomorrowPost() {
-  Logger.log(JSON.stringify(tomorrowPostCore_(true)));
+function runPreviewTomorrowPost() {
+  Logger.log(JSON.stringify(tomorrowPostCore_()));
 }
 
-function runPreviewTomorrowPost() {
-  Logger.log(JSON.stringify(tomorrowPostCore_(false)));
+function runSetupTodaySnapshotTrigger() {
+  setupTodaySnapshotTrigger_();
+}
+
+function runSnapshotTodayPostNow() {
+  snapshotTodayPostScheduled_();
+  Logger.log('已手動快照今日哨表');
 }
