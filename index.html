@@ -17311,6 +17311,19 @@ const DEMO_USERS = [
 const DEMO_PENDING = [];
 // 帳號申請／請假申請雲端服務：寫入「天鷹保全APP」試算表（獨立GAS專案）
 const ACCOUNT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d8kLcCHbVFiKAK9wyoLwqNkt59PS4vPCY9QfG0_wiDJf2coO3zMcg/exec';
+/* ── 密碼變更雲端同步：寫回 GAS「帳號管理」分頁。
+   密碼原本只存本機 localStorage，換裝置或重新加到桌面就變回預設 123，
+   改為每次重設/修改密碼都同步上雲端，任何裝置重開都拉得到最新密碼 ── */
+async function syncUserPwToCloud(empId, pw) {
+    try {
+        const body = new FormData();
+        body.append('action', 'updateUser');
+        body.append('data', JSON.stringify({ empId: empId, pw: pw }));
+        const res = await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
+        const d = await res.json();
+        return !!(d && d.status === 'ok');
+    } catch (e) { return false; }
+}
 const DEFAULT_PERMS = {
     fulltime: [1, 2, 3, 7, 5, 6, 9, 12, 13, 18, 99],
     parttime: [1, 2, 3, 7, 5, 6, 9, 12, 13, 18, 99],
@@ -18999,6 +19012,7 @@ function UsersTab({ userDb, setUserDb, showToast, setSelectedUser }) {
                                 return;
                             }
                             setUserDb(prev => ({ ...prev, [resetTarget.empId]: { ...prev[resetTarget.empId], pw: newPwInput } }));
+                            syncUserPwToCloud(resetTarget.empId, newPwInput).then(ok => { if (!ok) showToast('⚠️ 雲端同步失敗，密碼僅本機生效'); });
                             setResetTarget(null);
                             showToast(`✅ ${resetTarget.name} 密碼已重設！`);
                         }, style: { flex: 1, background: 'linear-gradient(135deg,#D4A800,#FFD700)', border: 'none',
@@ -19006,6 +19020,7 @@ function UsersTab({ userDb, setUserDb, showToast, setSelectedUser }) {
                             cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\u78BA\u8A8D\u91CD\u8A2D"),
                     React.createElement("button", { onClick: () => {
                             setUserDb(prev => ({ ...prev, [resetTarget.empId]: { ...prev[resetTarget.empId], pw: '123' } }));
+                            syncUserPwToCloud(resetTarget.empId, '123').then(ok => { if (!ok) showToast('⚠️ 雲端同步失敗，密碼僅本機生效'); });
                             setResetTarget(null);
                             showToast(`🔄 ${resetTarget.name} 已還原預設密碼 123`);
                         }, style: { flex: 1, background: 'rgba(248,113,113,.1)', border: '1px solid rgba(248,113,113,.3)',
@@ -19342,6 +19357,7 @@ function App() {
             return;
         }
         setUserDb(prev => ({ ...prev, [currentUser.empId]: { ...prev[currentUser.empId], pw: pwForm.new1 } }));
+        syncUserPwToCloud(currentUser.empId, pwForm.new1).then(ok => { if (!ok) showToast('⚠️ 雲端同步失敗，新密碼僅本機生效'); });
         setChangePwModal(false);
         setPwForm({ old: '', new1: '', new2: '' });
         showToast("✅ 密碼已成功更新！");
@@ -20069,6 +20085,13 @@ function App() {
                             localStorage.removeItem('tianying_work_allowed_ids');
                         }
                         catch (e) { }
+                        /* 雲端也要一起還原，否則下次開啟 loadLeaveSettings 又把雲端舊權限拉回來 */
+                        try {
+                            const body = new FormData();
+                            body.append('action', 'setSettings');
+                            body.append('data', JSON.stringify({ toolPerms: JSON.stringify(DEFAULT_PERMS), workAllowedIds: null }));
+                            await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
+                        } catch (e) { }
                         showToast("🔄 已還原為原廠預設權限");
                     }, style: { width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,.1)',
                         borderRadius: 8, padding: 10, fontSize: 12, color: 'var(--muted)', cursor: 'pointer',

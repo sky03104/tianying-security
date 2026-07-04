@@ -2214,6 +2214,7 @@ function buildLeaveEntryFlex_() {
 var SETTING_KEY_CAP_MORNING = 'leaveCapMorning';
 var SETTING_KEY_CAP_NIGHT   = 'leaveCapNight';
 var SETTING_KEY_TOOL_PERMS  = 'toolPerms';   // ★ 工具權限雲端同步用設定鍵
+var SETTING_KEY_WORK_ALLOWED = 'workAllowedIds'; // ★ 施工單查詢 正職/兼職個別白名單（JSON字串；空=不限制）
 var DEFAULT_CAP_MORNING = 5;
 var DEFAULT_CAP_NIGHT   = 3;
 
@@ -2284,6 +2285,14 @@ function getSettings() {
     // ★ 工具權限：有設定才回傳（空字串代表雲端尚未設定，前端沿用本機）
     var tp = readSettingStr_(SETTING_KEY_TOOL_PERMS, '');
     if (tp) res.toolPerms = tp;
+    // ★ 施工單個別白名單：有設定且為合法陣列才回傳（前端只認 Array）
+    var wa = readSettingStr_(SETTING_KEY_WORK_ALLOWED, '');
+    if (wa) {
+      try {
+        var waArr = JSON.parse(wa);
+        if (Array.isArray(waArr)) res.workAllowedIds = waArr;
+      } catch (e2) {}
+    }
     return jsonRes(res);
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString(),
@@ -2305,6 +2314,13 @@ function setSettings(e) {
       writeSetting_(SETTING_KEY_TOOL_PERMS, d.toolPerms);
     }
 
+    // ★ 施工單個別白名單：陣列→存JSON字串；null→清空（代表還原成全員可用）
+    if (Array.isArray(d.workAllowedIds)) {
+      writeSetting_(SETTING_KEY_WORK_ALLOWED, JSON.stringify(d.workAllowedIds));
+    } else if (d.workAllowedIds === null) {
+      writeSetting_(SETTING_KEY_WORK_ALLOWED, '');
+    }
+
     var res = {
       status: 'ok',
       leaveCapMorning: readSetting_(SETTING_KEY_CAP_MORNING, DEFAULT_CAP_MORNING),
@@ -2312,6 +2328,13 @@ function setSettings(e) {
     };
     var tp = readSettingStr_(SETTING_KEY_TOOL_PERMS, '');
     if (tp) res.toolPerms = tp;
+    var wa2 = readSettingStr_(SETTING_KEY_WORK_ALLOWED, '');
+    if (wa2) {
+      try {
+        var waArr2 = JSON.parse(wa2);
+        if (Array.isArray(waArr2)) res.workAllowedIds = waArr2;
+      } catch (e3) {}
+    }
     return jsonRes(res);
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString()});
@@ -3039,4 +3062,40 @@ function runSetupTodaySnapshotTrigger() {
 function runSnapshotTodayPostNow() {
   snapshotTodayPostScheduled_();
   Logger.log('已手動快照今日哨表');
+}
+
+// ════════════════════════════════════════════════════════════
+// 【一鍵重建哨表觸發器】── 清掉殘留的舊觸發器（含舊版21:00個人逐人推播），
+//   只重建正確的兩個：21:00 群組版哨表推播、08:00 今日哨表快照。
+//   ★ 重要觀念：時間觸發器執行的是「編輯器目前儲存的程式碼」，不是部署版本。
+//     所以修掉個人版推播後，必須把新程式碼貼進 GAS 編輯器儲存，觸發器才會跑新版。
+//   在編輯器選此函式執行一次，看 Log 確認清理結果。
+// ════════════════════════════════════════════════════════════
+function 一鍵重建哨表觸發器() {
+  // 這個專案唯二需要的排程觸發器（其餘同名或舊版殘留一律刪除重建）
+  var KILL_LIST = {
+    'pushTomorrowPostScheduled_': 1,   // 21:00 哨表推播（舊版此函式是個人逐人push，同名觸發器一併清掉重建）
+    'snapshotTodayPostScheduled_': 1,  // 08:00 今日哨表快照
+    'onScheduleEdit_': 1,              // 已廢棄的班表偵測（改即時推播後不再需要）
+    'processScheduleChangeQueue_': 1   // 已廢棄的5分鐘彙整推播
+  };
+  var triggers = ScriptApp.getProjectTriggers();
+  var log = ['目前專案共 ' + triggers.length + ' 個觸發器：'];
+  for (var i = 0; i < triggers.length; i++) {
+    var fn = triggers[i].getHandlerFunction();
+    if (KILL_LIST[fn]) {
+      ScriptApp.deleteTrigger(triggers[i]);
+      log.push('🗑️ 已刪除：' + fn);
+    } else {
+      log.push('⏭️ 保留（非哨表相關）：' + fn);
+    }
+  }
+  ScriptApp.newTrigger('pushTomorrowPostScheduled_')
+    .timeBased().everyDays(1).atHour(21).inTimezone('Asia/Taipei').create();
+  ScriptApp.newTrigger('snapshotTodayPostScheduled_')
+    .timeBased().everyDays(1).atHour(8).inTimezone('Asia/Taipei').create();
+  log.push('✅ 已重建：pushTomorrowPostScheduled_（每日21:00 群組版完整哨表，只吃1則額度）');
+  log.push('✅ 已重建：snapshotTodayPostScheduled_（每日08:00 今日哨表快照，無推播）');
+  log.push('提醒：個人「哨點」查詢是 reply 回覆訊息，不佔每月200則推播額度，可放心使用。');
+  Logger.log(log.join('\n'));
 }
