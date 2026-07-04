@@ -18914,7 +18914,9 @@ function ok(obj) {
     return ScheduleApp;
 })();
 // ── UsersTab: 帳號資料庫（獨立元件，避免 Hooks in IIFE）──────────────
-function UsersTab({ userDb, setUserDb, showToast, setSelectedUser }) {
+/* canEdit：帳號編輯權限（停用/改角色/重設密碼），僅 captain/executive/admin；
+   leader/vicecaptain 只能瀏覽名單 */
+function UsersTab({ userDb, setUserDb, showToast, setSelectedUser, canEdit }) {
     const [dbSearch, setDbSearch] = useState('');
     const [resetTarget, setResetTarget] = useState(null);
     const [newPwInput, setNewPwInput] = useState('');
@@ -18951,7 +18953,7 @@ function UsersTab({ userDb, setUserDb, showToast, setSelectedUser }) {
             return (React.createElement("div", { key: u.empId, style: { background: 'var(--card)', border: '1px solid var(--border)',
                     borderRadius: 10, padding: '10px 12px', marginBottom: 7,
                     display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                    transition: 'border-color .2s' }, onClick: () => setSelectedUser({ ...u, id: u.empId, status: u.status || 'active' }), onMouseEnter: e => e.currentTarget.style.borderColor = 'var(--gold)', onMouseLeave: e => e.currentTarget.style.borderColor = 'var(--border)' },
+                    transition: 'border-color .2s' }, onClick: () => { if (!canEdit) { showToast('⚠️ 僅隊長、公司主管、管理員可編輯帳號'); return; } setSelectedUser({ ...u, id: u.empId, status: u.status || 'active' }); }, onMouseEnter: e => e.currentTarget.style.borderColor = 'var(--gold)', onMouseLeave: e => e.currentTarget.style.borderColor = 'var(--border)' },
                 React.createElement("div", { style: { position: 'relative', flexShrink: 0 } },
                     React.createElement("div", { style: { width: 38, height: 38, borderRadius: '50%',
                             background: `linear-gradient(135deg,${rc}88,${rc}33)`,
@@ -18984,7 +18986,7 @@ function UsersTab({ userDb, setUserDb, showToast, setSelectedUser }) {
                             (u.shift === '早班') ? '早班' : '晚班'))),
                 React.createElement("div", { style: { fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700,
                         color: rc, border: `1px solid ${rc}44`, flexShrink: 0, whiteSpace: 'nowrap' } }, roleLabels[u.role]),
-                React.createElement("button", { onClick: () => { setResetTarget(u); setNewPwInput(''); }, style: { flexShrink: 0, background: 'rgba(99,102,241,.15)',
+                canEdit && React.createElement("button", { onClick: (e) => { e.stopPropagation(); setResetTarget(u); setNewPwInput(''); }, style: { flexShrink: 0, background: 'rgba(99,102,241,.15)',
                         border: '1px solid rgba(99,102,241,.3)', borderRadius: 7,
                         padding: '4px 8px', fontSize: 11, color: 'var(--indigo2)',
                         cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\u91CD\u8A2D")));
@@ -20142,7 +20144,7 @@ function App() {
                             React.createElement("div", { style: { fontSize: 13, fontWeight: 600 } }, tool.name),
                             React.createElement("div", { style: { fontSize: 11, color: 'var(--muted)' } }, tool.category)),
                         React.createElement("span", { style: { fontSize: 12, color: 'var(--gold)', fontWeight: 600 } }, "\u7DE8\u8F2F \u203A")))))))),
-            adminSubTab === "users" && (React.createElement(UsersTab, { userDb: userDb, setUserDb: setUserDb, showToast: showToast, setSelectedUser: setSelectedUser })),
+            adminSubTab === "users" && (React.createElement(UsersTab, { userDb: userDb, setUserDb: setUserDb, showToast: showToast, setSelectedUser: setSelectedUser, canEdit: ['captain', 'executive', 'admin'].includes(currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) })),
             adminSubTab === "approve" && React.createElement(React.Fragment, null,
                 React.createElement("button", { onClick: () => loadPendingFromCloud(false), style: { width: '100%', padding: '9px', marginBottom: 12, borderRadius: 8, cursor: 'pointer',
                         background: 'rgba(129,140,248,.12)', color: '#818CF8', border: '1px solid rgba(129,140,248,.35)',
