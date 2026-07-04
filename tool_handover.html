@@ -48,7 +48,11 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
 .add-btn:active{opacity:.85;}
 .add-btn:disabled{opacity:.5;cursor:default;}
 /* LIST */
-.list-title{font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px;}
+.list-title{font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.swipe-hint{font-size:13px;color:var(--text2);margin-bottom:9px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.swipe-hint b{font-weight:900;}
+.swipe-hint .hint-done{color:var(--green);}
+.swipe-hint .hint-progress{color:var(--warn);}
 .item-swipe{position:relative;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;}
 .swipe-bg{position:absolute;inset:0;display:flex;align-items:center;border-radius:var(--radius);font-size:15px;font-weight:900;opacity:0;z-index:1;padding:0 22px;}
 .swipe-bg-progress{justify-content:flex-start;background:var(--warn-dim);color:var(--warn);}
@@ -128,6 +132,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC','Microsof
     </div>
 
     <div class="list-title">事項清單</div>
+    <div class="swipe-hint">⬅️ <b class="hint-done">左滑完成</b>　➡️ <b class="hint-progress">右滑進行中</b></div>
     <div id="itemList"></div>
   </div>
 </div>
