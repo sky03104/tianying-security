@@ -2047,17 +2047,19 @@ function conQuickSend(idx, type) {
 
 init();
 
-/* ── 刷新預覽 iframe ── */
+/* ── 刷新預覽 iframe（加時間戳記強制不吃快取，確保每次都是最新資料）── */
+let currentPreviewGid='921725644';
 function refreshPreview(silent){
   const frame = document.getElementById('previewFrame');
-  if(frame){ const src=frame.src; frame.src=''; frame.src=src; if(!silent)showToast('🔄 預覽已刷新','ok'); }
+  if(frame){ frame.src='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/preview?gid='+currentPreviewGid+'&t='+Date.now(); if(!silent)showToast('🔄 預覽已刷新','ok'); }
 }
 
 /* ── 切換預覽分頁（開店前 / B1F餐廳區 / 4F餐廳區）── */
 const PREVIEW_SS_ID='1mxCRUxbuPBuReP1gWK3unFbjtOkAuSkBakQeaH9Rdyc';
 function switchPreviewSheet(gid, btn){
+  currentPreviewGid=gid;
   const frame=document.getElementById('previewFrame');
-  if(frame) frame.src='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/preview?gid='+gid;
+  if(frame) frame.src='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/preview?gid='+gid+'&t='+Date.now();
   const lk=document.getElementById('prevOpenLink');
   if(lk) lk.href='https://docs.google.com/spreadsheets/d/'+PREVIEW_SS_ID+'/edit?gid='+gid+'#gid='+gid;
   document.querySelectorAll('.prev-tab').forEach(b=>b.classList.remove('active'));
