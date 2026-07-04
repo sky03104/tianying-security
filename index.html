@@ -17736,6 +17736,8 @@ const css = `
     padding:10px 20px; font-size:13px; color:var(--gold2);
     z-index:200; animation:fadeIn .3s; white-space:nowrap;
     box-shadow:0 4px 20px rgba(212,168,0,.25); }
+  .toast.toast-err { border-color:#F87171; color:#F87171;
+    box-shadow:0 4px 20px rgba(248,113,113,.25); }
 `;
 // ═══ LOGO ══════════════════════════════════════════════════
 const LogoMark = ({ size = 72 }) => (React.createElement("img", { src: EAGLE_SRC, width: size, height: size * 0.96, style: { display: 'block', objectFit: 'contain',
@@ -19305,8 +19307,8 @@ function App() {
             setPage("main");
         } catch(e) {}
     }, []);
-    const showToast = (msg) => {
-        setToast(msg);
+    const showToast = (msg, type = 'ok') => {
+        setToast({ msg, type });
         setTimeout(() => setToast(null), 2200);
     };
     const handleLogin = () => {
@@ -19383,11 +19385,11 @@ function App() {
             if (d.status === 'ok' && Array.isArray(d.list)) {
                 setLeaveRequests(d.list);
                 if (!silent) showToast(`🔄 已更新請假清單（${d.list.length} 筆）`);
-            } else {
+            } else if (!silent) {
                 showToast('⚠️ 請假清單載入失敗：' + (d.msg || d.message || '未知錯誤'), 'err');
             }
         } catch (e) {
-            showToast('⚠️ 請假清單雲端連線失敗：' + e.message, 'err');
+            if (!silent) showToast('⚠️ 請假清單雲端連線失敗：' + e.message, 'err');
         }
     };
     /* ── 主管待審卡片：讀事故報告／匿名表揚清單（僅 executive/admin 觸發） ── */
@@ -19766,7 +19768,7 @@ function App() {
     if (page === "login")
         return (React.createElement("div", { className: "app" },
             React.createElement("style", null, css),
-            toast && React.createElement("div", { className: "toast" }, toast),
+            toast && React.createElement("div", { className: `toast${toast.type === 'err' ? ' toast-err' : ''}` }, toast.msg),
             React.createElement("div", { className: "login-page" },
                 React.createElement("div", { className: "login-bg" }),
                 React.createElement("div", { className: "hex-grid" }),
@@ -19816,7 +19818,7 @@ function App() {
     if (page === "register")
         return (React.createElement("div", { className: "app" },
             React.createElement("style", null, css),
-            toast && React.createElement("div", { className: "toast" }, toast),
+            toast && React.createElement("div", { className: `toast${toast.type === 'err' ? ' toast-err' : ''}` }, toast.msg),
             React.createElement("div", { className: "login-page" },
                 React.createElement("div", { className: "login-bg" }),
                 React.createElement("div", { className: "hex-grid" }),
@@ -20265,7 +20267,7 @@ function App() {
     };
     return (React.createElement("div", { className: "app" },
         React.createElement("style", null, css),
-        toast && React.createElement("div", { className: "toast" }, toast),
+        toast && React.createElement("div", { className: `toast${toast.type === 'err' ? ' toast-err' : ''}` }, toast.msg),
         React.createElement("div", { className: "topbar" },
             React.createElement("div", { className: "topbar-logo" },
                 React.createElement("div", { className: "mini-logo" },
