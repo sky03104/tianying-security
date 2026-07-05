@@ -1309,15 +1309,15 @@ function drawLiveUsers(ctx, t) {
     }
 
     // 光暈 + 本體圓點
-    const gr = ctx.createRadialGradient(x, y, 0, x, y, 22);
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, 11);
     gr.addColorStop(0, u.color + '66');
     gr.addColorStop(1, u.color + '00');
     ctx.fillStyle = gr;
-    ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill();
 
     ctx.fillStyle = u.color;
-    ctx.strokeStyle = '#F5F5F5'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#F5F5F5'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
     // 名字標籤（深色底 + 顏色邊框）
     ctx.font = "bold 12px 'Microsoft JhengHei', sans-serif";
