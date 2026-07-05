@@ -19138,6 +19138,16 @@ function App() {
         window.addEventListener('message', handler);
         return () => window.removeEventListener('message', handler);
     }, []);
+    // 網址帶 ?openTool=xxx 時自動開啟對應工具（供 brain_map.html 等外部頁面連結使用，
+    // 目前只有 schedule／leave 兩個工具沒有獨立網址、只能靠這個管道開）
+    useEffect(() => {
+        if (!currentUser) return;
+        try {
+            const openTool = new URLSearchParams(window.location.search).get('openTool');
+            if (openTool === 'schedule') setActiveToolId('schedule');
+            else if (openTool === 'leave') { setShowLeave(true); loadLeaveFromCloud(true); }
+        } catch (e) {}
+    }, [currentUser]);
     // 帳號資料持久化：userDb 任何變更（員工資料修改、密碼重設、註冊審核）即寫入儲存
     useEffect(() => {
         try { localStorage.setItem('tianying_userdb', JSON.stringify(userDb)); } catch (e) { }

@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>天鷹保全｜打烊後進出快速登錄</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Share+Tech+Mono&display=swap');
+:root{
+  --bg:#0A0C10;--surface:#0D0F14;--surface2:#131720;--surface3:#1a1f2a;
+  --border:rgba(212,168,0,.18);--border2:rgba(255,255,255,.07);
+  --gold:#D4A800;--gold2:#FFD700;--gold-dim:rgba(212,168,0,.12);
+  --indigo:#818CF8;--indigo-dim:rgba(99,102,241,.12);
+  --danger:#F87171;--danger-dim:rgba(239,68,68,.12);
+  --green:#4ADE80;--green-dim:rgba(34,197,94,.1);
+  --text:#F5F5F5;--text2:#9CA3AF;--text3:#4B5563;
+  --radius:10px;--rsm:7px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;padding-bottom:68px;font-size:16px;}
+/* HEADER */
+.hdr{background:rgba(13,15,20,.97);border-bottom:1px solid var(--border);padding:9px 13px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;backdrop-filter:blur(12px);}
+.hdr-brand{display:flex;align-items:center;gap:9px;}
+.hdr-logo{width:30px;height:30px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.4);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:var(--gold);flex-shrink:0;text-shadow:0 0 10px rgba(212,168,0,.6);}
+.hdr-title{font-size:13px;font-weight:700;color:var(--gold);line-height:1.2;text-shadow:0 0 15px rgba(212,168,0,.4);}
+.hdr-sub{font-size:10px;color:var(--text3);}
+.hdr-time{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);text-align:right;line-height:1.5;}
+/* TABS */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;position:relative;transition:color .2s;}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-ico{font-size:16px;display:block;margin-bottom:1px;}
+.tbadge{position:absolute;top:4px;right:50%;transform:translateX(10px);background:var(--danger);color:#fff;border-radius:9px;padding:1px 4px;font-size:8px;font-weight:700;display:none;}
+/* PANELS */
+.panel{display:none;padding:11px 13px;}
+.panel.active{display:block;}
+/* FORM */
+.form-row{margin-bottom:11px;}
+.lbl{font-size:12px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.highlight-row{background:rgba(212,168,0,.07);border:1px solid rgba(212,168,0,.22);border-radius:var(--radius);padding:11px;margin-bottom:11px;}
+.highlight-row .lbl{font-size:13px;color:var(--gold2);text-shadow:0 0 10px rgba(255,215,0,.3);}
+.req{color:var(--danger);}
+.lbl-btn{margin-left:auto;padding:2px 8px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.3);border-radius:4px;color:var(--gold);font-size:10px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;transition:all .15s;}
+.lbl-btn:active{background:rgba(212,168,0,.2);}
+.txt{width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;transition:border-color .2s;}
+.txt:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba(212,168,0,.06);}
+.txt::placeholder{color:var(--text3);}
+select.txt{-webkit-appearance:none;}
+/* SEARCH */
+.swrap{position:relative;}
+.sinp{width:100%;padding:9px 34px 9px 11px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;transition:border-color .2s;}
+.sinp:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba(212,168,0,.06);}
+.sinp::placeholder{color:var(--text3);}
+.sico{position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none;}
+.dd{display:none;background:var(--surface2);border:1px solid rgba(212,168,0,.4);border-radius:var(--radius);margin-top:3px;max-height:165px;overflow-y:auto;position:relative;z-index:150;}
+.dd.open{display:block;}
+.ddi{padding:9px 11px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.ddi:last-child{border-bottom:none;}
+.ddi:active{background:var(--surface3);}
+.ddi-name{flex:1;}
+.ftag{font-size:10px;color:var(--gold);background:var(--gold-dim);padding:2px 6px;border-radius:4px;font-family:'Share Tech Mono',monospace;flex-shrink:0;}
+.seldis{padding:5px 10px;background:var(--green-dim);border:1px solid rgba(74,222,128,.25);border-radius:var(--rsm);font-size:12px;color:var(--green);display:none;margin-top:4px;}
+.seldis.show{display:block;}
+/* SHOP ROWS */
+.shoprows-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;}
+.shop-row{border-bottom:1px solid var(--border2);padding-bottom:10px;margin-bottom:10px;}
+.shop-row:last-child{border-bottom:none;padding-bottom:0;margin-bottom:0;}
+.row-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.row-lbl{font-size:11px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+/* Floor selector buttons inside row */
+.floor-selector{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0;}
+.fs-btn{padding:4px 8px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:11px;font-family:'Share Tech Mono',monospace;cursor:pointer;transition:all .15s;}
+.fs-btn:active,.fs-btn.sel{background:var(--gold-dim);border-color:rgba(212,168,0,.5);color:var(--gold);}
+.fpill{background:var(--gold-dim);color:var(--gold);padding:2px 7px;border-radius:10px;font-family:'Share Tech Mono',monospace;font-size:10px;border:1px solid rgba(212,168,0,.3);}
+.row-del{width:22px;height:22px;border-radius:50%;background:var(--danger-dim);color:var(--danger);border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cs-row{display:grid;grid-template-columns:116px 1fr;gap:7px;margin-top:7px;align-items:start;}
+.mini-cnt{display:flex;align-items:center;gap:3px;}
+.cbtnsm{width:30px;height:30px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--text);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s;}
+.cbtnsm:active{border-color:rgba(212,168,0,.5);color:var(--gold);}
+.cntsm{flex:1;padding:5px 3px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--gold);font-size:18px;font-weight:700;font-family:'Share Tech Mono',monospace;text-align:center;outline:none;width:44px;-webkit-appearance:none;}
+.cntsm:focus{border-color:rgba(212,168,0,.5);}
+.sup-mini{position:relative;}
+.add-row-btn{width:100%;padding:9px;background:var(--gold-dim);border:1px dashed rgba(212,168,0,.4);border-radius:var(--radius);color:var(--gold);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;margin-top:8px;transition:all .15s;}
+.add-row-btn:active{background:rgba(212,168,0,.2);}
+/* CHIPS — work type & inspector same size */
+.chips{display:flex;flex-wrap:wrap;gap:5px;}
+.chip{padding:5px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;}
+.chip.sel{background:var(--indigo-dim);border-color:rgba(129,140,248,.5);color:var(--indigo);}
+/* Inspector chips — same style as work type, 6-col grid, 2 rows max visible */
+.ichips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.ichip{padding:5px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.ichip.sel{background:var(--indigo-dim);border-color:rgba(129,140,248,.5);color:var(--indigo);}
+/* TIME */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.tinp{width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:'Share Tech Mono',monospace;outline:none;transition:border-color .2s;}
+.tinp:focus{border-color:rgba(212,168,0,.5);}
+.now-btn{display:inline-block;margin-top:5px;padding:4px 10px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.3);border-radius:var(--rsm);color:var(--gold);font-size:11px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;transition:all .15s;}
+.now-btn:active{background:rgba(212,168,0,.2);}
+/* SUBMIT */
+.submit-btn{width:100%;padding:14px;background:linear-gradient(135deg,rgba(212,168,0,.25),rgba(212,168,0,.12));border:1px solid rgba(212,168,0,.6);border-radius:var(--radius);color:var(--gold);font-size:15px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer;letter-spacing:.04em;margin-top:4px;text-shadow:0 0 12px rgba(212,168,0,.5);transition:all .15s;}
+.submit-btn:active{opacity:.85;}
+.divider{height:1px;background:var(--border);margin:12px 0;}
+/* QUEUE */
+.q-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.q-badge{background:var(--gold-dim);color:var(--gold);border:1px solid rgba(212,168,0,.4);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;font-family:'Share Tech Mono',monospace;}
+.qi{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px;margin-bottom:7px;position:relative;}
+.qi-acts{position:absolute;top:8px;right:8px;display:flex;gap:4px;}
+.qi-btn{width:26px;height:26px;border-radius:6px;border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.qi-edit{background:var(--indigo-dim);color:var(--indigo);}
+.qi-del{background:var(--danger-dim);color:var(--danger);}
+.qi-r1{display:flex;align-items:center;gap:6px;margin-bottom:4px;padding-right:62px;}
+.qi-fl{font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:bold;color:var(--gold);background:var(--gold-dim);padding:2px 6px;border-radius:4px;flex-shrink:0;border:1px solid rgba(212,168,0,.2);}
+.qi-shop{font-size:13px;font-weight:700;flex:1;}
+.qi-cnt{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);}
+.qi-meta{font-size:11px;color:var(--text3);display:flex;gap:5px;flex-wrap:wrap;}
+/* EXPORT */
+.exp-sec{margin-top:9px;}
+.sbar{display:flex;align-items:center;gap:7px;padding:7px 10px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.2);border-radius:var(--radius);margin-bottom:8px;font-size:11px;color:var(--text2);}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s;}
+.sdot.on{background:var(--green);box-shadow:0 0 6px var(--green);}
+.exp-btn{width:100%;padding:11px;border-radius:var(--radius);font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer;margin-bottom:7px;border:1px solid;transition:all .15s;}
+.exp-btn.pri{background:var(--indigo-dim);border-color:rgba(129,140,248,.4);color:var(--indigo);}
+.exp-btn.suc{background:var(--gold-dim);border-color:rgba(212,168,0,.4);color:var(--gold);}
+.exp-btn.dan{background:var(--danger-dim);border-color:rgba(239,68,68,.4);color:var(--danger);}
+.exp-btn:active{opacity:.8;}
+.copy-area{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);white-space:pre-wrap;max-height:170px;overflow-y:auto;margin-top:6px;display:none;}
+/* DB */
+.db-sec{margin-bottom:17px;}
+.db-title{font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.db-add{display:flex;gap:6px;margin-bottom:8px;}
+.db-add .txt{flex:1;}
+.db-add select{width:68px;padding:9px 5px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:12px;outline:none;-webkit-appearance:none;}
+.dbadd-btn{padding:9px 12px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.4);border-radius:var(--radius);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;}
+.dbadd-btn:active{background:rgba(212,168,0,.2);}
+.db-list{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);max-height:210px;overflow-y:auto;position:relative;}
+.db-sticky{position:sticky;top:0;z-index:10;width:100%;padding:8px 10px;background:var(--surface2);border:none;border-bottom:1px solid var(--border2);color:var(--text);font-size:12px;font-family:'Noto Sans TC',sans-serif;outline:none;}
+.dbi{padding:8px 10px;font-size:12px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:6px;}
+.dbi:last-child{border-bottom:none;}
+.dbi-name{flex:1;color:var(--text);}
+.dbi-fl{font-size:10px;color:var(--gold);font-family:'Share Tech Mono',monospace;flex-shrink:0;}
+.dbi-btns{display:flex;gap:3px;flex-shrink:0;}
+.dbbtn{width:22px;height:22px;border-radius:4px;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.dbbtn-e{background:var(--indigo-dim);color:var(--indigo);}
+.dbbtn-d{background:var(--danger-dim);color:var(--danger);}
+.new-tag{color:var(--gold);font-size:9px;margin-left:4px;background:var(--gold-dim);padding:1px 5px;border-radius:3px;border:1px solid rgba(212,168,0,.3);}
+/* SETTINGS */
+.set-step{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;}
+.set-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.set-title{font-size:13px;font-weight:700;color:var(--gold);}
+.set-toggle{padding:3px 9px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.3);border-radius:4px;color:var(--gold);font-size:10px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;transition:all .15s;}
+.set-body p{font-size:12px;color:var(--text2);line-height:1.65;margin-bottom:7px;}
+.gas-code{background:var(--bg);border:1px solid var(--border2);border-radius:var(--rsm);padding:9px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);white-space:pre-wrap;max-height:140px;overflow-y:auto;margin:5px 0;}
+.url-inp{width:100%;padding:9px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--rsm);color:var(--text);font-size:11px;font-family:'Share Tech Mono',monospace;outline:none;margin-top:5px;transition:border-color .2s;}
+.url-inp:focus{border-color:rgba(212,168,0,.5);}
+/* PREVIEW */
+.preview-link{display:block;width:100%;padding:11px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.4);border-radius:var(--radius);color:var(--gold);font-size:13px;font-weight:700;text-align:center;margin-bottom:9px;text-decoration:none;transition:all .15s;}
+.preview-link:active{background:rgba(212,168,0,.2);}
+.preview-frame{width:100%;height:calc(100vh - 140px);min-height:300px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);}
+/* MODAL */
+.moverlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:none;align-items:flex-end;}
+.moverlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:15px;width:100%;max-height:88vh;overflow-y:auto;}
+.modal-title{font-size:14px;font-weight:700;margin-bottom:12px;color:var(--gold);}
+.macts{display:flex;gap:7px;margin-top:11px;}
+.mbtn{flex:1;padding:12px;border-radius:var(--radius);font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer;border:none;transition:all .15s;}
+.mbtn-s{background:var(--gold-dim);border:1px solid rgba(212,168,0,.5);color:var(--gold);}
+.mbtn-c{background:var(--surface2);color:var(--text2);border:1px solid var(--border2);}
+/* WTYPE EDIT */
+.wt-list{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);max-height:190px;overflow-y:auto;margin-bottom:9px;}
+.wt-item{padding:8px 11px;font-size:13px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;}
+.wt-item:last-child{border-bottom:none;}
+.wt-del{background:var(--danger-dim);color:var(--danger);border:none;border-radius:4px;width:22px;height:22px;font-size:12px;cursor:pointer;}
+/* TOAST */
+.toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gold-dim);border:1px solid rgba(212,168,0,.5);color:var(--gold);padding:8px 17px;border-radius:20px;font-size:12px;font-weight:700;opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap;text-shadow:0 0 10px rgba(212,168,0,.4);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.err{background:var(--danger-dim);border-color:rgba(239,68,68,.5);color:var(--danger);text-shadow:none;}
+.toast.ok{background:var(--green-dim);border-color:rgba(74,222,128,.4);color:var(--green);text-shadow:none;}
+/* BOTTOM NAV */
+.bnav{position:fixed;bottom:0;left:0;right:0;background:rgba(13,15,20,.97);border-top:1px solid var(--border);display:flex;z-index:200;backdrop-filter:blur(12px);}
+.nbtn{flex:1;padding:8px 3px;text-align:center;font-size:9px;color:var(--text3);cursor:pointer;border:none;background:none;font-family:'Noto Sans TC',sans-serif;position:relative;transition:color .2s;}
+.nbtn.active{color:var(--gold);}
+.nbtn-ico{font-size:17px;display:block;margin-bottom:1px;}
+.nbadge{position:absolute;top:5px;right:50%;transform:translateX(9px);background:var(--danger);color:#fff;border-radius:8px;padding:1px 4px;font-size:8px;font-weight:700;display:none;}
+.empty{text-align:center;padding:34px 18px;color:var(--text3);}
+/* TODAY */
+.tr-card{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:13px;margin-bottom:9px;position:relative;}
+.tr-card.has-exit{border-color:rgba(74,222,128,.25);}
+.tr-card.no-exit{border-color:rgba(212,168,0,.3);}
+.tr-r1{display:flex;align-items:center;gap:8px;margin-bottom:7px;padding-right:80px;}
+.tr-fl{font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:bold;color:var(--gold);background:var(--gold-dim);padding:3px 8px;border-radius:4px;flex-shrink:0;border:1px solid rgba(212,168,0,.2);}
+.tr-shop{font-size:17px;font-weight:700;flex:1;}
+.tr-cnt{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);}
+.tr-meta{font-size:14px;color:var(--text3);display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;}
+.tr-exit-row{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:var(--rsm);font-size:14px;}
+.tr-exit-row.filled{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,.2);}
+.tr-exit-row.empty-exit{background:var(--gold-dim);color:var(--gold);border:1px solid rgba(212,168,0,.2);cursor:pointer;}
+.tr-acts{position:absolute;top:8px;right:8px;}
+.tr-fill-btn{padding:4px 10px;background:var(--gold-dim);border:1px solid rgba(212,168,0,.4);border-radius:var(--rsm);color:var(--gold);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.empty-ico{font-size:36px;margin-bottom:9px;}
+
+/* ===== 施工單查詢 FAB ===== */
+#conFab{position:fixed;right:18px;bottom:82px;z-index:200;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#818CF8);border:none;color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(99,102,241,.55);transition:transform .15s;-webkit-tap-highlight-color:transparent;}
+#conFab:active{transform:scale(.88);}
+#conOverlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;display:none;backdrop-filter:blur(3px);}
+#conOverlay.open{display:block;}
+#conDrawer{position:fixed;bottom:0;left:0;right:0;z-index:401;background:#0D0F14;border-top:1.5px solid rgba(212,168,0,.28);border-radius:18px 18px 0 0;max-height:82vh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .32s cubic-bezier(.4,0,.2,1);}
+#conDrawer.open{transform:translateY(0);}
+.con-drag{width:38px;height:4px;background:rgba(255,255,255,.14);border-radius:2px;margin:10px auto 0;flex-shrink:0;}
+.con-dh{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.con-dh-title{font-size:17px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:7px;}
+.con-close{background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;}
+.con-tabs{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0;}
+.con-tab{flex:1;padding:9px 4px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:none;color:var(--text2);font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;-webkit-tap-highlight-color:transparent;}
+.con-tab.active{background:rgba(212,168,0,.13);border-color:rgba(212,168,0,.38);color:var(--gold);}
+.con-tab-date{font-size:11px;font-weight:600;opacity:.85;margin-left:2px;}
+.con-card-date{display:inline-block;font-size:12px;font-weight:700;color:var(--gold);background:rgba(212,168,0,.1);border:1px solid rgba(212,168,0,.25);border-radius:5px;padding:2px 8px;margin-bottom:8px;}
+.con-body{flex:1;overflow-y:auto;padding:10px 12px 24px;-webkit-overflow-scrolling:touch;}
+.con-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 12px;margin-bottom:10px;}
+.con-card-shop{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.con-card-applicant{display:inline-block;background:rgba(212,168,0,.1);border:1px solid rgba(212,168,0,.22);color:var(--gold);font-size:12px;border-radius:4px;padding:2px 8px;margin-bottom:7px;}
+.con-card-tab{display:inline-block;background:rgba(99,102,241,.1);border:1px solid rgba(129,140,248,.22);color:#818CF8;font-size:10px;border-radius:4px;padding:1px 6px;margin-left:4px;}
+.con-info{display:flex;flex-wrap:wrap;gap:4px 12px;margin-bottom:9px;}
+.con-info span{font-size:14px;color:var(--text2);display:flex;align-items:center;gap:3px;}
+.con-info i{font-size:12px;}
+.con-btns{display:flex;gap:8px;}
+.con-btn-in{flex:1;padding:10px 4px;border-radius:8px;background:rgba(34,197,94,.13);border:1px solid rgba(74,222,128,.3);color:#4ADE80;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;transition:all .15s;}
+.con-btn-out{flex:1;padding:10px 4px;border-radius:8px;background:rgba(239,68,68,.1);border:1px solid rgba(248,113,113,.28);color:#F87171;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;transition:all .15s;}
+.con-btn-in:active,.con-btn-out:active{transform:scale(.94);}
+/* ===== 施工單搜尋欄 ===== */
+.con-search-wrap{padding:9px 12px 4px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;}
+.con-search-input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 13px;color:var(--text);font-size:15px;font-family:inherit;outline:none;box-sizing:border-box;}
+.con-search-input:focus{border-color:rgba(212,168,0,.4);background:rgba(255,255,255,.09);}
+.con-search-input::placeholder{color:var(--text3);}
+/* ===== 施工單卡片三欄標題 ===== */
+.con-card-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-width:0;flex-wrap:nowrap;justify-content:flex-start;}
+.con-card-applicant-col{font-size:13px;font-weight:700;color:var(--gold);white-space:nowrap;background:rgba(212,168,0,.12);border:1px solid rgba(212,168,0,.25);border-radius:4px;padding:2px 7px;flex-shrink:0;}
+.con-card-shop-col{font-size:18px;font-weight:800;color:var(--text);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.con-card-loc-col{font-size:13px;font-weight:700;color:#818CF8;white-space:nowrap;background:rgba(129,140,248,.1);border:1px solid rgba(129,140,248,.2);border-radius:4px;padding:2px 7px;flex-shrink:0;}
+
+.con-empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:15px;line-height:1.8;}
+.con-loading{text-align:center;padding:32px 20px;color:var(--text2);font-size:15px;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-logo">CEC</div>
+    <div><div class="hdr-title">天鷹保全｜打烊後進出</div><div class="hdr-sub">漢神巨蛋快速登錄系統</div></div>
+  </div>
+  <div class="hdr-time" id="hdrTime"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tab-entry" onclick="switchTab('entry')"><span class="tab-ico">➕</span>登錄</div>
+  <div class="tab" id="tab-today" onclick="switchTab('today')"><span class="tab-ico">📝</span>今日</div>
+  <div class="tab" id="tab-preview" onclick="switchTab('preview')"><span class="tab-ico">📊</span>預覽</div>
+  <div class="tab" id="tab-db" onclick="switchTab('db')"><span class="tab-ico">🗂</span>資料庫</div>
+  <div class="tab" id="tab-settings" onclick="switchTab('settings')"><span class="tab-ico">⚙️</span>設定</div>
+</div>
+
+<!-- ENTRY -->
+<div class="panel active" id="panel-entry">
+  <div class="highlight-row">
+    <div class="lbl">專櫃／廠商批次登記 <span class="req">*</span></div>
+    <div class="shoprows-box" id="shopRowsBox"></div>
+    <button class="add-row-btn" onclick="addShopRow()">＋ 新增專櫃／廠商（批次登記）</button>
+  </div>
+  <div class="two-col" style="background:rgba(212,168,0,.07);border:1px solid rgba(212,168,0,.22);border-radius:var(--radius);padding:11px;margin-bottom:11px;">
+    <div class="form-row" style="margin-bottom:0">
+      <div class="lbl" style="font-size:13px;color:var(--gold2);text-shadow:0 0 10px rgba(255,215,0,.3);">進場時間</div>
+      <input class="tinp" type="time" id="entryTime">
+      <button class="now-btn" onclick="setNow('entryTime')">現在時間</button>
+    </div>
+    <div class="form-row" style="margin-bottom:0">
+      <div class="lbl" style="font-size:13px;color:var(--gold2);text-shadow:0 0 10px rgba(255,215,0,.3);">退場時間</div>
+      <input class="tinp" type="time" id="exitTime">
+      <button class="now-btn" onclick="setNow('exitTime')">現在時間</button>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="lbl">施工地點</div>
+    <input class="txt" id="location" type="text" placeholder="例：B1F 停車場入口">
+  </div>
+  <div class="form-row">
+    <div class="lbl">施工項目 <button class="lbl-btn" onclick="openWtModal()">✏️ 編輯</button></div>
+    <div class="chips" id="wtChips"></div>
+    <input class="txt" id="wtCustom" type="text" placeholder="或輸入自訂項目..." style="margin-top:7px">
+  </div>
+  <div class="form-row">
+    <div class="lbl">檢查者</div>
+    <div class="swrap">
+      <input class="sinp" id="insSrch" type="text" placeholder="搜尋或輸入檢查者..." autocomplete="off">
+      <span class="sico">🔎</span>
+    </div>
+    <div class="dd" id="insDD"></div>
+    <div class="seldis" id="insSel"></div>
+    <div class="ichips" id="insChips"></div>
+  </div>
+  <div class="divider"></div>
+  <button class="submit-btn" onclick="directSubmitToSheet()" style="background:linear-gradient(135deg,#22C55E,#4ADE80);margin-top:8px;color:#0A0C10;">🚀 直接送出到試算表</button>
+</div>
+
+<!-- TODAY -->
+<div class="panel" id="panel-today">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">今日進出紀錄</div>
+    <button class="exp-btn pri" onclick="loadTodayRecords()" style="width:auto;padding:6px 12px;margin:0;font-size:11px">🔄 從試算表載入</button>
+  </div>
+  <div id="todayStatus" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
+  <div id="todayList">
+    <div class="empty"><div class="empty-ico">📝</div><p>點上方「從試算表載入」<br>抓取今日已送出的紀錄</p></div>
+  </div>
+</div>
+
+<!-- PREVIEW -->
+<div class="panel" id="panel-preview">
+  <div style="display:flex;gap:8px;margin-bottom:9px;">
+    <a class="preview-link" style="flex:1;margin-bottom:0" href="https://docs.google.com/spreadsheets/d/1TnN3iJb1w9XTuw0-QuNrtXEOa71KCCy7y8Q3_1b1FmI/edit" target="_blank">🔗 新分頁開啟</a>
+    <button class="preview-link" style="flex:none;width:auto;padding:11px 14px;margin-bottom:0;cursor:pointer;border:none;" onclick="refreshPreview()">🔄 刷新</button>
+  </div>
+  <iframe class="preview-frame" id="previewFrame"
+    src="https://docs.google.com/spreadsheets/d/1TnN3iJb1w9XTuw0-QuNrtXEOa71KCCy7y8Q3_1b1FmI/gviz/tq?tqx=out:html&range=A2:I"
+    frameborder="0"></iframe>
+</div>
+
+<!-- DB -->
+<div class="panel" id="panel-db">
+  <div class="db-sec">
+    <div class="db-title">📦 廠商／專櫃資料庫</div>
+    <div class="db-add">
+      <input class="txt" id="nShopName" type="text" placeholder="廠商名稱">
+      <select id="nShopFloor"><option>B1F</option><option>1F</option><option>2F</option><option>3F</option><option>4F</option><option>5F</option><option>6F</option><option>7F</option><option>8F</option><option>9F</option><option>10F</option></select>
+      <button class="dbadd-btn" onclick="addShop()">新增</button>
+    </div>
+    <div class="db-list">
+      <input class="db-sticky" id="dbShopQ" type="text" placeholder="🔍 搜尋廠商..." oninput="renderDBShops(this.value)">
+      <div id="dbShopList"></div>
+    </div>
+  </div>
+  <div class="db-sec">
+    <div class="db-title">👤 監工人員資料庫</div>
+    <div class="db-add">
+      <input class="txt" id="nPersonName" type="text" placeholder="監工姓名">
+      <button class="dbadd-btn" onclick="addPerson()">新增</button>
+    </div>
+    <div class="db-list">
+      <input class="db-sticky" id="dbPersonQ" type="text" placeholder="🔍 搜尋人員..." oninput="renderDBPersons(this.value)">
+      <div id="dbPersonList"></div>
+    </div>
+  </div>
+  <div class="db-sec">
+    <div class="db-title">🔎 檢查者資料庫</div>
+    <div class="db-add">
+      <input class="txt" id="nInsName" type="text" placeholder="檢查者姓名">
+      <button class="dbadd-btn" onclick="addInspector()">新增</button>
+    </div>
+    <div class="db-add" id="insEmpWrap">
+      <input class="txt" id="nInsEmp" type="text" placeholder="綁定登入工號（選填，自動填入檢查者用）">
+    </div>
+    <div class="db-list">
+      <input class="db-sticky" id="dbInsQ" type="text" placeholder="🔍 搜尋檢查者..." oninput="renderDBInspectors(this.value)">
+      <div id="dbInsList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="panel" id="panel-settings">
+  <div class="set-step">
+    <div class="set-head"><div class="set-title">📝 步驟一：Apps Script</div><button class="set-toggle" onclick="toggleStep('s1b')">隱藏</button></div>
+    <div id="s1b">
+      <p class="set-body">試算表→擴充功能→Apps Script→貼上→儲存→部署為網路應用程式（執行身分：我；存取：任何人）</p>
+      <div class="gas-code" id="gasCodeBox"></div>
+      <button class="exp-btn pri" onclick="copyGasCode()" style="margin-bottom:0">📋 複製程式碼</button>
+    </div>
+  </div>
+  <div class="set-step">
+    <div class="set-head"><div class="set-title">🔗 步驟二：Web App 網址</div><button class="set-toggle" onclick="toggleStep('s2b')">隱藏</button></div>
+    <div id="s2b">
+      <div id="builtInNote" style="font-size:11px;padding:6px 9px;border-radius:6px;margin-bottom:8px;display:none"></div>
+      <p class="set-body">部署後的 Web App URL：</p>
+      <input class="url-inp" type="url" id="gasUrlInp" placeholder="https://script.google.com/macros/s/...">
+      <button class="exp-btn suc" onclick="saveGasUrl()" style="margin-top:8px;margin-bottom:0">✅ 儲存並測試</button>
+    </div>
+  </div>
+  <div class="set-step" style="background:var(--gold-dim);border-color:rgba(212,168,0,.3)">
+    <div class="set-head">
+      <div class="set-title">☁️ 共用資料庫同步</div>
+      <span id="syncBadge" style="font-size:10px"></span>
+    </div>
+    <p class="set-body">連線後，所有員工的資料庫（廠商、監工、施工項目）都會共用同一份，修改後自動同步。</p>
+    <button class="exp-btn suc" onclick="syncDBFromGAS()" style="margin-bottom:6px">⬇ 從雲端拉取最新資料庫</button>
+    <button class="exp-btn pri" onclick="pushDBToGAS()" style="margin-bottom:0">⬆ 推送本地資料庫到雲端</button>
+  </div>
+  <div class="set-step">
+    <div class="set-head"><div class="set-title">📋 步驟三：分頁名稱</div><button class="set-toggle" onclick="toggleStep('s3b')">隱藏</button></div>
+    <div id="s3b">
+      <p class="set-body">要寫入資料的分頁名稱：</p>
+      <input class="txt" type="text" id="sheetNameInp" placeholder="進出資料表">
+      <button class="exp-btn pri" onclick="saveSheetName()" style="margin-top:7px;margin-bottom:0">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- TODAY EDIT MODAL -->
+<div class="moverlay" id="todayEditModal">
+  <div class="modal">
+    <div class="modal-title" id="todayEditTitle">✏️ 編輯紀錄</div>
+    <input type="hidden" id="tedRowNum">
+    <div class="two-col">
+      <div class="form-row"><div class="lbl">樓層</div>
+        <select class="txt" id="tedFloor"><option>B1F</option><option>1F</option><option>2F</option><option>3F</option><option>4F</option><option>5F</option><option>6F</option><option>7F</option><option>8F</option><option>9F</option><option>10F</option></select>
+      </div>
+      <div class="form-row"><div class="lbl">人數</div>
+        <input class="txt" type="number" id="tedCount" min="1" inputmode="numeric">
+      </div>
+    </div>
+    <div class="form-row"><div class="lbl">監工姓名</div><input class="txt" type="text" id="tedSup"></div>
+    <div class="form-row"><div class="lbl">廠商／專櫃</div><input class="txt" type="text" id="tedShop"></div>
+    <div class="two-col">
+      <div class="form-row"><div class="lbl">進場時間</div>
+        <input class="tinp" type="time" id="tedEntry">
+        <button class="now-btn" onclick="setNow('tedEntry')">現在</button>
+      </div>
+      <div class="form-row"><div class="lbl">退場時間</div>
+        <input class="tinp" type="time" id="tedExit">
+        <button class="now-btn" onclick="setNow('tedExit')">現在</button>
+      </div>
+    </div>
+    <div class="form-row"><div class="lbl">施工地點</div><input class="txt" type="text" id="tedLoc"></div>
+    <div class="form-row"><div class="lbl">施工項目</div><input class="txt" type="text" id="tedWtype"></div>
+    <div class="form-row">
+      <div class="lbl">檢查者</div>
+      <input class="txt" type="text" id="tedIns" placeholder="檢查者姓名">
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px" id="tedInsChips"></div>
+    </div>
+    <div class="macts">
+      <button class="mbtn mbtn-c" onclick="closeMo('todayEditModal')">取消</button>
+      <button class="mbtn mbtn-s" onclick="saveTodayEdit()">✅ 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT QUEUE MODAL -->
+<div class="moverlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title">✏️ 編輯紀錄</div>
+    <input type="hidden" id="eId">
+    <div class="form-row"><div class="lbl">樓層</div><select class="txt" id="eFloor"><option>B1F</option><option>1F</option><option>2F</option><option>3F</option><option>4F</option><option>5F</option><option>6F</option><option>7F</option><option>8F</option><option>9F</option><option>10F</option></select></div>
+    <div class="form-row"><div class="lbl">監工</div><input class="txt" type="text" id="eSup"></div>
+    <div class="form-row"><div class="lbl">廠商</div><input class="txt" type="text" id="eShop"></div>
+    <div class="form-row"><div class="lbl">人數</div><input class="txt" type="number" id="eCnt" min="1" inputmode="numeric"></div>
+    <div class="two-col">
+      <div class="form-row"><div class="lbl">進場</div><input class="tinp" type="time" id="eEntry"></div>
+      <div class="form-row"><div class="lbl">退場</div><input class="tinp" type="time" id="eExit"></div>
+    </div>
+    <div class="form-row"><div class="lbl">地點</div><input class="txt" type="text" id="eLoc"></div>
+    <div class="form-row"><div class="lbl">施工項目</div><input class="txt" type="text" id="eWtype"></div>
+    <div class="form-row"><div class="lbl">檢查者</div><input class="txt" type="text" id="eIns"></div>
+    <div class="macts">
+      <button class="mbtn mbtn-c" onclick="closeMo('editModal')">取消</button>
+      <button class="mbtn mbtn-s" onclick="saveEdit()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- DB EDIT MODAL -->
+<div class="moverlay" id="dbEditModal">
+  <div class="modal">
+    <div class="modal-title" id="dbEditTitle">✏️ 編輯</div>
+    <input type="hidden" id="dbEType"><input type="hidden" id="dbEId">
+    <div class="form-row"><div class="lbl">名稱</div><input class="txt" type="text" id="dbEName"></div>
+    <div class="form-row" id="dbEFloorRow"><div class="lbl">樓層</div><select class="txt" id="dbEFloor"><option>B1F</option><option>1F</option><option>2F</option><option>3F</option><option>4F</option><option>5F</option><option>6F</option><option>7F</option><option>8F</option><option>9F</option><option>10F</option></select></div>
+    <div class="form-row" id="dbEEmpRow" style="display:none"><div class="lbl">綁定工號</div><input class="txt" type="text" id="dbEEmp" placeholder="綁定登入工號（選填）"></div>
+    <div class="macts">
+      <button class="mbtn mbtn-c" onclick="closeMo('dbEditModal')">取消</button>
+      <button class="mbtn mbtn-s" onclick="saveDbEdit()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- WTYPE MODAL -->
+<div class="moverlay" id="wtModal">
+  <div class="modal">
+    <div class="modal-title">✏️ 編輯施工項目</div>
+    <div class="wt-list" id="wtEditList"></div>
+    <div class="db-add">
+      <input class="txt" type="text" id="nWtype" placeholder="新增施工項目...">
+      <button class="dbadd-btn" onclick="addWtype()">新增</button>
+    </div>
+    <div class="macts"><button class="mbtn mbtn-s" onclick="closeMo('wtModal')">完成</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="bnav">
+  <button class="nbtn active" id="nav-entry" onclick="switchTab('entry')"><span class="nbtn-ico">➕</span>登錄</button>
+  <button class="nbtn" id="nav-today" onclick="switchTab('today')"><span class="nbtn-ico">📝</span>今日</button>
+  <button class="nbtn" id="nav-preview" onclick="switchTab('preview')"><span class="nbtn-ico">📊</span>預覽</button>
+  <button class="nbtn" id="nav-db" onclick="switchTab('db')"><span class="nbtn-ico">🗂</span>資料庫</button>
+  <button class="nbtn" id="nav-settings" onclick="switchTab('settings')"><span class="nbtn-ico">⚙️</span>設定</button>
+</div>
+
+<script>
+const WORKFLOW_GAS_URL='https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec';
+function logWorkflow(tool,actionType,status){
+  var u=JSON.parse(localStorage.getItem('hsh_session_user')||'{}');
+  if(!u.empId)return;
+  try{fetch(WORKFLOW_GAS_URL,{method:'POST',body:JSON.stringify({action:'logTask',tool,empId:u.empId,userName:u.name||'未知',actionType,status:status||'已完成'})});}catch(e){}
+}
+const FLOORS=['B1F','1F','2F','3F','4F','5F','6F','7F','8F','9F','10F'];
+const DEF_WT=['員工下班','員工上班','施工維修','清潔','送貨','設備檢查','裝修','電機工程','廣告施作','消毒','陳列','進櫃'];
+const DEF_INS=[
+  {id:1,n:'伯威'},{id:2,n:'志堅'},{id:3,n:'楷文'},{id:4,n:'日典'},
+  {id:5,n:'承訓'},{id:6,n:'晨嘉'},{id:7,n:'國賢'},{id:8,n:'伯維'},
+  {id:9,n:'易晉'},{id:10,n:'世峰'},{id:11,n:'俊明'},{id:12,n:'志遠'},
+];
+// Known max shop IDs per floor for code generation
+const FLOOR_MAX={'B1F':190,'1F':123,'2F':57,'3F':72,'4F':73,'5F':47,'6F':36,'7F':32,'8F':60,'9F':0,'10F':1};
+
+const DEF_SHOPS=[
+  {n:'設備課',f:'B1F'},{n:'繼光香香雞',f:'B1F'},{n:'鬍子爺爺',f:'B1F'},{n:'翰林',f:'B1F'},{n:'鄧師傅',f:'B1F'},{n:'歐貝拉',f:'B1F'},{n:'徹思叔叔',f:'B1F'},{n:'鼎泰豐',f:'B1F'},{n:'詩特莉',f:'B1F'},{n:'新悅鐵板燒',f:'B1F'},{n:'31冰淇淋',f:'B1F'},{n:'麥當勞',f:'B1F'},{n:'雪紡',f:'B1F'},{n:'琉璃工坊',f:'B1F'},{n:'島嶼吐司',f:'B1F'},{n:'珍煮丹',f:'B1F'},{n:'星巴克(B1F)',f:'B1F'},{n:'波坡茶',f:'B1F'},{n:'松本清',f:'B1F'},{n:'東泱宮',f:'B1F'},{n:'東京牛奶',f:'B1F'},{n:'吳寶春',f:'B1F'},{n:'百濟',f:'B1F'},{n:'多那之',f:'B1F'},{n:'可麗餅',f:'B1F'},{n:'可瑞安',f:'B1F'},{n:'牛角次男坊',f:'B1F'},{n:'天仁',f:'B1F'},{n:'不二家',f:'B1F'},{n:'山崎',f:'B1F'},{n:'山水婆',f:'B1F'},{n:'大心',f:'B1F'},{n:'丸龜',f:'B1F'},{n:'上茂',f:'B1F'},{n:'八色烤肉',f:'B1F'},{n:'一風堂',f:'B1F'},{n:'APPLE',f:'B1F'},{n:'BBL',f:'B1F'},{n:"BEARD PAPA'S",f:'B1F'},{n:'CHACHATHE',f:'B1F'},{n:'COCO',f:'B1F'},{n:'GODIVA',f:'B1F'},{n:'HAFU',f:'B1F'},{n:'MINI ONE',f:'B1F'},{n:'MIOPANE',f:'B1F'},{n:'NESPRESSO',f:'B1F'},{n:'OSIM',f:'B1F'},{n:'Panasonic',f:'B1F'},{n:'TWG',f:'B1F'},{n:'方師傅',f:'B1F'},{n:'SONY',f:'B1F'},{n:'哈根達斯',f:'B1F'},{n:'宜得利',f:'B1F'},{n:'廣生堂',f:'B1F'},{n:'喫茶趣',f:'B1F'},{n:'咖樂迪',f:'B1F'},{n:'菲律賓薯條',f:'B1F'},{n:'LERBALARIO',f:'B1F'},{n:'Dyson',f:'B1F'},{n:'北海道冰淇淋',f:'B1F'},{n:'康庭(B1F)',f:'B1F'},{n:'旭花枝丸',f:'B1F'},{n:'藝康',f:'B1F'},{n:'阿默蛋糕',f:'B1F'},{n:'恆隆行',f:'B1F'},{n:'香草集',f:'B1F'},{n:'Milkyshop',f:'B1F'},{n:'果果',f:'B1F'},{n:'果億',f:'B1F'},{n:'果億病媒防治',f:'B1F'},{n:'普迪國際',f:'B1F'},{n:'力潔',f:'B1F'},{n:'正宏搬運',f:'B1F'},{n:'漢承',f:'B1F'},{n:'誠浤',f:'B1F'},{n:'中興保全',f:'B1F'},{n:'康庭',f:'B1F'},{n:'奇星宇',f:'B1F'},{n:'三星',f:'B1F'},{n:'糖村',f:'B1F'},{n:'雷莉歐',f:'B1F'},{n:'伊佐茶序',f:'B1F'},{n:'Hohos',f:'B1F'},{n:'冰滴咖啡',f:'B1F'},{n:'FOUR咖啡',f:'B1F'},{n:'台軒',f:'B1F'},{n:'緯城科技',f:'B1F'},{n:'RafKAMPO',f:'B1F'},{n:'宜伯客',f:'B1F'},{n:'翔通',f:'B1F'},{n:'法廚',f:'B1F'},{n:'兔兔酒',f:'B1F'},{n:'綠藤生機',f:'B1F'},{n:'布萊頓環衛',f:'B1F'},{n:'杉築室內',f:'B1F'},{n:'宜家',f:'B1F'},{n:'越鋼',f:'B1F'},{n:'大任',f:'B1F'},{n:'冠宏',f:'B1F'},{n:'姜泡菜',f:'B1F'},{n:'艾比亞',f:'B1F'},{n:'艾笛亞',f:'B1F'},{n:'全能',f:'B1F'},{n:'曙光',f:'B1F'},{n:'曙光除蟲',f:'B1F'},{n:'綠活通管',f:'B1F'},{n:'所羅門',f:'B1F'},{n:'喜時',f:'B1F'},{n:'樂清',f:'B1F'},
+  {n:'設備課',f:'1F'},{n:'寶格麗',f:'1F'},{n:'潘海莉根',f:'1F'},{n:'愛馬仕',f:'1F'},{n:'雅詩蘭黛',f:'1F'},{n:'植村秀',f:'1F'},{n:'海洋娜娜',f:'1F'},{n:'香緹卡',f:'1F'},{n:'香奈兒鞋櫃',f:'1F'},{n:'香奈兒',f:'1F'},{n:'克蘭絲',f:'1F'},{n:'西北影像',f:'1F'},{n:'巴黎世家',f:'1F'},{n:'凡賽斯',f:'1F'},{n:'AESOP',f:'1F'},{n:'AMQ',f:'1F'},{n:'BAOBAO',f:'1F'},{n:'BOBBI BROWN',f:'1F'},{n:'BURBERRY',f:'1F'},{n:'BV',f:'1F'},{n:'DIOR',f:'1F'},{n:'GUCCI',f:'1F'},{n:'JIMMY CHOO',f:'1F'},{n:'JOE MALONE',f:'1F'},{n:'LOEWE',f:'1F'},{n:'LV',f:'1F'},{n:'MAC',f:'1F'},{n:'MIU MIU',f:'1F'},{n:'RV',f:'1F'},{n:'TOM FORD',f:'1F'},{n:'VCA',f:'1F'},{n:'YSL',f:'1F'},{n:'馬卡龍',f:'1F'},{n:'陸林',f:'1F'},{n:'倩碧',f:'1F'},{n:'Omga',f:'1F'},{n:'Balenciaga',f:'1F'},{n:'Versace',f:'1F'},{n:'Sisley',f:'1F'},{n:'Suqqu',f:'1F'},{n:'NARS',f:'1F'},{n:'協龍',f:'1F'},{n:'赫蓮娜',f:'1F'},{n:'鹽埕水族',f:'1F'},{n:'圖輪數位館',f:'1F'},{n:'時浪',f:'1F'},{n:'契兒氏',f:'1F'},{n:'肌膚之鑰',f:'1F'},{n:'天行設計',f:'1F'},{n:'清河工程',f:'1F'},
+  {n:'設備課',f:'2F'},{n:'潘朵拉',f:'2F'},{n:'喬治傑森',f:'2F'},{n:'捷盛',f:'2F'},{n:'星巴克(2F)',f:'2F'},{n:'施華洛世奇',f:'2F'},{n:'西北影像',f:'2F'},{n:'台保',f:'2F'},{n:'10分之10',f:'2F'},{n:'BOSS',f:'2F'},{n:'COACH',f:'2F'},{n:'HM',f:'2F'},{n:'KS',f:'2F'},{n:'LONGCHAMP',f:'2F'},{n:'LONGINES',f:'2F'},{n:'LULULEMON',f:'2F'},{n:'ME',f:'2F'},{n:'MK(2F)',f:'2F'},{n:'POLO',f:'2F'},{n:'ZARA',f:'2F'},{n:'YS',f:'2F'},{n:'Kate Spade',f:'2F'},{n:'ALLSAINTS',f:'2F'},{n:'Diptyque',f:'2F'},{n:'浪琴',f:'2F'},{n:'匯僑',f:'2F'},{n:'項依',f:'2F'},{n:'捷盛',f:'2F'},{n:'國壹發',f:'2F'},{n:'Creed',f:'2F'},{n:'DAKS',f:'2F'},{n:'Mfk',f:'2F'},
+  {n:'設備課',f:'3F'},{n:'蘇菲亞',f:'3F'},{n:'鎮金店',f:'3F'},{n:'點睛品',f:'3F'},{n:'盧亞香水',f:'3F'},{n:'無印良品',f:'3F'},{n:'捷盛',f:'3F'},{n:'三宅一生',f:'3F'},{n:'西北影像',f:'3F'},{n:'北臉',f:'3F'},{n:'手機殼',f:'3F'},{n:'天梭',f:'3F'},{n:'AAPE',f:'3F'},{n:'ADIDAS',f:'3F'},{n:'APM',f:'3F'},{n:'AVEDA',f:'3F'},{n:'BIRKENSTOCK',f:'3F'},{n:'CK',f:'3F'},{n:'GIORDANO LADIES',f:'3F'},{n:'ICB',f:'3F'},{n:'I PRIMO',f:'3F'},{n:'IPRIMO',f:'3F'},{n:'JOY',f:'3F'},{n:'LAFA',f:'3F'},{n:'luciano',f:'3F'},{n:'MK(3F)',f:'3F'},{n:'MLB',f:'3F'},{n:'NB(3F)',f:'3F'},{n:'NGA國家地理',f:'3F'},{n:'PURE WAY',f:'3F'},{n:'SABON',f:'3F'},{n:'SPORT b.',f:'3F'},{n:'IROO',f:'3F'},{n:'PUMA',f:'3F'},{n:'L.Erickson',f:'3F'},{n:'CYRANO',f:'3F'},{n:'天群工程',f:'3F'},{n:'wacky willy',f:'3F'},{n:'Hearth',f:'3F'},{n:'Mikimoto',f:'3F'},{n:'杰威爾',f:'3F'},{n:'Blue Elephant',f:'3F'},{n:'誠舍',f:'3F'},{n:'漢風',f:'3F'},{n:'晴意廣告',f:'3F'},{n:'MFG',f:'3F'},
+  {n:'設備課',f:'4F'},{n:'雞三和',f:'4F'},{n:'點點心',f:'4F'},{n:'微兜',f:'4F'},{n:'菊川四代目鰻魚飯',f:'4F'},{n:'涓豆腐',f:'4F'},{n:'金色三麥',f:'4F'},{n:'初魚',f:'4F'},{n:'東京企劃',f:'4F'},{n:'京都勝牛',f:'4F'},{n:'西北影像',f:'4F'},{n:'黑毛屋',f:'4F'},{n:'王將',f:'4F'},{n:'太羽',f:'4F'},{n:'大戶屋',f:'4F'},{n:'千房',f:'4F'},{n:'GOZO',f:'4F'},{n:'HEATHER',f:'4F'},{n:'INNISFREE',f:'4F'},{n:'LOWRYS FARM',f:'4F'},{n:'MARU.A',f:'4F'},{n:'PLAYBOY',f:'4F'},{n:'RM',f:'4F'},{n:'UQ',f:'4F'},{n:'WAVE SHINE',f:'4F'},{n:'OWNDAYS',f:'4F'},{n:'山海',f:'4F'},{n:'康庭(4F)',f:'4F'},{n:'綠十字',f:'4F'},{n:'高麗潔',f:'4F'},{n:'創新科技',f:'4F'},{n:'1986環衛',f:'4F'},{n:'均德利環衛',f:'4F'},{n:'潔客神',f:'4F'},{n:'Olivo',f:'4F'},{n:'DITA',f:'4F'},{n:'佳廣',f:'4F'},{n:'沙發匠',f:'4F'},{n:'大永室內設計',f:'4F'},{n:'元富',f:'4F'},{n:'峻昇',f:'4F'},
+  {n:'設備課',f:'5F'},{n:'黛安芬',f:'5F'},{n:'銀穗',f:'5F'},{n:'冉冉',f:'5F'},{n:'海港',f:'5F'},{n:'施舒雅',f:'5F'},{n:'保時潔',f:'5F'},{n:'西北影像',f:'5F'},{n:'CHIC A',f:'5F'},{n:'D+AF.',f:'5F'},{n:'LOVFEE',f:'5F'},{n:'NANAS',f:'5F'},{n:'SO NICE',f:'5F'},{n:'QUEEN SHOP',f:'5F'},{n:'保時捷',f:'5F'},{n:'Butter',f:'5F'},{n:'色采',f:'5F'},{n:'瑪登瑪朵',f:'5F'},{n:'花田囍飾',f:'5F'},{n:'Relove',f:'5F'},{n:'不丹森呼吸',f:'5F'},{n:'AIR SPACE',f:'5F'},{n:'Lapela',f:'5F'},{n:'Fitflop',f:'5F'},{n:'JB',f:'5F'},{n:'引雅',f:'5F'},{n:'綠典',f:'5F'},{n:'天圓設計',f:'5F'},{n:'Lomel',f:'5F'},{n:'Nomel',f:'5F'},{n:'瑞秋懷恩',f:'5F'},{n:'高瓴環保',f:'5F'},
+  {n:'設備課',f:'6F'},{n:'麗嬰房',f:'6F'},{n:'橙子共和國',f:'6F'},{n:'紀伊國屋',f:'6F'},{n:'奇哥',f:'6F'},{n:'西北影像',f:'6F'},{n:'安妮公主',f:'6F'},{n:'ADIDAS',f:'6F'},{n:'FEES',f:'6F'},{n:'BANDSL',f:'6F'},{n:'山丘的月光',f:'6F'},{n:'服務中心',f:'6F'},{n:'京恆文化',f:'6F'},{n:'星期土',f:'6F'},{n:'書店',f:'6F'},{n:'蒙奇影像',f:'6F'},{n:'甘霖廣告(6F)',f:'6F'},{n:'貴賓廳HR',f:'6F'},{n:'聚色',f:'6F'},{n:"Toy's Snap",f:'6F'},{n:'諾瓦',f:'6F'},{n:'Tiger',f:'6F'},{n:'Tiger Family',f:'6F'},{n:'樂高',f:'6F'},{n:'玄音音響',f:'6F'},{n:'甘寧廣告',f:'6F'},{n:'雷諾瓦',f:'6F'},
+  {n:'設備課',f:'7F'},{n:'WODEN',f:'7F'},{n:'西北影像',f:'7F'},{n:'GU',f:'7F'},{n:'JINS',f:'7F'},{n:'PORTER',f:'7F'},{n:'CK',f:'7F'},{n:'TIMBERLAND',f:'7F'},{n:'ROOTS',f:'7F'},{n:'花予她',f:'7F'},{n:'品安',f:'7F'},{n:'嘉裕西服',f:'7F'},{n:'新光保全',f:'7F'},{n:'藏壽司',f:'7F'},{n:'Plainme',f:'7F'},{n:'LACOSTE',f:'7F'},{n:'Hoka',f:'7F'},{n:'群彩',f:'7F'},{n:'新秀麗',f:'7F'},{n:'Tommy',f:'7F'},{n:'Fred Perry',f:'7F'},{n:'康庭(7F)',f:'7F'},{n:'睿昱',f:'7F'},{n:'美冠',f:'7F'},
+  {n:'設備課',f:'8F'},{n:'聯倉',f:'8F'},{n:'銀谷',f:'8F'},{n:'湯姆熊',f:'8F'},{n:'西北影像',f:'8F'},{n:'台灣隆健康',f:'8F'},{n:'大創',f:'8F'},{n:'ADIDAS',f:'8F'},{n:'NB(8F)',f:'8F'},{n:'NIKE',f:'8F'},{n:'友均',f:'8F'},{n:'佐丹奴',f:'8F'},{n:'GETCHI',f:'8F'},{n:"Levi's",f:'8F'},{n:'FILA',f:'8F'},{n:'UA',f:'8F'},{n:'視中心',f:'8F'},{n:'愛迪達',f:'8F'},{n:'VERVE',f:'8F'},{n:'玩具反斗城',f:'8F'},{n:'Oneboy',f:'8F'},{n:'日落小物',f:'8F'},{n:'Klassic',f:'8F'},{n:'yogibo',f:'8F'},{n:'始祖鳥',f:'8F'},{n:'好事集',f:'8F'},{n:'康庭(8F)',f:'8F'},{n:'Popcorn',f:'8F'},{n:'爆米花',f:'8F'},{n:'惡魔手機殼',f:'8F'},
+  {n:'三商電腦',f:'10F'},
+];
+const DEF_PERSONS=['周永璿','徐賢峻','洪偉盛','余德和','廖錫涌','施宗呈','方登弘','林澤宏','鞠宜溱','蘇營彰','畢治睿','許景堯','陳國彥','周昱成','王美珠','陳月鳳','林志忠','金玟伶','陳虹伶','陳怡菁','林妏娟','柯沂岑','黃子芸','辛苓佳','林佳汝','廖小川','張嘉芬','吳玉琳','楊松林','劉宏致','翁慧雯','陳冠龍','黃淳怡','蘇筱雅','張婉琳','黃至萱','李珮琪','麥修武','吳存智','葉順福','鄭承浩','鐘銘財','林雨萱','林哲揚','陳筱莉','王重皓','薛寓豪','陳虹燕','陳文龍','林博宸','阮心筠','魏勁萱','蔡和育','陳俞蓁','李美惠','藍婉玲','陳憶涵','王怡晴','洪正育','林冠宇','安世翔','賀朝建','李柔蕙','張世融','張育明','陳品賢','黃俊豪','葉利生','許穎純','游勝喬'];
+
+// STATE
+let shops=(()=>{
+  let s=JSON.parse(localStorage.getItem('hsh_shops')||'null')||DEF_SHOPS.map((s,i)=>({id:i+1,...s}));
+  // migrate: ensure all shop entries have emps array
+  s.forEach(sh=>{if(!sh.emps)sh.emps=[];});
+  return s;
+})();
+let persons=JSON.parse(localStorage.getItem('hsh_persons')||'null')||DEF_PERSONS.map((n,i)=>({id:i+1,n}));
+let inspectors=JSON.parse(localStorage.getItem('hsh_ins')||'null')||DEF_INS.map(x=>({...x}));
+let workTypes=JSON.parse(localStorage.getItem('hsh_wt')||'null')||[...DEF_WT];
+let queue=JSON.parse(localStorage.getItem('hsh_q')||'[]');
+// ★ 預設連線設定（管理員填寫後，所有員工開啟就自動連線，不需手動設定）
+const BUILT_IN_GAS_URL   = 'https://script.google.com/macros/s/AKfycbwZ5f7h_Lv_MOCxPrqPpBPKA917-JKmEz5DDekYixLDsGf1QAKCTOuVxwo18OYKX7a4ng/exec'; // Web App URL
+const BUILT_IN_SHEET     = '進出資料表'; // ← 要寫入的分頁名稱
+const CON_GAS_URL = 'https://script.google.com/macros/s/AKfycbz7orMAA608y2GiDlirI0FlJW4lccqZvnzN4si7XFIxh7_euyx1zTA0uSmb5Rd4jnCkwg/exec'; // 施工單查詢 GAS
+
+// 優先用寫死的 URL；若沒有才用 localStorage（給個別員工自訂用）
+let gasUrl    = BUILT_IN_GAS_URL    || localStorage.getItem('hsh_gasUrl')    || '';
+let sheetName = BUILT_IN_SHEET      || localStorage.getItem('hsh_sheet')     || '進出資料表';
+let shopNextId=Math.max(...shops.map(s=>s.id),0)+1;
+let personNextId=Math.max(...persons.map(p=>p.id),0)+1;
+let insNextId=Math.max(...inspectors.map(p=>p.id),0)+1;
+let rowNextId=2;
+let shopRows=[{id:1,floor:'',shopName:'',isNew:false,count:1,supervisor:''}];
+let _rt=null,_ri=null;
+let selIns='',selWt='';
+
+/* ── saveLocal：只存 localStorage，不推雲端（用於從雲端拉取後） ── */
+function saveLocal(){
+  localStorage.setItem('hsh_shops',JSON.stringify(shops));
+  localStorage.setItem('hsh_persons',JSON.stringify(persons));
+  localStorage.setItem('hsh_ins',JSON.stringify(inspectors));
+  localStorage.setItem('hsh_wt',JSON.stringify(workTypes));
+  localStorage.setItem('hsh_q',JSON.stringify(queue));
+}
+
+/* ── save：存本地 + 2秒後推雲端（用於使用者主動變更資料） ── */
+function save(){
+  saveLocal();
+  clearTimeout(save._pushTimer);
+  save._pushTimer=setTimeout(function(){if(gasUrl)pushDBToGAS();},2000);
+}
+
+// TIME FORMAT: match spreadsheet format HH:MM:SS
+function fmtTime(t){
+  if(!t) return '';
+  // t is HH:MM from time input, convert to HH:MM:SS
+  return t+':00';
+}
+// Created time format: matches "yyyy/M/d HH:mm:ss" — done server side in GAS
+
+function init(){
+  /* 讀取 APP 登入者角色，僅「管理員(admin)」可見設定Tab，其他職務一律隱藏 */
+  (function checkRole(){
+    try{
+      const u = JSON.parse(localStorage.getItem('hsh_session_user')||'{}');
+      const canSetting = ['admin'].includes(u.role)
+                        || window.self===window.top; // 直接開啟（非APP內嵌）時預設允許，供管理員部署設定用
+      window._canMng = canSetting; // 全域管理旗標：組長以上可設定「檢查者↔工號」綁定
+      if(!canSetting){
+        const st = document.getElementById('tab-settings');
+        const ns = document.getElementById('nav-settings');
+        if(st) st.style.display='none';
+        if(ns) ns.style.display='none';
+        const iw = document.getElementById('insEmpWrap');
+        if(iw) iw.style.display='none';
+      }
+    }catch(e){}
+  })();
+  setInterval(()=>{
+    const n=new Date();
+    document.getElementById('hdrTime').innerHTML=
+      n.toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'})+'<br>'+
+      n.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  },1000);
+  renderShopRows();
+  buildWtChips();
+  buildInsChips();
+  setupInsSearch();
+  updateGasStatus();
+  renderQueue();
+  if(gasUrl)syncDBFromGAS(true); /* ★ 開啟工具即自動拉取雲端最新資料庫，避免跨裝置看到舊的監工/廠商/檢查者名單 */
+  document.getElementById('gasCodeBox').textContent=GAS_CODE;
+  document.getElementById('gasUrlInp').value=gasUrl;
+  document.getElementById('sheetNameInp').value=sheetName;
+  // Show built-in URL status
+  var note=document.getElementById('builtInNote');
+  if(note){
+    if(BUILT_IN_GAS_URL){
+      note.style.display='block';
+      note.style.background='rgba(74,222,128,.1)';
+      note.style.border='1px solid rgba(74,222,128,.25)';
+      note.style.color='var(--green)';
+      note.textContent='✓ 已內建連線設定，員工開啟即自動連線';
+    } else {
+      note.style.display='block';
+      note.style.background='rgba(212,168,0,.1)';
+      note.style.border='1px solid rgba(212,168,0,.25)';
+      note.style.color='var(--gold)';
+      note.textContent='⚠ BUILT_IN_GAS_URL 尚未填入，請參考說明填寫後重新上傳';
+    }
+  }
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('.dd')&&!e.target.closest('.sinp')&&!e.target.closest('.sup-mini')&&!e.target.closest('.floor-selector'))
+      document.querySelectorAll('.dd.open').forEach(d=>d.classList.remove('open'));
+  });
+}
+
+// SHOP ROWS
+function renderShopRows(){
+  document.getElementById('shopRowsBox').innerHTML=shopRows.map((r,i)=>`
+    <div class="shop-row" id="shopRowEl${r.id}">
+      <div class="row-head">
+        <div class="row-lbl">監工登記 ${i+1}${r.floor?` <span class="fpill">${r.floor}</span>`:''}</div>
+        ${shopRows.length>1?`<button class="row-del" onclick="removeRow(${r.id})">✕</button>`:''}
+      </div>
+      <div class="swrap" style="margin-bottom:5px">
+        <input class="sinp" id="sp${r.id}" type="text" value="${x(r.supervisor)}" placeholder="監工姓名..." autocomplete="off"
+          oninput="fspRow(${r.id},this.value)" onfocus="fspRow(${r.id},this.value)">
+        <span class="sico">🔍</span>
+      </div>
+      <div class="dd" id="spdd${r.id}"></div>
+      <div class="swrap" style="margin-bottom:${r.shopName&&!r.floor?'0':'5px'}">
+        <input class="sinp" id="ss${r.id}" type="text" value="${x(r.shopName)}"
+          placeholder="搜尋或輸入專櫃／廠商名稱..." autocomplete="off"
+          oninput="fsRow(${r.id},this.value)" onfocus="fsRow(${r.id},this.value)">
+        <span class="sico">🔍</span>
+      </div>
+      <div class="dd" id="sdd${r.id}"></div>
+      ${r.shopName&&!r.floor?`
+        <div style="margin:5px 0 4px;font-size:11px;color:var(--gold)">▼ 請選擇樓層：</div>
+        <div class="floor-selector" id="fsel${r.id}">
+          ${FLOORS.map(f=>`<button class="fs-btn" onclick="setRowFloor(${r.id},'${f}')">${f}</button>`).join('')}
+        </div>`:''}
+      ${r.shopName&&r.floor?`<div class="seldis show" id="selDis${r.id}" style="margin-bottom:4px">✓ ${x(r.shopName)} (${r.floor})${r.isNew?' 🆕新廠商':''}</div>`:`<div class="seldis" id="selDis${r.id}" style="margin-bottom:4px"></div>`}
+      <div class="mini-cnt" style="margin-top:7px">
+        <button class="cbtnsm" ontouchstart="startRC(${r.id},-1,event)" ontouchend="stopRC()" onmousedown="startRC(${r.id},-1,event)" onmouseup="stopRC()" onmouseleave="stopRC()">−</button>
+        <input class="cntsm" type="number" id="cc${r.id}" value="${r.count}" min="1" inputmode="numeric" onchange="upRow(${r.id},'count',parseInt(this.value)||1)">
+        <button class="cbtnsm" ontouchstart="startRC(${r.id},1,event)" ontouchend="stopRC()" onmousedown="startRC(${r.id},1,event)" onmouseup="stopRC()" onmouseleave="stopRC()">＋</button>
+      </div>
+    </div>`).join('');
+}
+
+function addShopRow(){shopRows.push({id:rowNextId++,floor:'',shopName:'',isNew:false,count:1,supervisor:''});renderShopRows();showToast('已新增欄位');}
+function removeRow(id){shopRows=shopRows.filter(r=>r.id!==id);renderShopRows();}
+function upRow(id,k,v){const r=shopRows.find(r=>r.id===id);if(r)r[k]=v;}
+function startRC(id,d,e){e.preventDefault();chRC(id,d);_rt=setTimeout(()=>{_ri=setInterval(()=>chRC(id,d),80);},400);}
+function stopRC(){clearTimeout(_rt);clearInterval(_ri);}
+function chRC(id,d){const r=shopRows.find(r=>r.id===id);if(!r)return;r.count=Math.max(1,r.count+d);const el=document.getElementById('cc'+id);if(el)el.value=r.count;}
+
+function setRowFloor(rowId,floor){
+  const r=shopRows.find(r=>r.id===rowId);
+  if(!r)return;
+  r.floor=floor;
+  const exists=shops.find(s=>s.n===r.shopName&&s.f===floor);
+  r.isNew=!exists;
+  updateRowLabel(rowId);
+}
+
+function fsRow(id,q){
+  const dd=document.getElementById('sdd'+id);
+  const r=shopRows.find(r=>r.id===id);
+  // Update state without re-rendering (to keep focus)
+  if(r){r.shopName=q;}
+  if(!q.trim()){dd.classList.remove('open');return;}
+  let res=shops.filter(s=>s.n.toLowerCase().includes(q.toLowerCase()));
+  res=res.slice(0,25);
+  if(!res.length){
+    dd.innerHTML=`<div class="ddi" onclick="pickNewShop(${id},this.getAttribute('data-name'))" data-name="${x(q)}">📝 "${x(q)}" — 新廠商（選樓層後新增）</div>`;
+    dd.classList.add('open');return;
+  }
+  dd.innerHTML=res.map(s=>`<div class="ddi" onclick="chooseRow(${id},this.getAttribute('data-name'),this.getAttribute('data-floor'),false)" data-name="${x(s.n)}" data-floor="${s.f}">
+    <span class="ddi-name">${x(s.n)}</span><span class="ftag">${s.f}</span>
+  </div>`).join('');
+  dd.classList.add('open');
+}
+
+function pickNewShop(id,name){
+  const r=shopRows.find(r=>r.id===id);
+  if(!r)return;
+  r.shopName=name;r.floor='';r.isNew=true;
+  // Update input value without re-render
+  const inp=document.getElementById('ss'+id);
+  if(inp)inp.value=name;
+  const dd=document.getElementById('sdd'+id);
+  if(dd)dd.classList.remove('open');
+  // Show inline floor selector below the row
+  showFloorPicker(id);
+}
+
+function showFloorPicker(id){
+  // Remove any existing picker
+  const old=document.getElementById('fpicker'+id);
+  if(old)old.remove();
+  const row=document.getElementById('shopRowEl'+id);
+  if(!row)return;
+  const div=document.createElement('div');
+  div.id='fpicker'+id;
+  div.className='floor-selector';
+  div.style.marginTop='5px';
+  div.innerHTML='<div style="font-size:11px;color:var(--gold);margin-bottom:4px">▼ 請選擇樓層：</div>'+
+    FLOORS.map(f=>`<button class="fs-btn" onclick="setRowFloor(${id},'${f}');this.closest('.floor-selector').remove()">${f}</button>`).join('');
+  row.appendChild(div);
+}
+
+function chooseRow(id,name,floor,isNew){
+  const r=shopRows.find(r=>r.id===id);if(!r)return;
+  r.shopName=name;r.floor=floor;r.isNew=isNew;
+  // Update input without re-render
+  const inp=document.getElementById('ss'+id);
+  if(inp)inp.value=name;
+  const dd=document.getElementById('sdd'+id);
+  if(dd)dd.classList.remove('open');
+  // Update the label pill for floor
+  updateRowLabel(id);
+  // Remove any open floor picker
+  const fp=document.getElementById('fpicker'+id);if(fp)fp.remove();
+}
+
+function updateRowLabel(id){
+  const r=shopRows.find(r=>r.id===id);
+  if(!r)return;
+  const lbl=document.querySelector('#shopRowEl'+id+' .row-lbl');
+  if(!lbl)return;
+  const idx=shopRows.findIndex(rr=>rr.id===id);
+  lbl.innerHTML='監工登記 '+(idx+1)+(r.floor?` <span class="fpill">${r.floor}</span>`:'');
+  // Update selected display
+  const sel=document.getElementById('selDis'+id);
+  if(sel){
+    if(r.shopName&&r.floor){
+      sel.textContent='✓ '+r.shopName+' ('+r.floor+')'+(r.isNew?' 🆕新廠商':'');
+      sel.classList.add('show');
+    } else {
+      sel.classList.remove('show');
+    }
+  }
+}
+
+// 依監工姓名反查曾登記過的專櫃／樓層（同名可能對應多筆，如設備課跨樓層）
+function findPersonShopMatches(q){
+  const seen=new Set();
+  const matches=[];
+  shops.forEach(s=>{
+    if(!s.emps)return;
+    s.emps.forEach(n=>{
+      if(n.includes(q)){
+        const key=n+'|'+s.n+'|'+s.f;
+        if(!seen.has(key)){seen.add(key);matches.push({name:n,shopName:s.n,floor:s.f});}
+      }
+    });
+  });
+  matches.sort((a,b)=>a.name===b.name?FLOORS.indexOf(a.floor)-FLOORS.indexOf(b.floor):a.name.localeCompare(b.name,'zh-Hant'));
+  return matches;
+}
+function choseSupWithShop(id,el){
+  const name=el.getAttribute('data-name');
+  const shopName=el.getAttribute('data-shop');
+  const floor=el.getAttribute('data-floor');
+  const r=shopRows.find(r=>r.id===id);if(!r)return;
+  r.supervisor=name;r.shopName=shopName;r.floor=floor;
+  r.isNew=!shops.find(s=>s.n===shopName&&s.f===floor);
+  const dd=document.getElementById('spdd'+id);if(dd)dd.classList.remove('open');
+  renderShopRows();
+  showToast('✓ 已自動帶入 '+shopName+'（'+floor+'）','ok');
+}
+function fspRow(id,q){
+  const r=shopRows.find(r=>r.id===id);
+  if(r)r.supervisor=q;
+  const dd=document.getElementById('spdd'+id);
+  // 尚未選定專櫃／樓層：依姓名反查歷史紀錄，自動帶入專櫃＋樓層（重名或跨樓層則列出全部供選擇）
+  if(!(r&&r.shopName&&r.floor)){
+    if(!q.trim()){dd.classList.remove('open');return;}
+    const matches=findPersonShopMatches(q);
+    const matchedNames=new Set(matches.map(m=>m.name));
+    const otherPersons=persons.filter(p=>p.n.includes(q)&&!matchedNames.has(p.n)).slice(0,10);
+    let html='';
+    if(matches.length){
+      html+='<div style="padding:4px 10px;font-size:10px;color:var(--gold);border-bottom:1px solid var(--border2)">符合的監工紀錄（點選自動帶入專櫃／樓層）</div>';
+      html+=matches.map(m=>`<div class="ddi" onclick="choseSupWithShop(${id},this)" data-name="${x(m.name)}" data-shop="${x(m.shopName)}" data-floor="${x(m.floor)}">
+        <span class="ddi-name">⭐ ${x(m.name)}</span><span class="ftag">${x(m.shopName)} · ${x(m.floor)}</span>
+      </div>`).join('');
+    }
+    if(otherPersons.length){
+      if(matches.length) html+='<div style="padding:4px 10px;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border2)">其他人員（尚無專櫃紀錄）</div>';
+      html+=otherPersons.map(p=>`<div class="ddi" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(p.n)}">${x(p.n)}</div>`).join('');
+    }
+    html+=`<div class="ddi" style="color:var(--gold)" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(q)}">📝 "${x(q)}" — 新監工（先填姓名，再選專櫃）</div>`;
+    dd.innerHTML=html;
+    dd.classList.add('open');
+    return;
+  }
+  // Find this shop's employee list
+  const shopEntry=r&&r.shopName&&r.floor?shops.find(s=>s.n===r.shopName&&s.f===r.floor):null;
+  const shopEmps=shopEntry&&shopEntry.emps?shopEntry.emps:[];
+  if(!q.trim()){
+    // Show shop-specific employees when field is focused empty
+    if(shopEmps.length){
+      dd.innerHTML='<div style="padding:5px 10px;font-size:10px;color:var(--gold);border-bottom:1px solid var(--border2)">'+
+        x(r.shopName)+' 常用監工</div>'+
+        shopEmps.map(n=>`<div class="ddi" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(n)}">${x(n)}</div>`).join('');
+      dd.classList.add('open');
+    } else {
+      dd.classList.remove('open');
+    }
+    return;
+  }
+  // Filter: shop emps first, then all persons
+  const shopMatches=shopEmps.filter(n=>n.includes(q));
+  const allMatches=persons.filter(p=>p.n.includes(q)&&!shopEmps.includes(p.n)).slice(0,10);
+  if(!shopMatches.length&&!allMatches.length){
+    dd.innerHTML=`<div class="ddi" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(q)}">📝 "${x(q)}" — 新監工（加入${r&&r.shopName?x(r.shopName):'名單'}）</div>`;
+    dd.classList.add('open');return;
+  }
+  let html='';
+  if(shopMatches.length){
+    html+='<div style="padding:4px 10px;font-size:10px;color:var(--gold);border-bottom:1px solid var(--border2)">'+(r&&r.shopName?x(r.shopName)+' 的監工':'本專櫃監工')+'</div>';
+    html+=shopMatches.map(n=>`<div class="ddi" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(n)}">⭐ ${x(n)}</div>`).join('');
+  }
+  if(allMatches.length){
+    if(shopMatches.length) html+='<div style="padding:4px 10px;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border2)">其他人員</div>';
+    html+=allMatches.map(p=>`<div class="ddi" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(p.n)}">${x(p.n)}</div>`).join('');
+  }
+  html+=`<div class="ddi" style="color:var(--gold)" onclick="choseSup(${id},this.getAttribute('data-name'))" data-name="${x(q)}">📝 "${x(q)}" — 新監工（加入${r&&r.shopName?x(r.shopName)+'名單':'名單'}）</div>`;
+  dd.innerHTML=html;
+  dd.classList.add('open');
+}
+function choseSup(id,name){
+  const r=shopRows.find(r=>r.id===id);if(!r)return;
+  r.supervisor=name;
+  const el=document.getElementById('sp'+id);if(el)el.value=name;
+  const dd=document.getElementById('spdd'+id);if(dd)dd.classList.remove('open');
+  /* 還沒選專櫃 → 提醒補選（新專櫃/新監工送出時會自動建檔入庫） */
+  if(!r.shopName.trim())showToast('請再選擇專櫃／樓層，送出時會自動建檔','ok');
+}
+
+function addSupToShop(shopName,floor,name){
+  if(!shopName||!floor||!name)return;
+  const entry=shops.find(s=>s.n===shopName&&s.f===floor);
+  if(!entry)return;
+  if(!entry.emps)entry.emps=[];
+  if(!entry.emps.includes(name)){
+    entry.emps.push(name);
+    save();
+    showToast('✓ '+name+' 已加入 '+shopName+' 名單','ok');
+  }
+}
+
+// INSPECTOR
+function setupInsSearch(){
+  const inp=document.getElementById('insSrch');
+  const dd=document.getElementById('insDD');
+  inp.addEventListener('input',e=>{
+    const v=e.target.value.trim();
+    if(!v){dd.classList.remove('open');return;}
+    const res=inspectors.filter(p=>p.n.includes(v)).slice(0,12);
+    if(!res.length){
+      dd.innerHTML=`<div class="ddi" onclick="choseIns('${x(v)}')">📝 "${x(v)}" — 自訂</div>`;
+      dd.classList.add('open');return;
+    }
+    dd.innerHTML=res.map(p=>`<div class="ddi" onclick="choseIns('${x(p.n)}')">${x(p.n)}</div>`).join('');
+    dd.classList.add('open');
+  });
+  inp.addEventListener('focus',e=>{if(e.target.value.trim())e.target.dispatchEvent(new Event('input'));});
+}
+
+function buildInsChips(){
+  // Show all inspectors, 6 cols grid, wrapped
+  document.getElementById('insChips').innerHTML=
+    inspectors.map(p=>`<div class="ichip${selIns===p.n?' sel':''}" onclick="choseIns('${x(p.n)}')">${x(p.n)}</div>`).join('');
+}
+
+function choseIns(name){
+  selIns=name;
+  document.getElementById('insSrch').value=name;
+  document.getElementById('insDD').classList.remove('open');
+  const s=document.getElementById('insSel');s.textContent='✓ '+name;s.classList.add('show');
+  buildInsChips();
+}
+
+// WORK TYPES
+function buildWtChips(){
+  document.getElementById('wtChips').innerHTML=
+    workTypes.map(t=>`<div class="chip${selWt===t?' sel':''}" onclick="selWT('${x(t)}')">${x(t)}</div>`).join('');
+}
+function selWT(t){selWt=(selWt===t)?'':t;buildWtChips();}
+function openWtModal(){renderWtEdit();document.getElementById('wtModal').classList.add('open');}
+function renderWtEdit(){
+  document.getElementById('wtEditList').innerHTML=
+    workTypes.map((t,i)=>`<div class="wt-item"><span>${x(t)}</span><button class="wt-del" onclick="delWt(${i})">✕</button></div>`).join('');
+}
+function delWt(i){workTypes.splice(i,1);save();buildWtChips();renderWtEdit();}
+function addWtype(){
+  const v=document.getElementById('nWtype').value.trim();
+  if(!v||workTypes.includes(v)){showToast(v?'已存在':'請輸入','err');return;}
+  workTypes.push(v);save();buildWtChips();renderWtEdit();document.getElementById('nWtype').value='';showToast('✓ '+v);
+}
+
+function setNow(id){const n=new Date();document.getElementById(id).value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
+
+// GENERATE SHOP CODE
+function genShopCode(floor){
+  const prefix=floor+'-';
+  const localNums=shops.filter(s=>s.f===floor&&s.c&&s.c.startsWith(prefix))
+    .map(s=>{const n=parseInt(s.c.replace(prefix,''));return isNaN(n)?0:n;});
+  const maxKnown=FLOOR_MAX[floor]||0;
+  const maxLocal=localNums.length?Math.max(...localNums):0;
+  const next=Math.max(maxKnown,maxLocal)+1;
+  // Update FLOOR_MAX for this session
+  FLOOR_MAX[floor]=next;
+  return prefix+String(next).padStart(2,'0');
+}
+
+// AUTO ADD
+function autoAddShop(name,floor){
+  if(!name||!floor)return null;
+  let entry=shops.find(s=>s.n===name&&s.f===floor);
+  if(!entry){
+    const code=genShopCode(floor);
+    entry={id:shopNextId++,n:name,f:floor,c:code,isNew:true};
+    shops.push(entry);
+    save();
+  }
+  return entry;
+}
+function autoAddPerson(name,shopName,floor){
+  if(!name)return;
+  if(!persons.find(p=>p.n===name)){
+    persons.push({id:personNextId++,n:name});
+  }
+  // Also add to shop employee list
+  if(shopName&&floor){
+    const entry=shops.find(s=>s.n===shopName&&s.f===floor);
+    if(entry){
+      if(!entry.emps)entry.emps=[];
+      if(!entry.emps.includes(name)) entry.emps.push(name);
+    }
+  }
+  save();
+}
+
+/* ── 自動填入：施工項目與檢查者皆空、且已填退場時間 → 員工下班＋登入者綁定名 ── */
+function getSessionUser(){
+  try{return JSON.parse(localStorage.getItem('hsh_session_user')||'{}');}catch(e){return {};}
+}
+function resolveLoginInspector(){
+  const u=getSessionUser();
+  /* 優先：工號綁定的檢查者；次之：與登入者同名的檢查者；最後：直接用登入者姓名 */
+  if(u.empId){const b=inspectors.find(p=>p.empId===u.empId);if(b)return b.n;}
+  if(u.name){const s=inspectors.find(p=>p.n===u.name);return s?s.n:u.name;}
+  return '';
+}
+/* 常見複姓清單（自動填入去姓時優先比對，避免誤切） */
+const COMPOUND_SURNAMES=['歐陽','司馬','諸葛','上官','長孫','宇文','尉遲','公孫','慕容','令狐','皇甫','南宮','東方','張簡','范姜'];
+function getGivenName(fullName){
+  const n=String(fullName||'').trim();
+  if(n.length<=1)return n;
+  for(const cs of COMPOUND_SURNAMES){
+    if(n.startsWith(cs)&&n.length>cs.length)return n.slice(cs.length);
+  }
+  return n.slice(1); /* 預設單姓：去除第一個字 */
+}
+function nowHHMM(){
+  const d=new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+/* 打烊快速登記：施工項目與檢查者皆空 → 員工下班＋登入者綁定名；退場時間沒填就自動帶送出當下 */
+function applyAutoFill(wtype,inspector){
+  const entryV=document.getElementById('entryTime').value;
+  const exitV=document.getElementById('exitTime').value;
+  if(wtype||inspector)return null; /* 任一已手動填 → 不自動填 */
+  if(!exitV&&entryV)return null;   /* 只填進場沒填退場 → 可能是進場登記，不自動填 */
+  const ins=resolveLoginInspector();
+  if(!ins)return null;
+  /* exitTime 非 null = 退場時間是自動帶的（呼叫端需回填欄位）；檢查者僅填名，去除姓氏 */
+  return {wtype:'員工下班',inspector:getGivenName(ins),exitTime:exitV?null:nowHHMM()};
+}
+
+// ADD TO QUEUE
+function addToQueue(){
+  /* 只填監工沒選專櫃的列 → 擋下送出，要求補選（避免該列被默默丟掉、新監工也不會入庫） */
+  const supOnly=shopRows.filter(r=>r.supervisor.trim()&&!r.shopName.trim());
+  if(supOnly.length){showToast('監工「'+supOnly[0].supervisor.trim()+'」尚未選擇專櫃／樓層！','err');return;}
+  const validRows=shopRows.filter(r=>r.shopName.trim());
+  if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
+  // Check floors
+  const noFloor=validRows.filter(r=>!r.floor);
+  if(noFloor.length){showToast('請選擇樓層！','err');return;}
+
+  let inspector=selIns||document.getElementById('insSrch').value.trim();
+  let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
+  const _af=applyAutoFill(wtype,inspector);
+  const entryRaw=document.getElementById('entryTime').value;
+  let exitRaw=document.getElementById('exitTime').value;
+  if(_af){
+    wtype=_af.wtype;inspector=_af.inspector;
+    if(_af.exitTime){exitRaw=_af.exitTime;document.getElementById('exitTime').value=_af.exitTime;}
+  }
+  const shared={
+    entryTime:fmtTime(entryRaw),
+    exitTime:fmtTime(exitRaw),
+    location:document.getElementById('location').value.trim(),
+    workType:wtype,inspector
+  };
+
+  validRows.forEach(r=>{
+    const sname=r.shopName.trim();
+    const floor=r.floor;
+    const sup=r.supervisor.trim();
+    // Auto-add
+    const shopEntry=autoAddShop(sname,floor);
+    if(sup) autoAddPerson(sup,sname,floor);
+    const shopCode=(shopEntry&&shopEntry.c)?shopEntry.c:'';
+    queue.push({
+      id:Date.now()+Math.random(),
+      floor,shop:sname,shopCode,
+      count:r.count,supervisor:sup,...shared,
+    });
+  });
+
+  save();renderQueue();
+  showToast('✓ 已加入 '+validRows.length+' 筆'+(_af?'｜⚡ 自動填入：員工下班／檢查者 '+_af.inspector+(_af.exitTime?'／退場 '+_af.exitTime:''):''),'ok');
+  resetForm();
+}
+
+/* ── 直接送出到試算表（略過清單步驟）── */
+async function directSubmitToSheet(){
+  if(!gasUrl){showToast('未設定連線','err');return;}
+  /* 只填監工沒選專櫃的列 → 擋下送出，要求補選（避免該列被默默丟掉、新監工也不會入庫） */
+  const supOnly=shopRows.filter(r=>r.supervisor.trim()&&!r.shopName.trim());
+  if(supOnly.length){showToast('監工「'+supOnly[0].supervisor.trim()+'」尚未選擇專櫃／樓層！','err');return;}
+  const validRows=shopRows.filter(r=>r.shopName.trim());
+  if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
+  const noFloor=validRows.filter(r=>!r.floor);
+  if(noFloor.length){showToast('請選擇樓層！','err');return;}
+
+  let inspector=selIns||document.getElementById('insSrch').value.trim();
+  let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
+  const _af=applyAutoFill(wtype,inspector);
+  const entryRaw=document.getElementById('entryTime').value;
+  let exitRaw=document.getElementById('exitTime').value;
+  if(_af){
+    wtype=_af.wtype;inspector=_af.inspector;
+    if(_af.exitTime){exitRaw=_af.exitTime;document.getElementById('exitTime').value=_af.exitTime;}
+  }
+  /* 自動填入提示併入最終送出結果的 toast，避免被緊接的「送出中...」瞬間蓋掉 */
+  const autoFillNote=_af?'｜⚡ 自動填入：員工下班／檢查者 '+_af.inspector+(_af.exitTime?'／退場 '+_af.exitTime:''):'';
+  const shared={
+    entryTime:fmtTime(entryRaw),exitTime:fmtTime(exitRaw),
+    location:document.getElementById('location').value.trim(),
+    workType:wtype,inspector
+  };
+
+  const rows=validRows.map(r=>{
+    const sname=r.shopName.trim();const floor=r.floor;const sup=r.supervisor.trim();
+    const shopEntry=autoAddShop(sname,floor);
+    if(sup)autoAddPerson(sup,sname,floor);
+    const shopCode=(shopEntry&&shopEntry.c)?shopEntry.c:'';
+    return {floor,shop:sname,shopCode,count:r.count,supervisor:sup,...shared};
+  });
+
+  showToast('送出中...');
+  const body=new URLSearchParams();
+  body.append('rows',JSON.stringify(rows.map(r=>({
+    floor:r.floor,shop:r.shop,shopCode:r.shopCode||'',
+    count:r.count,supervisor:r.supervisor||'',
+    entryTime:r.entryTime||'',location:r.location||'',
+    workType:r.workType||'',exitTime:r.exitTime||'',
+    inspector:r.inspector||'',
+  }))));
+  body.append('sheetName',sheetName);
+  try{
+    const res=await fetch(gasUrl,{method:'POST',body});
+    const d=await res.json();
+    if(d.status==='ok'){
+      shops.forEach(s=>{if(s.isNew)delete s.isNew;});save();
+      showToast('✅ 已直接送出 '+d.added+' 筆！'+autoFillNote,'ok');
+      logWorkflow('closing','direct-submit','已完成');
+      resetForm();
+    }else showToast('失敗：'+d.msg,'err');
+  }catch(err){showToast('網路錯誤','err');}
+}
+
+function resetForm(){
+  shopRows=[{id:1,floor:'',shopName:'',isNew:false,count:1,supervisor:''}];rowNextId=2;
+  renderShopRows();
+  selWt='';selIns='';buildWtChips();buildInsChips();
+  ['entryTime','exitTime','location','wtCustom'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('insSrch').value='';
+  document.getElementById('insSel').classList.remove('show');
+}
+
+// QUEUE
+function renderQueue(){ /* 清單功能已移除：保留空函式避免其他呼叫處報錯 */ }
+
+function delQ(id){queue=queue.filter(i=>i.id!==id);save();renderQueue();}
+function clearQueue(){queue=[];save();renderQueue();document.getElementById('copyArea').style.display='none';showToast('已清空');}
+
+function openEdit(id){
+  const item=queue.find(i=>i.id===id);if(!item)return;
+  document.getElementById('eId').value=id;
+  document.getElementById('eFloor').value=item.floor||'B1F';
+  document.getElementById('eShop').value=item.shop||'';
+  document.getElementById('eCnt').value=item.count||1;
+  document.getElementById('eSup').value=item.supervisor||'';
+  // Strip :SS for time input display
+  document.getElementById('eEntry').value=(item.entryTime||'').substring(0,5);
+  document.getElementById('eExit').value=(item.exitTime||'').substring(0,5);
+  document.getElementById('eLoc').value=item.location||'';
+  document.getElementById('eWtype').value=item.workType||'';
+  document.getElementById('eIns').value=item.inspector||'';
+  document.getElementById('editModal').classList.add('open');
+}
+function saveEdit(){
+  const id=Number(document.getElementById('eId').value);
+  const idx=queue.findIndex(i=>i.id===id);if(idx<0)return;
+  queue[idx]={...queue[idx],
+    floor:document.getElementById('eFloor').value,
+    shop:document.getElementById('eShop').value,
+    count:parseInt(document.getElementById('eCnt').value)||1,
+    supervisor:document.getElementById('eSup').value,
+    entryTime:fmtTime(document.getElementById('eEntry').value),
+    exitTime:fmtTime(document.getElementById('eExit').value),
+    location:document.getElementById('eLoc').value,
+    workType:document.getElementById('eWtype').value,
+    inspector:document.getElementById('eIns').value,
+  };
+  save();renderQueue();closeMo('editModal');showToast('✓ 已更新');
+}
+
+function copyFormatted(){
+  const text='📋 打烊後進出紀錄 共'+queue.length+'筆\n'+
+    queue.map((item,i)=>`${i+1}.[${item.floor}]${item.shop} ${item.count}人`+
+      (item.supervisor?` 監:${item.supervisor}`:'')+
+      (item.entryTime?` 進:${item.entryTime.substring(0,5)}`:'')+
+      (item.exitTime?` 退:${item.exitTime.substring(0,5)}`:'')+
+      (item.workType?` ${item.workType}`:'')+
+      (item.inspector?` 查:${item.inspector}`:'')).join('\n');
+  navigator.clipboard.writeText(text).then(()=>showToast('✓ 已複製'));
+}
+function showCopyText(){
+  const a=document.getElementById('copyArea');
+  a.textContent=queue.map((item,i)=>
+    `---第${i+1}筆---\n樓層:${item.floor} 廠商:${item.shop}\n人數:${item.count} 監工:${item.supervisor||'—'}\n進場:${item.entryTime||'—'} 退場:${item.exitTime||'—'}\n地點:${item.location||'—'} 項目:${item.workType||'—'}\n檢查:${item.inspector||'—'}`).join('\n\n');
+  a.style.display=a.style.display==='none'?'block':'none';
+}
+
+// GAS CODE
+const GAS_CODE=`// ============================
+// 原有功能：每日匯出Excel（不需修改）
+// ============================
+function exportDailyExcel() {
+  var folderId = "1JaWrMWQQBGGt1BGGaUKqnwTVKQ9De8Na";
+  var folder = DriveApp.getFolderById(folderId);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("打烊後");
+  if (!sheet) throw new Error("找不到工作表：打烊後");
+  var reportDate = new Date();
+  reportDate.setDate(reportDate.getDate() - 1);
+  var fileName = (reportDate.getMonth()+1)+"月"+reportDate.getDate()+"日漢神巨蛋非營業時間 打烊後 進出管制表.xlsx";
+  var oldFiles = folder.getFilesByName(fileName);
+  while (oldFiles.hasNext()) oldFiles.next().setTrashed(true);
+  var exportUrl = "https://docs.google.com/spreadsheets/d/"+ss.getId()+"/export?format=xlsx";
+  var response = UrlFetchApp.fetch(exportUrl, {
+    headers: {Authorization: "Bearer "+ScriptApp.getOAuthToken()},
+    muteHttpExceptions: true
+  });
+  if (response.getResponseCode() !== 200) throw new Error("Excel匯出失敗");
+  folder.createFile(response.getBlob().setName(fileName));
+  var today = new Date();
+  sheet.getRange("G1").setValue((today.getFullYear()-1911)+"年"+(today.getMonth()+1)+"月"+today.getDate()+"日");
+  SpreadsheetApp.flush();
+}
+
+// ============================
+// 快速登錄工具 API
+// 欄位：A紀錄ID | B專櫃ID | C樓層 | D專櫃名稱 | E人數 | F監工
+//       G進場時間 | H施工地點 | I施工項目 | J退場時間 | K檢查者 | L建立時間
+// ============================
+function doPost(e) {
+  try {
+    var action = e.parameter.action || '';
+
+    // 共用資料庫：寫入
+    if (action === 'setDB') {
+      return setDB(e.parameter.db);
+    }
+
+    // 補填退場時間
+    if (action === 'updateExit') {
+      return updateExitTime(e);
+    }
+
+    // 一般進出資料寫入
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = e.parameter.sheetName || '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var rows = JSON.parse(e.parameter.rows);
+    var now = new Date();
+    var added = 0;
+
+    rows.forEach(function(r) {
+      var shopCode = getOrCreateShopCode(ss, r.shop, r.floor);
+      var nextRow = sheet.getLastRow() + 1;
+      sheet.getRange(nextRow, 1, 1, 12).setValues([[
+        genId(),
+        shopCode,
+        r.floor || '',
+        r.shop || '',
+        parseInt(r.count) || 1,
+        r.supervisor || '',
+        r.entryTime || '',
+        r.location || '',
+        r.workType || '',
+        r.exitTime || '',
+        r.inspector || '',
+        now
+      ]]);
+      // L欄顯示格式 yyyy/M/d HH:mm:ss，底層仍是數值，可供 FILTER 公式比較
+      sheet.getRange(nextRow, 12).setNumberFormat('yyyy/M/d HH:mm:ss');
+      added++;
+    });
+
+    return jsonRes({status:'ok', added:added});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+function doGet(e) {
+  var action = (e && e.parameter) ? e.parameter.action : '';
+
+  // 今日紀錄：回傳當班時段（今天 20:00 ~ 明天 08:00，或昨天 20:00 ~ 今天 08:00）的資料
+  if (action === 'getTodayRows') {
+    return getTodayRows(e);
+  }
+
+  // 共用資料庫：讀取
+  if (action === 'getDB') {
+    return getDB();
+  }
+
+  return jsonRes({status:'ok', msg:'天鷹保全 API 正常 ✓'});
+}
+
+// ============================
+// 今日紀錄：依當班時段撈資料
+// 當班時段定義：
+//   20:00 以後 → 今天 20:00 ~ 明天 08:00
+//   08:00 以前 → 昨天 20:00 ~ 今天 08:00
+// ============================
+function getTodayRows(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = (e && e.parameter && e.parameter.sheet) ? e.parameter.sheet : '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var now = new Date();
+    var nowHour = now.getHours();
+
+    // 計算當班時段起訖
+    var shiftStart, shiftEnd;
+    if (nowHour >= 20) {
+      // 今晚班：今天 20:00 ~ 明天 08:00
+      shiftStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
+      shiftEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0);
+    } else {
+      // 今早班（跨夜）：昨天 20:00 ~ 今天 08:00
+      shiftStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()-1, 20, 0, 0);
+      shiftEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+    }
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return jsonRes({status:'ok', rows:[]});
+
+    var data = sheet.getRange(2, 1, lastRow-1, 12).getValues();
+    var result = [];
+
+    for (var i = 0; i < data.length; i++) {
+      var createdAt = data[i][11]; // L欄，Date 物件
+      if (!(createdAt instanceof Date)) continue;
+      if (createdAt < shiftStart || createdAt > shiftEnd) continue;
+
+      // 格式化時間顯示
+      var entryVal = data[i][6];
+      var exitVal  = data[i][9];
+
+      result.push({
+        rowNum:  i + 2,           // 試算表實際列號
+        id:      data[i][0],
+        floor:   data[i][2],
+        shop:    data[i][3],
+        count:   data[i][4],
+        sup:     data[i][5],
+        entry:   fmtTimeVal(entryVal),
+        loc:     data[i][7],
+        wtype:   data[i][8],
+        exit:    fmtTimeVal(exitVal),
+        ins:     data[i][10],
+        created: Utilities.formatDate(createdAt, 'Asia/Taipei', 'HH:mm:ss')
+      });
+    }
+
+    // 最新的排在前面
+    result.reverse();
+    return jsonRes({status:'ok', rows:result});
+
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// ============================
+// 補填退場時間（直接更新試算表指定列）
+// ============================
+function updateExitTime(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = e.parameter.sheet || '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var rowNum   = parseInt(e.parameter.rowNum);
+    var exitTime = e.parameter.exitTime || '';  // "HH:MM:SS"
+    var inspector = e.parameter.inspector || '';
+
+    if (isNaN(rowNum) || rowNum < 2) return jsonRes({status:'error', msg:'列號無效'});
+
+    // J欄（第10欄）= 退場時間，K欄（第11欄）= 檢查者
+    if (exitTime) sheet.getRange(rowNum, 10).setValue(exitTime);
+    if (inspector) sheet.getRange(rowNum, 11).setValue(inspector);
+
+    return jsonRes({status:'ok'});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// 格式化時間欄位（可能是字串 "HH:MM:SS" 或空白）
+function fmtTimeVal(val) {
+  if (!val) return '';
+  if (typeof val === 'string') return val.substring(0,5); // HH:MM
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, 'Asia/Taipei', 'HH:mm');
+  }
+  return String(val).substring(0,5);
+}
+
+// ============================
+// 共用資料庫：讀取
+// ============================
+function getDB() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var dbSheet = ss.getSheetByName('_SharedDB');
+    if (!dbSheet) return jsonRes({status:'ok', db:null});
+    var val = dbSheet.getRange(1, 1).getValue();
+    if (!val) return jsonRes({status:'ok', db:null});
+    return jsonRes({status:'ok', db:JSON.parse(val)});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// ============================
+// 共用資料庫：寫入
+// ============================
+function setDB(dbJson) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var dbSheet = ss.getSheetByName('_SharedDB');
+    if (!dbSheet) dbSheet = ss.insertSheet('_SharedDB');
+    dbSheet.getRange(1, 1).setValue(dbJson);
+    return jsonRes({status:'ok'});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// ============================
+// 查詢或新增專櫃代號
+// ============================
+function getOrCreateShopCode(ss, name, floor) {
+  try {
+    var st = ss.getSheetByName('專櫃表');
+    if (!st) return name;
+    var data = st.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][1]).trim() === String(name).trim() &&
+          String(data[i][2]).trim() === String(floor).trim()) {
+        return data[i][0];
+      }
+    }
+    var prefix = floor + '-';
+    var maxNum = 0;
+    for (var j = 1; j < data.length; j++) {
+      var code = String(data[j][0]);
+      if (code.indexOf(prefix) === 0) {
+        var num = parseInt(code.replace(prefix, ''), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    }
+    var newNum = maxNum + 1;
+    var newCode = prefix + (newNum < 10 ? '0' + newNum : String(newNum));
+    st.appendRow([newCode, name, floor]);
+    return newCode;
+  } catch(err) {
+    return name;
+  }
+}
+
+// ============================
+// 工具函式
+// ============================
+function genId() {
+  var c = '0123456789abcdef', id = '';
+  for (var i = 0; i < 8; i++) id += c[Math.floor(Math.random() * 16)];
+  return id;
+}
+
+function jsonRes(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+function updateGasStatus(){
+  const dot=document.getElementById('sdot');
+  const txt=document.getElementById('stxt');
+  const btn=document.getElementById('sendBtn');
+  if(gasUrl){if(dot)dot.classList.add('on');if(txt)txt.textContent='✓ 已連線試算表';if(btn)btn.style.display='block';}
+  else{if(dot)dot.classList.remove('on');if(txt)txt.textContent='尚未設定試算表連線';if(btn)btn.style.display='none';}
+}
+function saveGasUrl(){
+  gasUrl=document.getElementById('gasUrlInp').value.trim();
+  if(!gasUrl){showToast('請貼上網址','err');return;}
+  localStorage.setItem('hsh_gasUrl',gasUrl);
+  showToast('測試中...');
+  fetch(gasUrl).then(r=>r.json()).then(d=>{
+    if(d.status==='ok'){showToast('✓ 連線成功！','ok');updateGasStatus();renderQueue();syncDBFromGAS();}
+    else showToast('連線異常：'+d.msg,'err');
+  }).catch(()=>showToast('連線失敗','err'));
+}
+function saveSheetName(){
+  sheetName=document.getElementById('sheetNameInp').value.trim()||'進出資料表';
+  localStorage.setItem('hsh_sheet',sheetName);
+  showToast('✓ 已儲存：'+sheetName,'ok');
+}
+function saveSheetName(){
+  sheetName=document.getElementById('sheetNameInp').value.trim()||'進出資料表';
+  localStorage.setItem('hsh_sheet',sheetName);
+  showToast('✓ 已儲存：'+sheetName,'ok');
+}
+
+async function sendToSheet(){
+  if(!gasUrl||!queue.length){showToast(!gasUrl?'未設定連線':'清單是空的','err');return;}
+  showToast('送出中...');
+  const body=new URLSearchParams();
+  body.append('rows',JSON.stringify(queue.map(r=>({
+    floor:r.floor,shop:r.shop,shopCode:r.shopCode||'',
+    count:r.count,supervisor:r.supervisor||'',
+    entryTime:r.entryTime||'',location:r.location||'',
+    workType:r.workType||'',exitTime:r.exitTime||'',
+    inspector:r.inspector||'',
+    isNewShop:shops.find(s=>s.n===r.shop&&s.f===r.floor&&s.isNew)?true:false
+  }))));
+  body.append('sheetName',sheetName);
+  try{
+    const res=await fetch(gasUrl,{method:'POST',body});
+    const d=await res.json();
+    if(d.status==='ok'){
+      shops.forEach(s=>{if(s.isNew)delete s.isNew;});save();
+      showToast('✅ 已送出 '+d.added+' 筆！','ok');
+      logWorkflow('closing','queue-submit','已完成');
+      queue=[];save();renderQueue();
+      document.getElementById('copyArea').style.display='none';
+    }else showToast('失敗：'+d.msg,'err');
+  }catch(err){showToast('網路錯誤','err');}
+}
+function copyGasCode(){navigator.clipboard.writeText(document.getElementById('gasCodeBox').textContent).then(()=>showToast('✓ 程式碼已複製','ok'));}
+function toggleStep(id){const el=document.getElementById(id);const btn=el.previousElementSibling.querySelector('.set-toggle');if(el.style.display==='none'){el.style.display='block';btn.textContent='隱藏';}else{el.style.display='none';btn.textContent='顯示';}}
+
+// DB
+function renderDBShops(q){
+  q=q||'';
+  const items=q?shops.filter(s=>s.n.includes(q)||s.f.includes(q)):shops;
+  const shown=items.slice(0,80);
+  document.getElementById('dbShopList').innerHTML=
+    shown.map(s=>`<div class="dbi" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="dbi-name">${x(s.n)}${s.isNew?'<span class="new-tag">NEW</span>':''}</span>
+        <span class="dbi-fl">${s.f}${s.c?' #'+s.c:''}</span>
+        <div class="dbi-btns" style="margin-left:auto">
+          <button class="dbbtn dbbtn-e" onclick="openDbEdit('shop',${s.id})">✏️</button>
+          <button class="dbbtn dbbtn-d" onclick="delShop(${s.id})">✕</button>
+        </div>
+      </div>
+      ${s.emps&&s.emps.length?`<div style="font-size:10px;color:var(--text3);margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">`+
+        s.emps.map((n,i)=>`<span style="background:var(--surface3);border:1px solid var(--border2);border-radius:4px;padding:1px 5px;display:flex;align-items:center;gap:3px">${x(n)}<span onclick="removeShopEmp(${s.id},${i})" style="color:var(--danger);cursor:pointer;font-size:9px">✕</span></span>`).join('')+
+        `</div>`:''}
+    </div>`).join('')+(items.length>80?`<div class="dbi" style="color:var(--text3);font-size:10px">還有${items.length-80}筆，請搜尋</div>`:'');
+}
+function renderDBPersons(q){
+  q=q||'';
+  const items=q?persons.filter(p=>p.n.includes(q)):persons;
+  document.getElementById('dbPersonList').innerHTML=items.slice(0,100).map(p=>`
+    <div class="dbi"><span class="dbi-name">${x(p.n)}</span>
+      <div class="dbi-btns">
+        <button class="dbbtn dbbtn-e" onclick="openDbEdit('person',${p.id})">✏️</button>
+        <button class="dbbtn dbbtn-d" onclick="delPerson(${p.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+function renderDBInspectors(q){
+  q=q||'';
+  const items=q?inspectors.filter(p=>p.n.includes(q)||(p.empId&&p.empId.includes(q))):inspectors;
+  document.getElementById('dbInsList').innerHTML=items.map(p=>`
+    <div class="dbi"><span class="dbi-name">${x(p.n)}${p.empId?` <span style="font-size:10px;color:#FFD700;border:1px solid rgba(212,168,0,.4);border-radius:6px;padding:1px 5px;margin-left:4px;vertical-align:1px;">🔗 ${x(p.empId)}</span>`:''}</span>
+      <div class="dbi-btns">
+        <button class="dbbtn dbbtn-e" onclick="openDbEdit('ins',${p.id})">✏️</button>
+        <button class="dbbtn dbbtn-d" onclick="delIns(${p.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+function addShop(){
+  const name=document.getElementById('nShopName').value.trim();
+  const floor=document.getElementById('nShopFloor').value;
+  if(!name){showToast('請輸入名稱','err');return;}
+  if(shops.find(s=>s.n===name&&s.f===floor)){showToast('已存在','err');return;}
+  const code=genShopCode(floor);
+  shops.push({id:shopNextId++,n:name,f:floor,c:code});
+  save();document.getElementById('nShopName').value='';
+  renderDBShops(document.getElementById('dbShopQ').value);
+  showToast('✓ 已新增 '+name+' ('+code+')','ok');
+}
+function addPerson(){
+  const name=document.getElementById('nPersonName').value.trim();
+  if(!name){showToast('請輸入名稱','err');return;}
+  if(persons.find(p=>p.n===name)){showToast('已存在','err');return;}
+  persons.push({id:personNextId++,n:name});save();
+  document.getElementById('nPersonName').value='';
+  renderDBPersons(document.getElementById('dbPersonQ').value);showToast('✓ '+name,'ok');
+}
+function addInspector(){
+  const name=document.getElementById('nInsName').value.trim();
+  const empEl=document.getElementById('nInsEmp');
+  const emp=(empEl&&window._canMng)?empEl.value.trim():'';
+  if(!name){showToast('請輸入名稱','err');return;}
+  if(inspectors.find(p=>p.n===name)){showToast('已存在','err');return;}
+  if(emp&&inspectors.find(p=>p.empId===emp)){showToast('此工號已綁定其他檢查者','err');return;}
+  inspectors.push({id:insNextId++,n:name,empId:emp});save();
+  document.getElementById('nInsName').value='';
+  if(empEl)empEl.value='';
+  renderDBInspectors(document.getElementById('dbInsQ').value);buildInsChips();showToast('✓ '+name+(emp?'（綁定 '+emp+'）':''),'ok');
+}
+function delShop(id){shops=shops.filter(s=>s.id!==id);save();renderDBShops(document.getElementById('dbShopQ').value);}
+function removeShopEmp(shopId,empIdx){
+  const s=shops.find(s=>s.id===shopId);
+  if(s&&s.emps){s.emps.splice(empIdx,1);save();renderDBShops(document.getElementById('dbShopQ').value);}
+}
+function delPerson(id){persons=persons.filter(p=>p.id!==id);save();renderDBPersons(document.getElementById('dbPersonQ').value);}
+function delIns(id){inspectors=inspectors.filter(p=>p.id!==id);save();renderDBInspectors(document.getElementById('dbInsQ').value);buildInsChips();}
+function openDbEdit(type,id){
+  document.getElementById('dbEType').value=type;
+  document.getElementById('dbEId').value=id;
+  const fr=document.getElementById('dbEFloorRow');
+  if(type==='shop'){
+    const s=shops.find(s=>s.id===id);if(!s)return;
+    document.getElementById('dbEditTitle').textContent='✏️ 編輯廠商';
+    document.getElementById('dbEName').value=s.n;
+    document.getElementById('dbEFloor').value=s.f;fr.style.display='block';
+  }else{
+    const arr=type==='person'?persons:inspectors;
+    const item=arr.find(p=>p.id===id);if(!item)return;
+    document.getElementById('dbEditTitle').textContent=type==='person'?'✏️ 編輯監工':'✏️ 編輯檢查者';
+    document.getElementById('dbEName').value=item.n;fr.style.display='none';
+  }
+  /* 檢查者：組長以上可編輯綁定工號 */
+  const er=document.getElementById('dbEEmpRow');
+  if(er){
+    if(type==='ins'&&window._canMng){
+      const it=inspectors.find(p=>p.id===id);
+      document.getElementById('dbEEmp').value=(it&&it.empId)?it.empId:'';
+      er.style.display='block';
+    }else er.style.display='none';
+  }
+  document.getElementById('dbEditModal').classList.add('open');
+}
+function saveDbEdit(){
+  const type=document.getElementById('dbEType').value;
+  const id=parseInt(document.getElementById('dbEId').value);
+  const name=document.getElementById('dbEName').value.trim();
+  if(!name){showToast('不能為空','err');return;}
+  if(type==='shop'){
+    const idx=shops.findIndex(s=>s.id===id);
+    shops[idx].n=name;shops[idx].f=document.getElementById('dbEFloor').value;
+    save();renderDBShops(document.getElementById('dbShopQ').value);
+  }else if(type==='person'){
+    const idx=persons.findIndex(p=>p.id===id);persons[idx].n=name;
+    save();renderDBPersons(document.getElementById('dbPersonQ').value);
+  }else{
+    const idx=inspectors.findIndex(p=>p.id===id);inspectors[idx].n=name;
+    if(window._canMng){
+      const emp=document.getElementById('dbEEmp').value.trim();
+      if(emp&&inspectors.find(p=>p.empId===emp&&p.id!==id)){showToast('此工號已綁定其他檢查者','err');return;}
+      inspectors[idx].empId=emp;
+    }
+    save();renderDBInspectors(document.getElementById('dbInsQ').value);buildInsChips();
+  }
+  closeMo('dbEditModal');showToast('✓ 已修改','ok');
+}
+
+// TODAY
+var todayRecords=[];
+async function loadTodayRecords(){
+  if(!gasUrl){showToast('請先在設定頁設定 GAS 連線','err');return;}
+  document.getElementById('todayStatus').textContent='⏳ 載入中...';
+  document.getElementById('todayList').innerHTML='<div class="empty"><div class="empty-ico">⏳</div><p>載入中...</p></div>';
+  try{
+    const res=await fetch(gasUrl+'?action=getTodayRows&sheet='+encodeURIComponent(sheetName));
+    const d=await res.json();
+    if(d.status==='ok'){
+      todayRecords=d.rows||[];
+      renderTodayList();
+      document.getElementById('todayStatus').textContent='✓ 共 '+todayRecords.length+' 筆，點「尚未退場」補填';
+    }else{
+      document.getElementById('todayStatus').textContent='載入失敗：'+d.msg;
+      showToast('載入失敗','err');
+    }
+  }catch(e){
+    document.getElementById('todayStatus').textContent='連線失敗';
+    showToast('連線失敗','err');
+  }
+}
+function renderTodayList(){
+  if(!todayRecords.length){
+    document.getElementById('todayList').innerHTML='<div class="empty"><div class="empty-ico">📭</div><p>本班尚無進場紀錄</p></div>';
+    return;
+  }
+  var sorted=todayRecords.slice().sort(function(a,b){
+    if(!a.exit&&b.exit)return -1;
+    if(a.exit&&!b.exit)return 1;
+    return 0;
+  });
+  document.getElementById('todayList').innerHTML=sorted.map(function(r){
+    var hasExit=r.exit&&r.exit.trim()!=='';
+    return '<div class="tr-card '+(hasExit?'has-exit':'no-exit')+'">'+
+      '<div class="tr-acts">'+
+        '<button class="qi-btn qi-edit" onclick="openTodayEdit('+r.rowNum+')">✏️</button>'+
+        '<button class="qi-btn qi-del" onclick="deleteTodayRow('+r.rowNum+')">🗑</button>'+
+      '</div>'+
+      '<div class="tr-r1">'+
+        '<span class="tr-fl">'+x(r.floor)+'</span>'+
+        '<span class="tr-shop">'+x(r.shop)+'</span>'+
+        '<span class="tr-cnt">'+r.count+'人</span>'+
+      '</div>'+
+      '<div class="tr-meta">'+
+        (r.sup?'<span>👤'+x(r.sup)+'</span>':'')+
+        (r.entry?'<span>🕐進 '+x(r.entry)+'</span>':'')+
+        (r.wtype?'<span>🔧'+x(r.wtype)+'</span>':'')+
+        (r.loc?'<span>📍'+x(r.loc)+'</span>':'')+
+        '<span style="color:var(--text3);font-size:10px">建立:'+x(r.created)+'</span>'+
+      '</div>'+
+      (hasExit?
+        '<div class="tr-exit-row filled" onclick="openTodayEdit('+r.rowNum+')">✅ 退場 '+x(r.exit)+(r.ins?' 檢:'+x(r.ins):'')+'  （點此修改）</div>':
+        '<div class="tr-exit-row empty-exit" onclick="openTodayEdit('+r.rowNum+')">🕑 尚未退場 → 點此補填 ▶</div>'
+      )+
+    '</div>';
+  }).join('');
+}
+function openTodayEdit(rowNum){
+  var r=todayRecords.find(function(t){return t.rowNum===rowNum;});
+  if(!r)return;
+  document.getElementById('tedRowNum').value=rowNum;
+  document.getElementById('todayEditTitle').textContent='✏️ 編輯 ['+r.floor+'] '+r.shop;
+  document.getElementById('tedFloor').value=r.floor||'B1F';
+  document.getElementById('tedShop').value=r.shop||'';
+  document.getElementById('tedCount').value=r.count||1;
+  document.getElementById('tedSup').value=r.sup||'';
+  document.getElementById('tedEntry').value=r.entry||'';
+  document.getElementById('tedExit').value=r.exit||'';
+  document.getElementById('tedLoc').value=r.loc||'';
+  document.getElementById('tedWtype').value=r.wtype||'';
+  document.getElementById('tedIns').value=r.ins||'';
+  document.getElementById('tedInsChips').innerHTML=
+    inspectors.slice(0,12).map(function(p){
+      return '<div class="ichip" data-n="'+x(p.n)+'" onclick="setTedIns(this)">'+x(p.n)+'</div>';
+    }).join('');
+  document.getElementById('todayEditModal').classList.add('open');
+}
+
+async function saveTodayEdit(){
+  if(!gasUrl){showToast('未設定連線','err');return;}
+  var rowNum=parseInt(document.getElementById('tedRowNum').value);
+  var floor=document.getElementById('tedFloor').value;
+  var shop=document.getElementById('tedShop').value.trim();
+  var count=parseInt(document.getElementById('tedCount').value)||1;
+  var sup=document.getElementById('tedSup').value.trim();
+  var entry=document.getElementById('tedEntry').value;
+  var exit=document.getElementById('tedExit').value;
+  var loc=document.getElementById('tedLoc').value.trim();
+  var wtype=document.getElementById('tedWtype').value.trim();
+  var ins=document.getElementById('tedIns').value.trim();
+  if(!shop){showToast('廠商名稱不能為空','err');return;}
+  showToast('儲存中...');
+  try{
+    var body=new URLSearchParams();
+    body.append('action','updateRow');
+    body.append('sheet',sheetName);
+    body.append('rowNum',rowNum);
+    body.append('floor',floor);
+    body.append('shop',shop);
+    body.append('count',count);
+    body.append('supervisor',sup);
+    body.append('entryTime',entry?(entry.length===5?entry+':00':entry):'');
+    body.append('exitTime',exit?(exit.length===5?exit+':00':exit):'');
+    body.append('location',loc);
+    body.append('workType',wtype);
+    body.append('inspector',ins);
+    const res=await fetch(gasUrl,{method:'POST',body});
+    const d=await res.json();
+    if(d.status==='ok'){
+      var r=todayRecords.find(function(t){return t.rowNum===rowNum;});
+      if(r){r.floor=floor;r.shop=shop;r.count=count;r.sup=sup;
+            r.entry=entry;r.exit=exit;r.loc=loc;r.wtype=wtype;r.ins=ins;}
+      renderTodayList();
+      closeMo('todayEditModal');
+      showToast('✅ 已儲存','ok');
+    }else showToast('儲存失敗：'+d.msg,'err');
+  }catch(e){showToast('連線失敗','err');}
+}
+
+async function deleteTodayRow(rowNum){
+  if(!gasUrl){showToast('未設定連線','err');return;}
+  var r=todayRecords.find(function(t){return t.rowNum===rowNum;});
+  if(!r)return;
+  if(!confirm('['+r.floor+'] '+r.shop+' 這筆要刪除？'))return;
+  showToast('刪除中...');
+  try{
+    var body=new URLSearchParams();
+    body.append('action','deleteRow');
+    body.append('sheet',sheetName);
+    body.append('rowNum',rowNum);
+    const res=await fetch(gasUrl,{method:'POST',body});
+    const d=await res.json();
+    if(d.status==='ok'){
+      showToast('✅ 已刪除','ok');
+      todayRecords=[];
+      await loadTodayRecords();
+    }else showToast('刪除失敗：'+d.msg,'err');
+  }catch(e){showToast('連線失敗','err');}
+}
+
+// SYNC DB
+var syncStatus='idle';
+async function syncDBFromGAS(silent){
+  if(!gasUrl)return;
+  syncStatus='loading';updateSyncBadge();
+  try{
+    const res=await fetch(gasUrl+'?action=getDB');
+    const d=await res.json();
+    if(d.status==='ok'&&d.db){
+      if(d.db.shops&&d.db.shops.length){
+        d.db.shops.forEach(function(ss){
+          const local=shops.find(function(l){return l.n===ss.n&&l.f===ss.f;});
+          if(local&&local.emps&&local.emps.length&&(!ss.emps||!ss.emps.length))ss.emps=local.emps;
+        });
+        shops=d.db.shops;shopNextId=Math.max(...shops.map(function(s){return s.id;}),0)+1;
+      }
+      if(d.db.persons&&d.db.persons.length){persons=d.db.persons;personNextId=Math.max(...persons.map(function(p){return p.id;}),0)+1;}
+      if(d.db.inspectors&&d.db.inspectors.length){inspectors=d.db.inspectors;insNextId=Math.max(...inspectors.map(function(p){return p.id;}),0)+1;}
+      if(d.db.workTypes&&d.db.workTypes.length)workTypes=d.db.workTypes;
+      saveLocal();buildWtChips();buildInsChips();  /* 只存本地，不觸發推送 */
+      syncStatus='ok';if(!silent)showToast('✓ 資料庫已同步','ok');
+    }else{syncStatus='idle';}
+  }catch(e){syncStatus='err';}
+  updateSyncBadge();
+}
+async function pushDBToGAS(){
+  if(!gasUrl)return;
+  try{
+    const body=new URLSearchParams();
+    body.append('action','setDB');
+    body.append('db',JSON.stringify({shops:shops,persons:persons,inspectors:inspectors,workTypes:workTypes}));
+    const res=await fetch(gasUrl,{method:'POST',body});
+    const d=await res.json();
+    if(d.status==='ok')showToast('✓ 資料庫已同步到雲端','ok');
+    else showToast('同步失敗：'+d.msg,'err');
+  }catch(e){showToast('同步失敗','err');}
+}
+function updateSyncBadge(){
+  const el=document.getElementById('syncBadge');
+  if(!el)return;
+  if(syncStatus==='loading'){el.textContent='⏳ 同步中...';el.style.color='var(--text2)';}
+  else if(syncStatus==='ok'){el.textContent='✓ 已同步';el.style.color='var(--green)';}
+  else if(syncStatus==='err'){el.textContent='⚠ 同步失敗';el.style.color='var(--danger)';}
+  else{el.textContent='';}
+}
+
+// TABS
+function switchTab(t){
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('[id^="tab-"],[id^="nav-"]').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('panel-'+t).classList.add('active');
+  document.getElementById('tab-'+t).classList.add('active');
+  document.getElementById('nav-'+t).classList.add('active');
+  if(t==='db'){renderDBShops();renderDBPersons();renderDBInspectors();if(gasUrl&&syncStatus!=='loading')syncDBFromGAS();}
+  if(t==='today'&&gasUrl&&todayRecords.length===0){loadTodayRecords();}
+  if(t==='preview'){refreshPreview(true);}
+}
+function closeMo(id){document.getElementById(id).classList.remove('open');}
+function setTedIns(el){document.getElementById('tedIns').value=el.getAttribute('data-n');}
+function showToast(msg,type){
+  type=type||'';
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(type?' '+type:'');
+  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
+}
+function x(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// 監工姓名顯示遮蔽（陳小明→陳X明），僅用於施工單查詢 Drawer 顯示，快速帶入/帶出仍用原始 o.supervisor
+function maskName(s){
+  s = String(s||'').trim();
+  if(!s || s==='--') return s;
+  var len = s.length;
+  if(len<=1) return s;
+  if(len===2) return s[0]+'X';
+  if(len===3) return s[0]+'X'+s[2];
+  return s[0]+'X'.repeat(len-2)+s[len-1];
+}
+
+// GENERATE SHOP CODE (client-side for DB panel)
+function genShopCode(floor){
+  const prefix=floor+'-';
+  const localNums=shops.filter(function(s){return s.f===floor&&s.c&&s.c.indexOf(prefix)===0;})
+    .map(function(s){const n=parseInt(s.c.replace(prefix,''));return isNaN(n)?0:n;});
+  const maxKnown=FLOOR_MAX[floor]||0;
+  const maxLocal=localNums.length?Math.max.apply(null,localNums):0;
+  const next=Math.max(maxKnown,maxLocal)+1;
+  FLOOR_MAX[floor]=next;
+  return prefix+(next<10?'0'+next:String(next));
+}
+
+
+// ===== 施工單查詢 Drawer =====
+var conOrders = {tonight: [], morning: []};
+var conTabIdx = 0;
+var conSearchKw = '';
+// ── 施工單班別實際日期：凌晨(<8點)仍算昨晚開始的夜班 ──
+function conShiftDates() {
+  var now = new Date();
+  var night = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (now.getHours() < 8) night.setDate(night.getDate() - 1);
+  var morn = new Date(night); morn.setDate(morn.getDate() + 1);
+  return { night: night, morn: morn };
+}
+function fmtConDate(d) {
+  var wk = ['日','一','二','三','四','五','六'][d.getDay()];
+  return (d.getMonth() + 1) + '/' + d.getDate() + '(' + wk + ')';
+}
+function updateConTabLabels() {
+  var sd = conShiftDates();
+  var t0 = document.getElementById('conTab0');
+  var t1 = document.getElementById('conTab1');
+  if (t0) t0.innerHTML = '\uD83C\uDF19 \u4ECA\u665A <span class="con-tab-date">' + fmtConDate(sd.night) + '</span>';
+  if (t1) t1.innerHTML = '\uD83C\uDF05 \u660E\u65E9 <span class="con-tab-date">' + fmtConDate(sd.morn) + '</span>';
+}
+
+function openConDrawer() {
+  document.getElementById('conOverlay').classList.add('open');
+  document.getElementById('conDrawer').classList.add('open');
+  updateConTabLabels();
+  loadConOrders();
+}
+function closeConDrawer() {
+  document.getElementById('conOverlay').classList.remove('open');
+  document.getElementById('conDrawer').classList.remove('open');
+}
+function conSearchChange(v) {
+  conSearchKw = v.trim().toLowerCase();
+  renderConBody();
+}
+function switchConTab(idx) {
+  conTabIdx = idx;
+  document.getElementById('conTab0').classList.toggle('active', idx === 0);
+  document.getElementById('conTab1').classList.toggle('active', idx === 1);
+  renderConBody();
+}
+function loadConOrders() {
+  var body_el = document.getElementById('conBody');
+  body_el.innerHTML = '<div class="con-loading">🔄 載入施工單資料...</div>';
+  fetch(CON_GAS_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain'},
+    body: JSON.stringify({action: 'getOrders', ts: Date.now()}),
+    redirect: 'follow'
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(d) {
+    if (d.status === 'ok') {
+      conOrders = {tonight: d.tonight || [], morning: d.morning || []};
+      renderConBody();
+    } else {
+      body_el.innerHTML = '<div class="con-empty">⚠️ 載入失敗<br>' + x(d.msg || '未知錯誤') + '</div>';
+    }
+  })
+  .catch(function() {
+    body_el.innerHTML = '<div class="con-empty">❌ 網路錯誤，請檢查連線</div>';
+  });
+}
+function renderConBody() {
+  var allList = conTabIdx === 0 ? conOrders.tonight : conOrders.morning;
+  // 搜尋過濾：申請單位、廠商、樓層（從地點提取）、地點
+  var list = allList;
+  if (conSearchKw) {
+    list = allList.filter(function(o) {
+      var floor = extractFloor(o.location);
+      var fields = [
+        (o.applicant || '').toLowerCase(),
+        (o.shop || '').toLowerCase(),
+        (floor || '').toLowerCase(),
+        (o.location || '').toLowerCase()
+      ];
+      return fields.some(function(f){ return f.indexOf(conSearchKw) !== -1; });
+    });
+  }
+  var body_el = document.getElementById('conBody');
+  if (!list || !list.length) {
+    body_el.innerHTML = '<div class="con-empty">📋 ' + (conSearchKw ? '無符合「' + x(conSearchKw) + '」的施工單' : (conTabIdx === 0 ? '今晚' : '明早') + ' 目前無施工單資料') + '</div>';
+    return;
+  }
+  var html = '';
+  // 當前分頁對應的實際日期（今晚 or 明早）
+  var _sd = conShiftDates();
+  var curDateStr = fmtConDate(conTabIdx === 0 ? _sd.night : _sd.morn);
+  for (var i = 0; i < list.length; i++) {
+    var o = list[i];
+    // 找原始 index（快速帶入/出需要實際在 tonight/morning 中的位置）
+    var origIdx = allList.indexOf(o);
+    // 卡片日期：GAS 若回傳實際日期(o.date)則優先，否則用分頁對應日期
+    var dateTxt = o.date ? x(String(o.date)) : curDateStr;
+    var timeStr = o.entryTime ? x(o.entryTime) + (o.exitTime ? '～' + x(o.exitTime) : '') : '';
+    // 三欄主標題
+    var applicantTxt = o.applicant ? x(o.applicant) : '—';
+    var shopTxt      = x(o.shop || '');
+    var locTxt       = o.location ? x(o.location) : '—';
+    html += '<div class="con-card">' +
+      '<div class="con-card-date">\uD83D\uDCC5 ' + dateTxt + '</div>' +
+      '<div class="con-card-header">' +
+        '<div class="con-card-applicant-col">' + applicantTxt + '</div>' +
+        '<div class="con-card-shop-col">' + shopTxt + '</div>' +
+        '<div class="con-card-loc-col">' + locTxt + '</div>' +
+      '</div>' +
+      '<div class="con-info">' +
+        (o.supervisor ? '<span>👤' + x(maskName(o.supervisor)) + '</span>' : '') +
+        '<span>👥' + (o.count || 0) + ' 人</span>' +
+        (timeStr ? '<span>🕐' + timeStr + '</span>' : '') +
+        (o.workType ? '<span>🔧' + x(o.workType) + '</span>' : '') +
+      '</div>' +
+      '<div class="con-btns">' +
+        '<button class="con-btn-in" onclick="conQuickSend(' + origIdx + ',\'entry\')">⬇ 快速帶入</button>' +
+        '<button class="con-btn-out" onclick="conQuickSend(' + origIdx + ',\'exit\')">⬆ 快速帶出</button>' +
+      '</div>' +
+    '</div>';
+  }
+  body_el.innerHTML = html;
+}
+function extractFloor(location) {
+  if (!location) return '';
+  var m = String(location).match(/^(B?\d+F)/i);
+  return m ? m[1].toUpperCase() : '';
+}
+function conQuickSend(idx, type) {
+  if (!gasUrl) { showToast('未設定 GAS 連線', 'err'); return; }
+  var list = conTabIdx === 0 ? conOrders.tonight : conOrders.morning;
+  var o = list[idx];
+  if (!o) { showToast('資料錯誤', 'err'); return; }
+  var now = new Date();
+  var hh = now.getHours() < 10 ? '0' + now.getHours() : String(now.getHours());
+  var mm = now.getMinutes() < 10 ? '0' + now.getMinutes() : String(now.getMinutes());
+  var timeStr = hh + ':' + mm + ':00';
+  var floor = extractFloor(o.location);
+  // 申請單位前綴加入施工項目
+  var wt = (o.applicant ? '[' + o.applicant + '] ' : '') + (o.workType || '');
+  closeConDrawer();
+  showToast('送出中...', '');
+  var postBody = new URLSearchParams();
+  postBody.append('rows', JSON.stringify([{
+    floor:      floor || 'B1F',
+    shop:       o.shop || '',
+    shopCode:   '',
+    count:      parseInt(o.count) || 1,
+    supervisor: o.supervisor || '',
+    entryTime:  type === 'entry' ? timeStr : '',
+    exitTime:   type === 'exit'  ? timeStr : '',
+    location:   o.location || '',
+    workType:   wt,
+    inspector:  '',
+    isNewShop:  false
+  }]));
+  postBody.append('sheetName', sheetName);
+  fetch(gasUrl, {method: 'POST', body: postBody})
+  .then(function(res) { return res.json(); })
+  .then(function(d) {
+    if (d.status === 'ok') {
+      showToast((type === 'entry' ? '✅ 帶入' : '✅ 帶出') + '：' + (o.shop || ''), 'ok');
+    } else {
+      showToast('失敗：' + (d.msg || '未知錯誤'), 'err');
+    }
+  })
+  .catch(function() { showToast('網路錯誤，請重試', 'err'); });
+}
+
+init();
+
+/* ── 預覽用 gviz/tq 資料查詢端點（比 /preview 可靠，資料查詢不受快取影響）── */
+const PREVIEW_BASE_URL='https://docs.google.com/spreadsheets/d/1TnN3iJb1w9XTuw0-QuNrtXEOa71KCCy7y8Q3_1b1FmI/gviz/tq?tqx=out:html&range=A2:I';
+function refreshPreview(silent){
+  const frame = document.getElementById('previewFrame');
+  if(frame){ frame.src=PREVIEW_BASE_URL+'&t='+Date.now(); if(!silent)showToast('🔄 預覽已刷新','ok'); }
+}
+</script>
+<!-- ===== 施工單查詢浮動按鈕 ===== -->
+<button id="conFab" onclick="openConDrawer()" title="施工單查詢">🔍</button>
+
+<!-- ===== 施工單查詢遮罩 ===== -->
+<div id="conOverlay" onclick="closeConDrawer()"></div>
+
+<!-- ===== 施工單查詢 Drawer ===== -->
+<div id="conDrawer">
+  <div class="con-drag"></div>
+  <div class="con-dh">
+    <div class="con-dh-title">📋 施工單查詢</div>
+    <button class="con-close" onclick="closeConDrawer()">✕</button>
+  </div>
+  <div class="con-tabs">
+    <button class="con-tab active" id="conTab0" onclick="switchConTab(0)">🌙 今晚</button>
+    <button class="con-tab" id="conTab1" onclick="switchConTab(1)">🌅 明早</button>
+  </div>
+  <div class="con-search-wrap">
+    <input class="con-search-input" id="conSearchInput" type="text"
+      placeholder="🔍 申請單位 / 廠商 / 樓層 / 地點..."
+      oninput="conSearchChange(this.value)">
+  </div>
+  <div class="con-body" id="conBody">
+    <div class="con-loading">🔄 載入施工單...</div>
+  </div>
+</div>
+
+</body>
+</html>

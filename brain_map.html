@@ -91,6 +91,43 @@
       transition: transform .15s;
     }
     #claude-fab:active { transform: scale(0.92); }
+
+    /* ── 上方工具捷徑列（依角色權限過濾）───────────── */
+    #tool-launcher-bar {
+      position: fixed; top: 90px; left: 0; right: 0; z-index: 120;
+      display: flex; gap: 8px; padding: 6px 16px 8px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    #tool-launcher-bar::-webkit-scrollbar { height: 4px; }
+    .tlb-btn {
+      flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: rgba(10,12,16,0.82); border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px); border-radius: 10px; padding: 6px 11px;
+      cursor: pointer; color: #C9D1D9; font-size: 9px; white-space: nowrap;
+      font-family: 'Microsoft JhengHei', sans-serif; transition: border-color .15s, background .15s;
+    }
+    .tlb-btn:hover { border-color: rgba(212,168,0,0.45); background: rgba(212,168,0,0.08); }
+    .tlb-icon { font-size: 17px; line-height: 1; }
+
+    /* ── 工具畫中畫視窗（左側浮動面板）───────────────── */
+    #tool-pip {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 32vw; min-width: 340px; max-width: 520px;
+      z-index: 250; background: #0A0C10; border-right: 1px solid rgba(212,168,0,0.3);
+      box-shadow: 10px 0 40px rgba(0,0,0,0.65);
+      display: none; flex-direction: column;
+    }
+    #tool-pip.open { display: flex; }
+    #tool-pip-header {
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+      padding: 10px 14px; background: rgba(212,168,0,0.09);
+      border-bottom: 1px solid rgba(212,168,0,0.18);
+    }
+    #tool-pip-title { font-size: 13px; font-weight: 700; color: #FFD700; }
+    #tool-pip-close {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 7px; color: #F5F5F5; padding: 4px 10px; cursor: pointer; font-size: 12px;
+    }
+    #tool-pip-frame { flex: 1; border: none; width: 100%; }
   </style>
 </head>
 <body>
@@ -128,6 +165,16 @@
 </div>
 
 <button id="claude-fab" title="喚醒 Claude Code（開新對話）" onclick="location.href='https://claude.ai/code'">🤖</button>
+
+<div id="tool-launcher-bar"></div>
+
+<div id="tool-pip">
+  <div id="tool-pip-header">
+    <span id="tool-pip-title">工具</span>
+    <button id="tool-pip-close" onclick="closeToolPip()">✕ 關閉</button>
+  </div>
+  <iframe id="tool-pip-frame" src="about:blank"></iframe>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -1031,6 +1078,76 @@ const CAN_VIEW_USERS = !!(SESSION_USER && (
   ['executive', 'admin'].includes(SESSION_USER.role) ||
   EXTRA_VIEWER_EMPIDS.includes(String(SESSION_USER.empId))
 ));
+
+// ════════════════════════════════════════════════════════════
+// 【上方工具捷徑列】── 對應 index.html 的 TOOLS/DEFAULT_PERMS，依角色權限過濾，
+//   點擊以「畫中畫」左側浮動視窗開啟（iframe），不離開咖哩海域畫面。
+//   schedule／leave 兩個工具在 index.html 裡是內嵌 React 元件、沒有獨立網址，
+//   靠 index.html?openTool=xxx 這個網址參數（2026-07-06 新增）間接開啟；
+//   其餘工具都有各自獨立檔，直接指向該檔案。
+// ════════════════════════════════════════════════════════════
+const BM_BASE_URL = 'https://sky03104.github.io/tianying-security/';
+const BM_TOOLS = [
+  { id: 1,  name: '班表查詢',           icon: '📅', url: BM_BASE_URL + 'index.html?openTool=schedule' },
+  { id: 2,  name: '打烊後進出快速登錄', icon: '🔒', url: BM_BASE_URL + 'tool_closing.html' },
+  { id: 16, name: '開店前進出快速登錄', icon: '🔓', url: BM_BASE_URL + 'tool_opening.html' },
+  { id: 3,  name: '資料上傳工具',       icon: '☁️', url: BM_BASE_URL + 'tool_upload.html' },
+  { id: 4,  name: '事故報告填寫',       icon: '📋', url: BM_BASE_URL + 'tool_report.html' },
+  { id: 99, name: '請假申請',           icon: '📝', url: BM_BASE_URL + 'index.html?openTool=leave' },
+  { id: 7,  name: '停車場車位數計算',   icon: '🅿️', url: BM_BASE_URL + 'tool_car.html' },
+  { id: 6,  name: '過夜車輛登記',       icon: '🚗', url: BM_BASE_URL + 'tool_signin.html' },
+  { id: 9,  name: '施工單查詢',         icon: '📋', url: BM_BASE_URL + 'tool_work.html' },
+  { id: 12, name: '緊急聯絡清單',       icon: '📞', url: BM_BASE_URL + 'tool_emergency.html' },
+  { id: 13, name: '匿名表揚／舉報',     icon: '🚨', url: BM_BASE_URL + 'tool_feedback.html' },
+  { id: 14, name: '今/明日哨表',        icon: '📋', url: BM_BASE_URL + 'post.html' },
+  { id: 17, name: '天鷹 AI 小助手',     icon: '🦅', url: BM_BASE_URL + 'tool_ai_chat.html' },
+  { id: 18, name: '物流車輛統計',       icon: '🚚', url: BM_BASE_URL + 'tool_logistics.html' },
+  { id: 19, name: '帶班交接事項',       icon: '🔄', url: BM_BASE_URL + 'tool_handover.html' },
+];
+// 跟 index.html 相同的預設權限（兩個檔案各自獨立、無法共用常數，手動保持一致；
+// 優先讀雲端已同步到本機的 tianying_perms，這份只是萬一讀不到時的備援值）
+const BM_DEFAULT_PERMS = {
+  fulltime: [1, 2, 3, 7, 5, 6, 9, 12, 13, 18, 99],
+  parttime: [1, 2, 3, 7, 5, 6, 9, 12, 13, 18, 99],
+  leader: [1, 2, 3, 7, 4, 5, 6, 9, 11, 12, 13, 18, 19, 99],
+  vicecaptain: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 18, 19, 99],
+  captain: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 19, 99],
+  executive: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 19, 99],
+  admin: [1, 2, 3, 7, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 99],
+};
+function bmAllowedToolIds() {
+  const role = SESSION_USER && SESSION_USER.role;
+  if (!role) return [];
+  try {
+    const saved = JSON.parse(localStorage.getItem('tianying_perms') || 'null');
+    if (saved && Array.isArray(saved[role])) return saved[role];
+  } catch (e) {}
+  return BM_DEFAULT_PERMS[role] || [];
+}
+function openToolPip(tool) {
+  document.getElementById('tool-pip-title').textContent = tool.icon + ' ' + tool.name;
+  document.getElementById('tool-pip-frame').src = tool.url;
+  document.getElementById('tool-pip').classList.add('open');
+}
+function closeToolPip() {
+  document.getElementById('tool-pip').classList.remove('open');
+  document.getElementById('tool-pip-frame').src = 'about:blank';
+}
+function renderToolLauncherBar() {
+  const bar = document.getElementById('tool-launcher-bar');
+  if (!bar) return;
+  const allowed = new Set(bmAllowedToolIds());
+  const visible = BM_TOOLS.filter(t => allowed.has(t.id));
+  bar.innerHTML = '';
+  visible.forEach(t => {
+    const btn = document.createElement('div');
+    btn.className = 'tlb-btn';
+    btn.innerHTML = '<span class="tlb-icon">' + t.icon + '</span><span>' + t.name + '</span>';
+    btn.onclick = () => openToolPip(t);
+    bar.appendChild(btn);
+  });
+}
+renderToolLauncherBar();
 
 // 工具 → 巡航路線（工具節點 → 後端 GAS → 資料表）；送出資料時沿路線跑一圈回來
 const TOOL_ROUTE = {

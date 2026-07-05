@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>天鷹保全｜緊急聯絡清單</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+:root{
+  --bg:#0A0C10;--bg2:#0D0F14;--bg3:#12151C;
+  --card:rgba(255,255,255,.05);--bd:rgba(255,255,255,.09);
+  --gold:#D4A800;--gold2:#FFD700;
+  --indigo:#6366F1;--indigo2:#818CF8;
+  --text:#F5F5F5;--muted:#6B7280;--muted2:#4B5563;
+  --green:#4ADE80;--red:#F87171;--warn:#FB923C;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--text);font-family:'Microsoft JhengHei',sans-serif;min-height:100vh;}
+body{padding-bottom:90px;}
+
+@keyframes spin1{to{transform:rotate(360deg);}}
+@keyframes spin2{to{transform:rotate(-360deg);}}
+@keyframes spin3{to{transform:rotate(180deg);}}
+@keyframes eaglePulse{0%,100%{filter:drop-shadow(0 0 8px rgba(212,168,0,.8));}50%{filter:drop-shadow(0 0 20px rgba(212,168,0,1));}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+/* ── Header ── */
+.hdr{background:var(--bg2);border-bottom:1px solid var(--bd);padding:10px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+
+/* ── LOGO 三層旋轉光環 ── */
+.logo-wrap{position:relative;width:48px;height:48px;flex-shrink:0;}
+.logo-ring{position:absolute;inset:0;border-radius:50%;border:2px solid transparent;}
+.ring1{border-top-color:var(--gold);border-right-color:rgba(212,168,0,.3);animation:spin1 3s linear infinite;}
+.ring2{inset:5px;border-bottom-color:var(--gold2);border-left-color:rgba(255,215,0,.4);animation:spin2 2s linear infinite;}
+.ring3{inset:10px;border-right-color:var(--gold);border-top-color:rgba(212,168,0,.2);animation:spin3 4s linear infinite;}
+
+/* ── LOGO 中央圖片（明確指定寬高，避免舊瀏覽器圖片爆大） ── */
+.logo-img{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:22px;height:22px;
+  border-radius:50%;
+  object-fit:cover;
+  animation:eaglePulse 3s ease-in-out infinite;
+}
+
+/* ── 四角金色框 ── */
+.logo-wrap::before,.logo-wrap::after,.logo-corner::before,.logo-corner::after{content:'';position:absolute;width:7px;height:7px;border-color:var(--gold);border-style:solid;opacity:.85;}
+.logo-wrap::before{top:0;left:0;border-width:1.5px 0 0 1.5px;}
+.logo-wrap::after{top:0;right:0;border-width:1.5px 1.5px 0 0;}
+.logo-corner{position:absolute;inset:0;pointer-events:none;}
+.logo-corner::before{bottom:0;left:0;border-width:0 0 1.5px 1.5px;}
+.logo-corner::after{bottom:0;right:0;border-width:0 1.5px 1.5px 0;}
+
+.hdr-info{flex:1;}
+/* 「天鷹」金色，「保全」白色 */
+.hdr-info h1{font-size:15px;font-weight:900;color:var(--text);}
+.hdr-info h1 span{background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hdr-sub{font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-top:1px;}
+.hdr-title{font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.5px;margin-top:2px;}
+.hdr-right{display:flex;gap:7px;align-items:center;}
+.role-badge{padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(99,102,241,.18);color:var(--indigo2);border:1px solid rgba(99,102,241,.3);}
+.btn-sync{background:rgba(212,168,0,.12);border:1px solid rgba(212,168,0,.3);color:var(--gold);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;font-family:inherit;}
+
+/* ── 同步面板 ── */
+.sync-panel{background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.22);border-radius:10px;margin:10px 16px;padding:14px;animation:fadeIn .2s;}
+.sync-panel.hidden{display:none;}
+.sync-label{font-size:11px;font-weight:700;color:var(--indigo2);margin-bottom:10px;}
+.sync-input{width:100%;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:9px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none;margin-bottom:10px;}
+.sync-input:focus{border-color:var(--indigo2);}
+.sync-btns{display:flex;gap:8px;}
+.btn-gold{flex:1;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0A0C10;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 2px 12px rgba(212,168,0,.3);}
+.btn-indigo{flex:1;background:linear-gradient(135deg,var(--indigo),var(--indigo2));color:#fff;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 2px 12px rgba(99,102,241,.3);}
+
+/* ── 分頁標籤 ── */
+.tabs{display:flex;gap:6px;padding:12px 16px 0;overflow-x:auto;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{padding:7px 18px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--bd);color:var(--muted);background:var(--card);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.tab.active{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0A0C10;border-color:transparent;box-shadow:0 2px 10px rgba(212,168,0,.35);}
+
+/* ── 搜尋 ── */
+.search-wrap{padding:10px 16px 0;}
+.search-box{background:var(--bg3);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;transition:border-color .2s;}
+.search-box:focus-within{border-color:rgba(212,168,0,.5);}
+.search-box input{background:none;border:none;outline:none;color:var(--text);font-size:13px;flex:1;font-family:inherit;}
+.search-box input::placeholder{color:var(--muted);}
+
+/* ── 篩選 chip ── */
+.filters{display:flex;gap:6px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;}
+.filters::-webkit-scrollbar{display:none;}
+.chip{padding:4px 13px;border-radius:12px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--bd);color:var(--muted);background:var(--card);white-space:nowrap;font-family:inherit;transition:all .15s;}
+.chip.active{border-color:var(--indigo2);color:var(--indigo2);background:rgba(99,102,241,.12);}
+
+/* ── 統計欄 ── */
+.stats{display:flex;gap:8px;padding:0 16px 12px;}
+.stat{flex:1;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;text-align:center;}
+.stat-n{font-size:22px;font-weight:900;color:var(--gold);}
+.stat-l{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* ── 人員卡片 ── */
+.section-label{padding:4px 16px 8px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;}
+.cards{padding:0 16px;display:flex;flex-direction:column;gap:10px;}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden;transition:border-color .2s;}
+.card:hover{border-color:rgba(212,168,0,.35);}
+.card-head{display:flex;align-items:center;gap:10px;padding:12px 14px 10px;}
+.avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;flex-shrink:0;}
+.card-name{font-size:15px;font-weight:800;flex:1;}
+.role-pill{padding:3px 9px;border-radius:10px;font-size:10px;font-weight:800;}
+.card-body{padding:0 14px 12px;display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.info-row{display:flex;flex-direction:column;gap:2px;}
+.info-row.full{grid-column:1/-1;}
+.info-lbl{font-size:10px;color:var(--muted);font-weight:600;}
+.info-val{font-size:13px;font-weight:700;}
+.info-val a{color:var(--gold2);text-decoration:none;}
+.no-ec{opacity:.35;font-style:italic;}
+.card-actions{display:flex;gap:7px;padding:0 14px 12px;}
+.btn-card-edit{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.35);background:rgba(99,102,241,.1);color:var(--indigo2);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;font-family:inherit;transition:all .15s;}
+.btn-card-edit:hover{background:rgba(99,102,241,.22);}
+.btn-card-del{padding:8px 12px;border-radius:8px;border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.08);color:var(--red);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;font-family:inherit;transition:all .15s;}
+.btn-card-del:hover{background:rgba(248,113,113,.2);}
+
+/* ── FAB 新增按鈕 ── */
+.fab{position:fixed;bottom:24px;right:20px;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0A0C10;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 20px rgba(212,168,0,.5);z-index:200;transition:transform .15s;}
+.fab:hover{transform:scale(1.08);}
+
+/* ── 編輯 Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:300;align-items:flex-end;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--bd);border-radius:18px 18px 0 0;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:22px 18px 36px;animation:fadeIn .22s;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.modal-title{font-size:16px;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.modal-close{background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--muted);font-size:16px;cursor:pointer;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;display:block;}
+.form-label span{color:var(--red);}
+.form-input,.form-select{width:100%;background:var(--bg3);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;}
+.form-input:focus,.form-select:focus{border-color:var(--gold);}
+.form-select option{background:var(--bg2);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.divider{border-top:1px solid var(--bd);margin:16px 0 14px;}
+.divider-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:12px;}
+.btn-form-submit{width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0A0C10;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 3px 16px rgba(212,168,0,.35);margin-top:6px;}
+.btn-form-cancel{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--bd);color:var(--muted);border-radius:10px;padding:12px;font-size:13px;cursor:pointer;font-family:inherit;margin-top:8px;}
+
+/* ── 確認刪除 Modal ── */
+.confirm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:400;align-items:center;justify-content:center;padding:20px;}
+.confirm-bg.open{display:flex;}
+.confirm-box{background:var(--bg2);border:1px solid rgba(248,113,113,.35);border-radius:14px;padding:24px 20px;max-width:320px;width:100%;animation:fadeIn .2s;}
+.confirm-title{font-size:15px;font-weight:800;color:var(--red);margin-bottom:8px;}
+.confirm-msg{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px;}
+.confirm-btns{display:flex;gap:10px;}
+.btn-confirm-del{flex:1;background:var(--red);color:#fff;border:none;border-radius:9px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+.btn-confirm-cancel{flex:1;background:var(--card);border:1px solid var(--bd);color:var(--muted);border-radius:9px;padding:12px;font-size:13px;cursor:pointer;font-family:inherit;}
+
+/* ── Toast 通知 ── */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-80px);background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,.5);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.ok{border-color:rgba(74,222,128,.5);color:var(--green);}
+.toast.err{border-color:rgba(248,113,113,.5);color:var(--red);}
+
+/* ── 空結果 ── */
+.empty{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty i{font-size:52px;margin-bottom:14px;display:block;opacity:.3;}
+
+/* ── 同步狀態小字 ── */
+.sync-status{font-size:10px;color:var(--muted);letter-spacing:.5px;white-space:nowrap;}
+.sync-status.ok{color:var(--green);}
+.sync-status.err{color:var(--red);}
+.sync-status.loading{color:var(--gold);}
+
+
+.footer{text-align:center;font-size:9px;color:var(--muted2);letter-spacing:1px;padding:18px 0 8px;}
+</style>
+</head>
+<body>
+
+<!-- ════════════════ Header ════════════════ -->
+<div class="hdr">
+  <!-- LOGO：三層旋轉光環 + LOGO.jpg + 四角框 -->
+  <div class="logo-wrap">
+    <div class="logo-corner"></div>
+    <div class="logo-ring ring1"></div>
+    <div class="logo-ring ring2"></div>
+    <div class="logo-ring ring3"></div>
+    <!-- 中央嵌入 LOGO.jpg（金色天鷹鷹頭） -->
+    <img class="logo-img" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD/wAARCADgAPwDACIAAREBAhEB/9sAQwAIBgYHBgUIBwcHCQkICgwUDQwLCwwZEhMPFB0aHx4dGhwcICQuJyAiLCMcHCg3KSwwMTQ0NB8nOT04MjwuMzQy/9sAQwEJCQkMCwwYDQ0YMiEcITIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMAAAERAhEAPwD36iiigBKKKKACiiigBRRRWfqWtaXo8Pm6nqVpZx/3p5lj/LJ5oA0KK4S4+KmiP8ujWmpa0+7busrZvLU+8j7Vx7gms2bxT441If6LpulaLFzlrqVrqXHY4XaoP1Jrnq4qhR/iSS9SowlLZHpuaw9Y8XeHvD4P9raxZWrD/lm8w38eij5j+Arz6XRdS1T/AJDvibVL7+9DC4tYW/4DHgkfVjTrTRfDvhuHz4bKxsVVfmmbaDgertz+ZryK/EWEp/DeXov87fqdEcJUe+htzfE+O5yuheHdW1PK/LK8X2aBv+BSYP5Kazp9a8eaoHAudI0WFvu+RG11Mvry21c/8BNYOp/Ezwtpu5f7Q+2SL/DaKXz+PC/rXH6n8aZPmXStJVf7slzJn/x1f/iq5nmGZ4nTD0bLu/8AN2X4F+yow+KR303hOLUt7a5quq6xu+9Hc3bLF+EabVA/Cli8OXemjdofiLV9O/uwtN9oh/75kyfyIrxHUviF4p1Ld5mqSW8f/PO2xEB+I+b8yak0z4l+KdN2r/aH2qNf+Wd2gf8AXhv1qXlubuXtXUjft5+nLa4e0w+3Ke8w+JPHWlj/AEi30vWol/54s1tN+IbKk/iKvw/FfS4W2a3pupaO2du66gJjOe4kXK4+pFeU6b8aYvu6rpDr/wBNLaQN/wCOtjH/AH1XYad8QfC2qptj1SKBm/5Z3P7n8Mng/gan69mWFX7+k2l2d183733Kweyoz+GR6lpniPR9Yh8zTtStrpfWOQH+Vaua8hufCnh7Un+1/wBnwLL95bm1YxPn1DIQT+dOt9N8RaQ//Em8V3fl/wDPDUY1uUPtu4Yfma6cPxDRnb2mnfS33W5vvbREsJNbHrtFeb2/jnxRYBV1fw3BfJ/FPpNyM/8AfqTB/JjWpY/FDwtcskd3eyaTcMufJ1SFrYj/AIEw2n8GNe5RxFKsr05J+jv+RzyhKO6OzoqGC4guYFmt5YpY26SRsGB+hHBqatyQpaKKACiiigAoFFAoAWiiigBKSuV1P4jeFdLuPs0uswz3OdvkWim4kz6FYw2PxxWJN8Q9XvMLovhO62t/y31SVbYex2Dcx/IVnUqwpx5qjsvPQai3sejVXuru2s4Gnup4oIV+9JNIFUfUnivMp5vGeq/8f/iOLT48fNDpNsFP/fyTc35AVTTwbo7zeffwT6ncf89tSle5b8nJX8hXlV8+wVLTm5n5K/46I3jhakuljrLv4o+F4XeKxu5tWuE/5Y6ZA9xn/gQG382rMn8b+K7/AHrpXhu2sU/hn1W5yfr5ceT+bCsq+8S+HdBTy7nUrO12/wDLGNgWH/AFyf0rktS+MmjW29dOsrm8b+82IU/M5b9K4FnOMxH+60Hbu9v0t97Nfq9OHxyOwmtPEmqbv7X8W3flt/y76ZGtqo9twy5H/AhTLXwn4fsH+0/2fBLN95rq5zM+fUs5JFeR6l8XPEl4GS0+zWEf8Plx7m/Nsj8gK5DUda1LVZN2o6hc3X+zLISPwHQfhTWAzbE/xqvIvLf8NH82HtKEPhjc+g9R8d+GNK+WbV4GZfl8uD96fp8uQPxxXH6l8aLNPl0zSZ5f9u5kCD8lyT+Yrx2itqHDeFhrVbk/uX4a/iTLFze2h2epfFDxTf8Ayx3kVnH/AHbaMD/x45b8jXJ3V5c383mXdzPPJ/emkLn8yagor2aGDw+H/hQS+Wv37nPKcpbsKKKK6CQooooAKKKKALlhquoaU+6wvrm1bdu/dSMufqAcH8a6/TPi14ks9qXbW1/H/wBNo9rY9iuP1BrhKK5q+Cw+I/iwT+Wv37lxqTj8LPa9N+MukXJRNRsLmzb+9GwmX69m/Q111l4m8NeIU8iHULG63f8ALvNgE/8AAHAJ/KvmakNePW4bw0nzUZOD+9f5/ibxxc0rS1Ppg+DtIimM+nLc6VcH/ltpk72/6A7T+Iq5BdeNtK/49NfttTi/hh1S2Ab/AL+R4P4lTXznpvijXtHCfYNXu4lT7sfmFk/75OV/Sux034yazbfLf2NteL/eXMLfiRlf0rF4TOMN/CqKovPf8dvlIfPQn8Sse1w/EbUbL5Nd8KX0Shtvn6bIt2mP7xA2uB7bTW7pfj/wpq83kWut2q3G7b5E7GCTPpscK2fwryjTfi34bvNq3X2mwk/6bJuX81z+oFdKJPDvimH72m6nH/d+SQr+B5BoWe4ih/vlFrzW3yv/AJh9WhL4JHrAO6lrx+Lwsmmvu0TVtV0fZ/yztrktD+Mb7lI/AVoQa5460rYrTaVrsK9fNja1mb05Xcn/AI6K9ChnmDqu3Nyvz0/4H4mUsNUj0PUKBXn0PxSt7cf8T/QNW0nC5aXyftMI/wCBx5/UCur0TxNoniFC2katZ3pC5ZYZQWUepXqOvevThVhUipQd0zFprc16KKK0EeS6rpy+CvGDyRxKuja7L8rcAW94Ryv+64GR/tAiteut1/RLTxHod1pV8m6C5j28dUPVWHoQQCD6ivOdCu71WutE1b/kL6awjnboJ0PKSj2YfkQa+Q4iy53+tU/SX6P9Pu7s7sJV+wzhvHXj/wAQ+HtZl023s7SCPaJIrgqXMinowyQBzkEYPI/PzTUvFevax/x/6tdyq/8Ayz8zan/fIwP0r3D4g+Fv+Em8Pv5K/wDEwtMy2/q/HKf8CA49wK+eK7cihg61BSjTXPHfS/o1fa5GJdSMrN6MSiiivojlCiirWn2F3qd7FaWcDzzyNtSOPqf8B7ngUAVamtrSe8mENrBLPKf4Ioyx/IV7H4b+EVjZos+uyfbLj/n3jYiNPqRgsfyHsa9Fs7K2sIfIsraCCH/nnDGFH5CvAxfEWGovlpLnflt9/wDkmdVPCzlq9D53tfh54rvE3R6NOq/9NmSL9GINa0fwj8Uv977DF/vT5/8AQQa95orx6nFFdv3IRS87v9UbrBx7s8K/4U94k/576b/39b/4mkPwe8S/89dN/wC/zf8AxNe7UVD4nxj+zH7n/wDJD+pw7s8IHwf8Tf39PX/tu39Fq/a/BfVHP+lapYxf9cVd/wCe2vaKKmXEuMkrJRXyf6tjWDp+Z5rY/BnSIdjXupXd038Sx7YlP6McfjXVab4G8N6Vt+y6Tbed/DJMvmkHsctnH4Vv1Ysk33tuv96QfzrhqZxjq3xVH8tPysWqFOKukeey/APStE8Oahqur63d3TWlrLc7LaNYl+VS2DncSOO2K8EFfZHxSu/sPww8Qy/3rQxf99kJ/wCzV8cV+lHkBRRRQMKKKKAClVmR9yttZejLwR9DSUUAdJpnj7xPpZVYdWnljX/lnP8AvR9PmyQPoRXsPgDxPq3irT7i51CygijjbYk0O4eY3fAJPQY5z1NeF6Ho1zr2tW+m2v8ArJ227uyL1LH2Aya+mdK0y20fTLfT7RdtvBGI19T6k+5OSfc18txDDCUKVlTXO9raW7vS1/n+h2YXnct9EGp6pbaPplxqF7J5VvAu5m7nsAPUk4AHqa2Ph54bm0y1uta1OBYtZ1ZhLcRjnyEH3IvwHX1Oa53Q7E+MfF5nk+bQ9En9tt1eAcD3WPOf94jrivVxW3D2XujS9vP4pbeS/wCDv6WJxVXmlyroLRRRX0ZyCVwXxB0O5KQeKdIi36npqkSxKuTc2p5eLjqR95fce9d7RUzhGcXCSumNNp3R5rZXkGpWFve2snmW86B0PqD/ACPtXivxU8K/2Vq39r2q/wCh3zHft6Ry9SPo3LfXd7V63fWH/CFeLPsirt0LWZTJZ9cW90eXi9Ar8so9cgCrGt6Rba9o11pt1/q5127u6HqGHuDg18NFzybH66wf4xf6r+tGek7Yil5nyzRV3VdMudH1S40+6XbcQPsb0PoR7EYI9jVHNfdRkpJOLumea9NxwH92voXwB4Pi8MaQks8f/E0ulDTyd0HURj0A7+p+grw3w7fWmmeILO+vYZJ7e2k81o48ZJHI68Yzg17R4e+KOja7rSWNwo0yHazNdXtwqqMDgYzySccZ9fSvEzxYqpSVHDRbT39O3z6+h04bkT5pM7miqcnibwTD/rPGOm/9s/m/kTVWXx58PYf9b4rRv+udtK38lNfJrI8e/wDl3+K/zOz6zS7mtSU+RoH+a3aR4WUMrSKVJyM8ggEfQ80yvNq03Tm4S3X9dDdO6ugpaSisxhS0lFAC1oaJHu1WL/Zy36Vn1u+G4R5ssx/hG1fx5P8AKu3LaXtcXTh5r7t3+BlWlywbOS+Pl/8AY/hm9v8AxXd5DD+WZP8A2T+VfLVe9/tI6p/yAtIVv+etzIv5Kp/9D/KvBK/UTxgooooGFFFFABRRXX/Dzwt/wk3iBftC/wDEvtMSXHo/Pyp/wIjn2BrOrVjSg6k3ZLUcU5OyPRvhZ4V/sfSP7Wuov9OvlHlq3WOHqB9W4Y+22un1y6u5ntNE0h/+JtqTGOKTbkW6AfvJW9lHT1JArQvb220vT7i9upPLt4Iy7t6Aeg9ewFX/AIfaFcos/ifV4duqaoo2RsuDa2w5ji9ifvN05OMcV8XhKU83xzr1V7i/LpH/AD+fVnoTkqFPljv/AFqdRoWi2fh7RrTS7CPZb2ybV9WPUsfUsSST6mtQUUDrX3B5otFFFACUUUUAY/iTQbXxJoN1pd0WWOdflkX70Tg5V1PYqcGuD0WXUfsb22rwPFf2kptp22/LOVxiRD3DAg+xJHau51rVPsyfZoW/fMvzN/dH+JrmB8/+01fI8R4uhJLDpXmuvby87r9DvwlOS9/oYuqeEdC1vU4r/UdPS4uI08tdzMAQM4yAQDjJ61ctNF0uw+Wz020g/wCuVui/yHNaPkS/883/AO+TTWVk+8rL/vV819cxPIqaqPlXS7sdfJC97K4zYv8AdSkeGJ/laNGX/aUGn0VzqrNbNlWMm68MeH7z5rjRtPkP977Oob8wM1l2/wAOvDNnqkGoW9g0UkD+YsfmMUz2JBJ6HkY7gV1NFdcMyxlNWjVl97JdKD3SFpKKWuE0CkpaKAEpaKSgBa63QY9mmI399i39P6VyVdZoVzHNp6Rr96L5W/Ovd4d5Prq5nrZ29f8AhrnLi2/Z6Hy38ZdXbV/ifqg3bo7PbaR+wVcsP++mauCrZ8WCT/hM9d85ds39oXG9ffzDmsav0E8sKKKKBhRRRQBLb28t1dRW0EbSzSOERF6licAD8a+lPCfh2PwzoFvp8e1pv9ZPIv8AHIep+g4A9gK8/wDhH4W3s3iS6XhcpZq3c9Gf8OQPx9q9E17ULmBLfTdKCvq+pSeRZqeicZaU+yrlj+FfKZ9i516scBQ1bav69F8t35+h24aCinUkLYWH/Ca+LPsjfPoejSiS79Li6HKRHsQn3mHrtBFes1j+G9AtvDOh2ul2pZkgX5pG+9K55Z2PcsST+NbFe/gcHDB0VSj833ff+uhy1KjqS5mFApKUV2GYtFFFACUUUUAVfsNtvaTyUMjdWKgn9anCqibVp9FZQo04XcYpX8httnn2s67rWheM1sLu5/4lepDOnSrEo8uRR88TnHJI+ZSevI5IqHXrzX7zRriLStUltr7bugk2pjcOQpyCMHp+NdX4p8O23ifQJ9NuGaJmw8M6/eilXlHBHcHH4ZHeuE0HUbm8gntNRjWLWNPfyL6Jegcchl/2WGGB9/avn88WJoSjiqM3yq11fRdtOz6/8E68NyS9yS1PGf8Aha3jSCdlvL6KVlJVo57KMEEHBBKqrZ/Gum8O/GFJp1ttftlg3N8tzbqdo/3lJJA9wT9KofFrwr9kvF8QWkf7m5IS6Vf4JOzewYDH1H+1Xl9dcMLgc0w6rciTfbRp9dv1+4hzqUZWufWMM0VzCk8EqywyqGjkjYEEHkEEdRT68R+F3jBtL1NNEvJW+xXZ2w7ukMp6Y9mPGPXB7mvbq+MzPL54Gt7Nu6ez7o76NVVI3Eoopa842CiiigBKWkooAWrFldtZ3Syr/wACX1FVqWrpzlTkpRdmiWk1ZnGfGvwEmq2B8Z6PGfOij/0+NV5kjUcSfVQMH/ZAP8PPz7X2PpWo/Y38qb/USdfb3rwb4u/DhvCmp/2vpMX/ABI7tuFXpbyHnZ/unqp+o7DP6PlWYxxtG70kt1+vzPJrUnTlboeY0UUV6hkFbXhfQJ/EmvW+nQ/KrfNLJ/zzjHU/XoB7kVi19BfDfwr/AMI94f8APuI9uoX2Hl9Y1/hX8jk+59q4MxxscHh3U69F3f8AWrNKVN1JWOoUWWiaTt+WCxtIvwRFH+Aq78PdInuWn8XalC8VzqCBLO3kAzbWo5A4/ic4ZvwHasNNPHjLxQuibS2jaayz6m235Zn6x2+e46M3sAOpr1sCvIyDAys8ZW1lLb57v5/l6m+KqL+HHZC0Gikr6Y4wpRSUooAWiiigBKKKKACiiigArzv4gaVLptzF4xsImeS0j8rUoE/5b2uclgO7IfmHtkZ6V6JTWVXTa3RqipTjUi4TV0xptO6PMrq3std0Z4JNs9jdxfeXkOpGQwP5EGvmvxBolz4e1q4024+9C3yybcCRTyrD6j9cjtX0QLJvBviZtAbd/ZV9un0uRsYjOcyW/wDwHO5f9kkdq5z4n+FP7b0X+0rWL/TrFS3yrzJF1I9yPvD8fWvksDOWVY14Wq/cls/yf6P/AIB31Eq9PnW6PB1ZozvVtrdivUe4r6a8Jaz/AG94W0/UGb99JHtl/wB9flb8yM/jXzJXs/wYv9+i6lp7N/qJ1lH0dccfip/OvT4hoRqYNze8Xf79P1v8jHCytUt3PTaKKK/Pj0wopaKACikpaBiUUUUCFrRga11XTLjRdVjWayuUKEP6Htnt6g9jis2lrrweMqYSqqtPdfiuxFSmqkeVnz18Q/AV74F1020m6fT58tZ3JX7691OOAy9/Xg964+vr2/sdO8X6HLoGtpvhl/1Uo4aNh91lPYjt69DkGvm7xJ8Ptb8O+LItBmi8+S5fbZzqpEc656j0x/EP4fpgn9IwWNpYykqlN+q7Hk1Kbpy5WaHww8K/29rf9oXcf/EvsWDHd0kl6qvuB1P4DvXsmvalNY20UFjH52q3sotrKL1kPc+iqMlj6D3pND0mx8K+HIrKNlWG2QySzNxk9Wc/r9AAO1aHgDS5dYvZPGd/Gy/aEMOlQvn91bE5MhHZnIz/ALuBnmvmp3zjHWX8KH9fj+S8js/3en/eZ1fhTw9B4Z0CDTYW8yTJkuJ2+9PKxy7n3J/IYHat2kpa+vStseeBpKKKYAKUUUCgBaKKKAEooooAKKKKACiiigDA8W+G4fFGgy2LuIbhWE1rc7cmCdeUcfQ8H1BI71w+hanJqVm8V5H5Go2khtr6D+5IvUj1Vhhge4Ner15v490ptF1BPGdhGzpGgi1aJckyW46SgD+JP1Un0ryc3y/65Q934o6r/L5/nY3oVfZy8meCfEfwp/wjev8An20e3T7zLxbekbfxJ+BOR7H2rZ+C0+zXdSg/vWob/vlgP/ZjXpviXQrbxb4cltNy/vFE1tN1CNjKsD6HOD7E15d8Jraez8eahZ3EbRTQWckckbdQRIgIrzsPjvruWVadR+/CLv6JaP8AR+evU2lT9nWi1sz2uiilr4g9ESiiigBaSiloAKSiigQtJS0lAC1p291bXaR2+pRq3lN+6nZQWjJGMg9uCRn0ODWXS11YXF1MNLmg9Ho10a7MicFNWZU1nwzf63r1lobxyjRGX7TfXathZ4w3ywA9cscFv9kdea9JjjWNFVFVVUbQq8AAdAB2rldL1ZrSTy5Pmt/1T6e3tXUxyLLGrI25W/iWvuMiq4SVBxw6s92nv/wV0R52JjNS98lpKWkr3DmCgUUtABQKKBQAtFFFACUUUUAFFFFABRRRQAVHLGk0bxSKrRsu1lPIIPBBHpUlFAHkVvaN4R8Rv4ZmY/YJ1afR5GbOUHMkOT3QnI6/KR6U5PDttD4sbxBHtWae1ME6/wB87lIb64Ug/QV2/jLw0PE2htbRS/Z76BhPZXPeGZeQ30P3SPQmuO0HVTq2n754fs17C5gvLZusUq8MPp3B9CK+PzvCzwtR4qjtNNS+f+f/AKUd+Gmprkl02NKlpKK+RO4KWkpaBiUUUtABSUtJQAtJRS0CEopaSgYtamkao1nJ5crfuG/8cPr9Ky6K3w2JqYaoqtN2aInBTi4s78Nu+7Tq5zQtS2f6JM3H/LNv/Zf8K6MV+lYDGwxlFVYfNdmeRUpunKzFooortMwoFFAoAWiiigBKKKKACiiigAooooAKKKKACuL1m0toNbuJ4IESadVadl4MjAYBPvt2j8K7M1xGpy+dqdw3+2V/Lj+leDxHV5MFy92l+v6HVhI3qX7FSilpK/Pz1AopaSgApaKKAEoopaAEooq3Z6dc3f8Aq4/l/wCejcD/AOv+FaU6cqkuWCu2S2krsq1JDbz3D7YY2b/dro7Tw/bQ/NN+/b8l/LvWukSxptVVUei8CvoMJw3Xqe9WfKvvf/A+85amLitI6nMQeHrt/wDWOsX6n9OP1q8nhuDH7yeVv93A/wAa3aK9+lw9gaa96Lk/N/5WRyyxVR7aGMfDtoPuyTq394MP8K1o12x43bvf1p9FehhsDQw13Rja/qZTqSn8TCiiiusgKBRQKAFooooASiiigAooooAKKKKACiiigBDXCXn/AB+3H/XVv/QjXdmuGvxs1C6/66t/MmvmuKF/ssH/AHv0Z2YL43/XUrUtFGK+HPSEpasWllPdvthX/eZuAPqa3BYabo9m97qM8SxxLueadgqIB354H416GCyvEYx/u1p3e39ehjUrQp7mRaaXdXh3Rx7U/vvwPw9am1PTbHSNNe7v9SgtlX/lpOwRPpknrXnPjP4/W1u81j4Tt1uZPum/nUiMf7idW78nA46EV4frWv6v4jvPtur6hPeXHZpW4T2UD5VHsAK+socOYWEWqjcn934f53OKWLm37uh9PW11BfW0VzazrPbyLuSRGyCPY1Zt7eS5fy4Y9zf56+lfO3gvxrqnhxLjT7KD7YLvC28DMcJMSAGAHUHoRxnjkV9Daf4lXwt4NEuvObm+iADfZYxuuZmOAiKAMnJCj2GT3rxp5D7PFKnUmlFvR9X5W/Dt99jdYq8Lpao6Wx0CKH57j97J/d/hH+NbKrsTatU9KkvZtPil1CCKC5ZdzxRsWEeeduT94gcFuMkHgVfr67CYGhhI8tJW8+rOCpUlUd5MKKKK7CAooooAKKKKACiiigAoFFAoAWiiigBKKKKACiiigAooooAKKKKACuL1hNmrXH+8D+YBrtK57U9Knu9V3R/KjINzt0GMj8TXiZ/QnWwqUFdpr/L9TowslGpdnPorO+1V3M33QvJNbun+H/8Alpdf9+1/qf8ACtWx02CxT92u6T+J26n/AAq/Xn5bw7GKVTFavt0+ff8AI1q4tvSH3nP3/iDTdJv4tIU/6dJCZooNpAKA4JBxg4PYc9/evnD4v6j4in8UtBqt68unt+9solXbGg6EYHBYcgk5OCOxxX0J458NSeINJSewZYtZ09/PsJm6bwMFG/2WHB+oPavNde02D4g+Cd0EflahExaOOThoJ14eJvTkFef9k+lelisTUwVem/8Aly9GrbPo/T9LmNOCqRa+0fPtFOkjeORo5FZZFbaVbggjggjsa1vDOhT+I9dt9Nh+XzDulk/55oOrfl09yK9iUlFOTeiMdzvvhF4V86ZvEV3H+7jzHZq3dujP+HQe5PpXp3hWx/4S/wAS/wBuy/NoukytHYKc4uLkcPN6FV5VTzzk9qzby3aV9P8ABWhfuJrmLbI6tza2g+V5Pqfur6sa9Y0zTbTSNMtrCziEVtbIIok9AOBz3PvXg4GMsfiXjqi92OkP8/66+iOmq/ZQ9mt+pdooor3zlCiiigAooooAKKKKACiiigAoFFAoAWiiigBKKKKACiiigAooooAKKKKACiiigAooooAK8v8AF9ifCfiL/hI4vl0jUXWHU13cQTcCOfHQBuFfp2PNeoVVv7G21KwuLG9iWW2njMcsbdCpGCKxr0IV6bpT2f8AX4blQk4yUkfL/wAWvCv2G/XxBax/6PcttuFX+CTs30YD8x710/gnSLfwP4PuNb1Ndt1Ogkdf4gv/ACziA/vEkcepA7V0NhaNp97deDtZX7S1oqyWsk2D9qtt3yMfVlICt7gHvV7QLD/hL/Fv22Rd2iaJPtiVhxdXgHLe6x9v9o+1fMp4qollUum8v7nT/L8O9ux8i/fr7vM6HwF4dudLsJ9V1Vf+JzqhE1yvXyFA+SEeyjr6sTXZ0UV9TTpxpxUIKyWxxNtu7CiiirEFFFFABRRRQAUUUUAFFFFABQKKBQAtFFFACYoxS0UAJijFLRQAmKMUtFACYoxS0UAJijFLRQAmKMUtFACYoxS0UAcn438HP4qsbdrO8+waraOWtrwDJjDfLIv0K5/EA1t6Jotp4f0a10rT4xHa20YSMd/cn1JOST3JNaNFKyvcBMUYpaKYCYoxS0UAJijFLRQAmKMUtFACYoxS0UAJijFLRQAmKWiigAooooA//9k=" alt="天鷹">
+  </div>
+  <div class="hdr-info">
+    <h1><span>天鷹</span>保全</h1>
+    <div class="hdr-sub">TIANYING SECURITY · INTERNAL SYSTEM</div>
+    <div class="hdr-title"><i class="ti ti-phone-call"></i> 緊急聯絡清單</div>
+  </div>
+  <div class="hdr-right">
+    <span class="role-badge" id="roleBadge" style="display:none;"></span>
+    <!-- 同步狀態小字（所有人可見） -->
+    <span class="sync-status" id="syncStatus"></span>
+    <!-- 雲端設定按鈕（僅管理員可見） -->
+    <button class="btn-sync" id="btnSyncAdmin" onclick="toggleSyncPanel()" style="display:none;" title="雲端設定">
+      <i class="ti ti-settings"></i>
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════ 管理員雲端設定面板 ════════════════ -->
+<div class="sync-panel hidden" id="syncPanel">
+  <div class="sync-label"><i class="ti ti-shield-lock"></i> 管理員 · 雲端設定</div>
+  <div style="font-size:10px;color:var(--muted);margin-bottom:8px;">
+    此設定僅管理員可見。修改後按「儲存」生效。
+  </div>
+  <input class="sync-input" id="gasUrlInput" placeholder="GAS Web App URL" type="url">
+  <div class="sync-btns">
+    <button class="btn-gold" onclick="adminSaveUrl()"><i class="ti ti-device-floppy"></i> 儲存 URL</button>
+    <button class="btn-indigo" onclick="pullFromGAS(false)"><i class="ti ti-cloud-download"></i> 立即拉取</button>
+  </div>
+  <div style="margin-top:10px;">
+    <button class="btn-indigo" style="width:100%;" onclick="pushToGAS()"><i class="ti ti-cloud-upload"></i> 立即推送到雲端</button>
+  </div>
+</div>
+
+<!-- ════════════════ 分頁標籤 ════════════════ -->
+<div class="tabs">
+  <button class="tab active" id="tab-all"   onclick="setTab('all')">全部</button>
+  <button class="tab"        id="tab-early" onclick="setTab('early')"><i class="ti ti-sun"></i> 早班</button>
+  <button class="tab"        id="tab-night" onclick="setTab('night')"><i class="ti ti-moon"></i> 晚班</button>
+</div>
+
+<!-- ════════════════ 搜尋框 ════════════════ -->
+<div class="search-wrap">
+  <div class="search-box">
+    <i class="ti ti-search" style="color:var(--muted);font-size:16px;"></i>
+    <!-- 修正：原為 renderCards()（不存在），改為 render() -->
+    <input id="searchInput" type="text" placeholder="搜尋姓名或電話…" oninput="render()">
+  </div>
+</div>
+
+<!-- ════════════════ 職務篩選 ════════════════ -->
+<div class="filters">
+  <button class="chip active" onclick="setFilter(this,'')">全部職務</button>
+  <button class="chip" onclick="setFilter(this,'隊長')">隊長</button>
+  <button class="chip" onclick="setFilter(this,'副隊長')">副隊長</button>
+  <button class="chip" onclick="setFilter(this,'組長')">組長</button>
+  <button class="chip" onclick="setFilter(this,'正職')">正職</button>
+  <button class="chip" onclick="setFilter(this,'兼職')">兼職</button>
+</div>
+
+<!-- ════════════════ 統計欄 ════════════════ -->
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="sTotal">0</div><div class="stat-l">總人數</div></div>
+  <div class="stat"><div class="stat-n" id="sEarly">0</div><div class="stat-l">早班</div></div>
+  <div class="stat"><div class="stat-n" id="sNight">0</div><div class="stat-l">晚班</div></div>
+</div>
+
+<!-- ════════════════ 人員卡片列表 ════════════════ -->
+<div id="cardsContainer"></div>
+
+<!-- 版權 -->
+<div class="footer">© TIANYING SECURITY · INTERNAL SYSTEM</div>
+
+<!-- ════════════════ FAB 新增按鈕 ════════════════ -->
+<button class="fab" id="fabBtn" onclick="openAddModal()" style="display:none;" title="新增聯絡人">
+  <i class="ti ti-plus"></i>
+</button>
+
+<!-- ════════════════ 編輯／新增 Modal ════════════════ -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="modalTitle">新增聯絡人</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">班別 <span>*</span></label>
+      <select class="form-select" id="fShift"><option value="早班">早班</option><option value="晚班">晚班</option></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">姓名 <span>*</span></label>
+        <input class="form-input" id="fName" placeholder="王小明">
+      </div>
+      <div class="form-group">
+        <label class="form-label">職務 <span>*</span></label>
+        <select class="form-select" id="fRole">
+          <option value="隊長">隊長</option><option value="副隊長">副隊長</option>
+          <option value="組長">組長</option><option value="正職">正職</option>
+          <option value="兼職">兼職</option><option value="PT">PT</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">本人電話 <span>*</span></label>
+      <input class="form-input" id="fPhone" type="tel" placeholder="0912-345-678">
+    </div>
+    <div class="divider"></div>
+    <div class="divider-label"><i class="ti ti-heart"></i> 緊急聯絡人資訊</div>
+    <div class="form-group">
+      <label class="form-label">緊急聯絡人姓名</label>
+      <input class="form-input" id="fEcName" placeholder="王媽媽">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">關係</label>
+        <input class="form-input" id="fEcRel" placeholder="母子">
+      </div>
+      <div class="form-group">
+        <label class="form-label">緊急聯絡人電話</label>
+        <input class="form-input" id="fEcPhone" type="tel" placeholder="0912-345-678">
+      </div>
+    </div>
+    <button class="btn-form-submit" onclick="submitContact()"><i class="ti ti-device-floppy"></i> 儲存</button>
+    <button class="btn-form-cancel" onclick="closeModal()">取消</button>
+  </div>
+</div>
+
+<!-- ════════════════ 確認刪除 Modal ════════════════ -->
+<div class="confirm-bg" id="confirmModal">
+  <div class="confirm-box">
+    <div class="confirm-title"><i class="ti ti-alert-triangle"></i> 確認刪除</div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="confirm-btns">
+      <button class="btn-confirm-del" id="confirmOkBtn">確認刪除</button>
+      <button class="btn-confirm-cancel" onclick="closeConfirm()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast 通知 -->
+<div class="toast" id="toast"></div>
+
+<script>
+const WORKFLOW_GAS_URL='https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec';
+function logWorkflow(tool,actionType,status){
+  var u=JSON.parse(localStorage.getItem('hsh_session_user')||'{}');
+  if(!u.empId)return;
+  try{fetch(WORKFLOW_GAS_URL,{method:'POST',body:JSON.stringify({action:'logTask',tool,empId:u.empId,userName:u.name||'未知',actionType,status:status||'已完成'})});}catch(e){}
+}
+/* ════════════════════════════════════════════════
+   天鷹保全 · 緊急聯絡清單
+   版本：v3.0（硬寫GAS URL + 自動同步 + 管理員設定）
+   ════════════════════════════════════════════════ */
+
+/* ── 內建 GAS URL（一般用戶看不到，管理員可覆寫） ── */
+var BUILT_IN_GAS_URL='https://script.google.com/macros/s/AKfycbz3lq9XquhuUPGR96JN77JoyV9M2ibqGiqIeqUyfxG1X-KuS06RllwA73n7VLbwObKA/exec';
+
+/* ── 預設聯絡人資料 ── */
+const INIT_CONTACTS=[
+  {id:1,shift:'早班',name:'王丞銘',role:'隊長',phone:'0938192569',ecName:'劉彩月',ecRel:'母子',ecPhone:'0922692539'},
+  {id:2,shift:'早班',name:'王麒森',role:'副隊長',phone:'0955981823',ecName:'劉彩月',ecRel:'母子',ecPhone:'0922692539'},
+  {id:3,shift:'早班',name:'葉茂榮',role:'組長',phone:'0921577113',ecName:'李欣美',ecRel:'岳母',ecPhone:'07-7663192'},
+  {id:4,shift:'早班',name:'羅聖凱',role:'正職',phone:'0925067895',ecName:'王怡珺',ecRel:'夫妻',ecPhone:'0927015558'},
+  {id:5,shift:'早班',name:'侯佳良',role:'正職',phone:'0907812116',ecName:'沙安莉',ecRel:'母子',ecPhone:'0981808009'},
+  {id:6,shift:'早班',name:'鄭宜慶',role:'正職',phone:'0983080417',ecName:'鄭富毓',ecRel:'父子',ecPhone:'0981614126'},
+  {id:7,shift:'早班',name:'蔡東記',role:'正職',phone:'0973134142',ecName:'蔡美玲',ecRel:'嬸嬸',ecPhone:'0989817658'},
+  {id:8,shift:'早班',name:'嚴永珅',role:'正職',phone:'0983294421',ecName:'嚴子家',ecRel:'姊弟',ecPhone:'0922313452'},
+  {id:9,shift:'早班',name:'李怡蒨',role:'正職',phone:'0968855616',ecName:'陳芝美',ecRel:'母女',ecPhone:'0937638616'},
+  {id:10,shift:'早班',name:'白恩菽',role:'正職',phone:'0915531583',ecName:'粘金媛',ecRel:'母女',ecPhone:'0932741183'},
+  {id:11,shift:'早班',name:'謝孟芸',role:'正職',phone:'0983052158',ecName:'楊麗芬',ecRel:'母女',ecPhone:'0976033380'},
+  {id:12,shift:'早班',name:'王政雄',role:'正職',phone:'0953556771',ecName:'陳韻如',ecRel:'夫妻',ecPhone:'0917636120'},
+  {id:13,shift:'早班',name:'張瀚升',role:'正職',phone:'0911010659',ecName:'張馨云',ecRel:'父女',ecPhone:'0988923700'},
+  {id:14,shift:'早班',name:'陳龍輝',role:'正職',phone:'0906162659',ecName:'陳美珍',ecRel:'母子',ecPhone:'0921412071'},
+  {id:15,shift:'早班',name:'張晉銘',role:'正職',phone:'0971720026',ecName:'張峮瑋',ecRel:'父女',ecPhone:'0975697673'},
+  {id:16,shift:'早班',name:'張馨遠',role:'正職',phone:'0988979777',ecName:'陳莉文',ecRel:'夫妻',ecPhone:'0988316801'},
+  {id:17,shift:'早班',name:'陳國榮',role:'正職',phone:'0987253683',ecName:'李秀惠',ecRel:'母子',ecPhone:'0908968578'},
+  {id:18,shift:'早班',name:'吳銘哲',role:'正職',phone:'0975078109',ecName:'吳芯芯',ecRel:'姊弟',ecPhone:'0908320857'},
+  {id:19,shift:'早班',name:'吳騰紘',role:'正職',phone:'0913155780',ecName:'黃慈崢',ecRel:'夫妻',ecPhone:'0989988612'},
+  {id:20,shift:'早班',name:'黃春福',role:'正職',phone:'0970759978',ecName:'黃和居',ecRel:'父子',ecPhone:'0926335703'},
+  {id:21,shift:'早班',name:'蔡明昌',role:'正職',phone:'0985273348',ecName:'蔡郭品',ecRel:'母子',ecPhone:'07-7115259'},
+  {id:22,shift:'早班',name:'朱智崇',role:'正職',phone:'0918901026',ecName:'劉清照',ecRel:'夫妻',ecPhone:'0903071013'},
+  {id:23,shift:'早班',name:'王景洋',role:'正職',phone:'0955755660',ecName:'',ecRel:'',ecPhone:''},
+  {id:24,shift:'早班',name:'陳建志',role:'兼職',phone:'0936131011',ecName:'王月念',ecRel:'母子',ecPhone:'0906589937'},
+  {id:25,shift:'早班',name:'胡文彬',role:'兼職',phone:'0938023007',ecName:'蔡玉惠',ecRel:'夫妻',ecPhone:'0915736077'},
+  {id:26,shift:'晚班',name:'謝志遠',role:'副隊長',phone:'0926266621',ecName:'盧麗慧',ecRel:'母子',ecPhone:'0921530822'},
+  {id:27,shift:'晚班',name:'石易晉',role:'組長',phone:'0958750101',ecName:'羅佩文',ecRel:'夫妻',ecPhone:'0919142880'},
+  {id:28,shift:'晚班',name:'張宏偉',role:'正職',phone:'0986154717',ecName:'張敏夫',ecRel:'父子',ecPhone:'0975336529'},
+  {id:29,shift:'晚班',name:'陳惠景',role:'正職',phone:'0926893637',ecName:'陳美華',ecRel:'阿姨',ecPhone:'0920022373'},
+  {id:30,shift:'晚班',name:'鄭竣丞',role:'正職',phone:'0930523353',ecName:'黃素玲',ecRel:'母子',ecPhone:'0985087100'},
+  {id:31,shift:'晚班',name:'許承訓',role:'正職',phone:'0958486447',ecName:'許承恩',ecRel:'兄弟',ecPhone:'0970712686'},
+  {id:32,shift:'晚班',name:'吳國賢',role:'正職',phone:'0976153560',ecName:'張蕙瑜',ecRel:'母子',ecPhone:'0958868563'},
+  {id:33,shift:'晚班',name:'潘伯威',role:'正職',phone:'0908178701',ecName:'潘恆華',ecRel:'父子',ecPhone:'0987383566'},
+  {id:34,shift:'晚班',name:'謝伯維',role:'正職',phone:'0981700339',ecName:'許碧純',ecRel:'母子',ecPhone:'0989544285'},
+  {id:35,shift:'晚班',name:'陳楷文',role:'正職',phone:'0970692100',ecName:'曹海倫',ecRel:'母子',ecPhone:'0937639509'},
+  {id:36,shift:'晚班',name:'羅世峰',role:'正職',phone:'0930902886',ecName:'關茹云',ecRel:'夫妻',ecPhone:'0962026836'},
+  {id:37,shift:'晚班',name:'王佩瑊',role:'兼職',phone:'0983605204',ecName:'張麗玲',ecRel:'母女',ecPhone:'0960803301'},
+  {id:38,shift:'晚班',name:'吳俊明',role:'正職',phone:'0916103880',ecName:'左裕卉',ecRel:'夫妻',ecPhone:'0968690130'},
+  {id:39,shift:'晚班',name:'吳文珍',role:'正職',phone:'0976892189',ecName:'吳文鈴',ecRel:'姊妹',ecPhone:'0926525625'},
+  {id:40,shift:'晚班',name:'黃志堅',role:'兼職',phone:'0939504548',ecName:'黃慧雯',ecRel:'姊姊',ecPhone:'0916968638'},
+  {id:41,shift:'晚班',name:'賴俐蓉',role:'正職',phone:'0988615680',ecName:'林欣平',ecRel:'朋友',ecPhone:'07-3908780'},
+  {id:42,shift:'晚班',name:'龔晨嘉',role:'正職',phone:'0915017001',ecName:'劉畇湘',ecRel:'母子',ecPhone:'0906669156'},
+];
+
+/* ── 職務顏色對照 ── */
+const RS={
+  '隊長':  {bg:'rgba(201,162,39,.2)',  c:'#C9A227', av:'#C9A22722'},
+  '副隊長':{bg:'rgba(245,158,11,.18)', c:'#F59E0B', av:'#F59E0B22'},
+  '組長':  {bg:'rgba(74,222,128,.14)', c:'#4ADE80', av:'#4ADE8022'},
+  '正職':  {bg:'rgba(99,102,241,.15)', c:'#818CF8', av:'#818CF822'},
+  '兼職':  {bg:'rgba(107,114,128,.2)', c:'#9CA3AF', av:'#9CA3AF22'},
+  'PT':    {bg:'rgba(107,114,128,.15)',c:'#6B7280', av:'#6B728022'},
+};
+
+/* ── 有權限編輯的角色 ── */
+const CAN_EDIT=['leader','vicecaptain','captain','executive','admin'];
+const ROLE_MAP={leader:'組長',vicecaptain:'副隊長',captain:'隊長',executive:'主管',admin:'管理員',fulltime:'正職',parttime:'兼職'};
+
+/* ── 全域狀態 ── */
+var contacts=[],nextId=100,tab='all',rf='',editId=null,delId=null,canEdit=false,isAdmin=false;
+
+/* ── 取得當前有效的 GAS URL（管理員可覆寫，否則用內建） ── */
+function getGasUrl(){
+  var override=localStorage.getItem('hsh_ec_gasUrl_override');
+  return (override&&override.trim()) ? override.trim() : BUILT_IN_GAS_URL;
+}
+
+/* ── 修正電話：雲端試算表把開頭 0 吃掉時補回（台灣手機 9 碼→補 0 成 10 碼） ── */
+function normalizePhone(p){
+  if(p===null||p===undefined) return '';
+  var s=String(p).trim();
+  if(/^9\d{8}$/.test(s)) s='0'+s; // 手機掉了開頭 0
+  return s;
+}
+
+/* ── 初始化 ── */
+function init(){
+  /* 從 localStorage 還原聯絡人，失敗則載入預設值 */
+  var sv=localStorage.getItem('hsh_ec_contacts');
+  if(sv){
+    try{
+      contacts=JSON.parse(sv).map(function(c){c.phone=normalizePhone(c.phone);c.ecPhone=normalizePhone(c.ecPhone);return c;});
+      nextId=Math.max.apply(null,contacts.map(function(c){return c.id;}).concat([99]))+1;
+    }catch(e){loadDef();}
+  }else{loadDef();}
+
+  /* 讀取登入身份（內嵌於主 App 時） */
+  var raw=localStorage.getItem('hsh_session_user');
+  if(raw){
+    try{
+      var u=JSON.parse(raw);
+      canEdit=CAN_EDIT.indexOf(u.role)!==-1;
+      /* 只有 admin 角色才是管理員 */
+      isAdmin=(u.role==='admin');
+      var b=document.getElementById('roleBadge');
+      b.textContent=u.name+' · '+(ROLE_MAP[u.role]||u.role);
+      b.style.display='inline-flex';
+    }catch(e){}
+  }
+
+  /* 獨立開啟時（非 iframe），視為管理員 */
+  if(window.self===window.top){canEdit=true;isAdmin=true;}
+
+  /* 管理員：顯示設定按鈕 + 載入已覆寫的 URL */
+  if(isAdmin){
+    document.getElementById('btnSyncAdmin').style.display='flex';
+    var override=localStorage.getItem('hsh_ec_gasUrl_override')||'';
+    document.getElementById('gasUrlInput').value=override||BUILT_IN_GAS_URL;
+  }
+
+  /* 有編輯權限才顯示 FAB 新增按鈕 */
+  if(canEdit) document.getElementById('fabBtn').style.display='flex';
+
+  render();
+  stats();
+
+  /* 開啟工具時自動從雲端拉取最新資料（靜默模式） */
+  pullFromGAS(true);
+}
+
+/* ── 載入預設聯絡人 ── */
+function loadDef(){
+  contacts=JSON.parse(JSON.stringify(INIT_CONTACTS));
+  nextId=INIT_CONTACTS.length+1;
+  save();
+}
+
+/* ── 儲存到 localStorage ── */
+function save(){
+  localStorage.setItem('hsh_ec_contacts',JSON.stringify(contacts));
+}
+
+/* ── 切換班別分頁 ── */
+function setTab(t){
+  tab=t;
+  document.querySelectorAll('.tab').forEach(function(e){e.classList.remove('active');});
+  document.getElementById('tab-'+t).classList.add('active');
+  render();
+}
+
+/* ── 切換職務篩選 ── */
+function setFilter(el,r){
+  rf=r;
+  document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('active');});
+  el.classList.add('active');
+  render();
+}
+
+/* ── 過濾資料（依分頁 + 職務 + 搜尋關鍵字） ── */
+function filtered(){
+  var q=document.getElementById('searchInput').value.trim().toLowerCase();
+  return contacts.filter(function(c){
+    if(tab==='early'&&c.shift!=='早班') return false;
+    if(tab==='night'&&c.shift!=='晚班') return false;
+    if(rf&&c.role!==rf) return false;
+    if(q&&c.name.toLowerCase().indexOf(q)===-1&&c.phone.indexOf(q)===-1) return false;
+    return true;
+  });
+}
+
+/* ── 渲染人員卡片 ── */
+function render(){
+  var list=filtered();
+  var box=document.getElementById('cardsContainer');
+  stats();
+
+  if(!list.length){
+    box.innerHTML='<div class="empty"><i class="ti ti-address-book-off"></i><p>找不到符合條件的聯絡人</p></div>';
+    return;
+  }
+
+  /* 依班別分組 */
+  var g={};
+  list.forEach(function(c){
+    if(!g[c.shift]) g[c.shift]=[];
+    g[c.shift].push(c);
+  });
+
+  var html='';
+  ['早班','晚班'].forEach(function(s){
+    if(!g[s]) return;
+    if(tab==='all') html+='<div class="section-label"><i class="ti ti-users"></i> '+s+' &middot; '+g[s].length+' 人</div>';
+    html+='<div class="cards">'+g[s].map(card).join('')+'</div><div style="height:14px;"></div>';
+  });
+  box.innerHTML=html;
+}
+
+/* ── 產生單一人員卡片 HTML ── */
+function card(c){
+  var rs=RS[c.role]||{bg:'rgba(255,255,255,.08)',c:'#9CA3AF',av:'#9CA3AF22'};
+
+  /* 編輯 / 刪除按鈕（有權限才顯示） */
+  var acts=canEdit
+    ? '<div class="card-actions">'
+      + '<button class="btn-card-edit" onclick="openEdit('+c.id+')"><i class="ti ti-pencil"></i> 編輯</button>'
+      + '<button class="btn-card-del"  onclick="openDel('+c.id+')"><i class="ti ti-trash"></i></button>'
+      + '</div>'
+    : '';
+
+  /* 緊急聯絡資訊欄 */
+  var ec=c.ecName
+    ? '<div class="info-row"><div class="info-lbl">緊急聯絡人</div><div class="info-val">'+c.ecName
+        +(c.ecRel?' <span style="font-size:11px;color:var(--muted);">('+c.ecRel+')</span>':'')
+        +'</div></div>'
+      + '<div class="info-row"><div class="info-lbl">緊急電話</div><div class="info-val"><a href="tel:'+c.ecPhone+'">'+(c.ecPhone||'—')+'</a></div></div>'
+    : '<div class="info-row full"><div class="info-val no-ec">尚未填寫緊急聯絡資訊</div></div>';
+
+  return '<div class="card">'
+    + '<div class="card-head">'
+    +   '<div class="avatar" style="background:'+rs.av+';color:'+rs.c+';border:1.5px solid '+rs.c+'44;">'+c.name[0]+'</div>'
+    +   '<div class="card-name">'+c.name+'</div>'
+    +   '<div class="role-pill" style="background:'+rs.bg+';color:'+rs.c+';">'+c.role+'</div>'
+    + '</div>'
+    + '<div class="card-body">'
+    +   '<div class="info-row"><div class="info-lbl">本人電話</div><div class="info-val"><a href="tel:'+c.phone+'">'+(c.phone||'—')+'</a></div></div>'
+    +   '<div class="info-row"><div class="info-lbl">班別</div><div class="info-val">'+c.shift+'</div></div>'
+    +   ec
+    + '</div>'
+    + acts
+    + '</div>';
+}
+
+/* ── 更新統計數字 ── */
+function stats(){
+  document.getElementById('sTotal').textContent=contacts.length;
+  document.getElementById('sEarly').textContent=contacts.filter(function(c){return c.shift==='早班';}).length;
+  document.getElementById('sNight').textContent=contacts.filter(function(c){return c.shift==='晚班';}).length;
+}
+
+/* ── 開啟新增 Modal ── */
+function openAddModal(){
+  editId=null;
+  document.getElementById('modalTitle').textContent='新增聯絡人';
+  ['fName','fPhone','fEcName','fEcRel','fEcPhone'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('fShift').value=tab==='night'?'晚班':'早班';
+  document.getElementById('fRole').value='正職';
+  document.getElementById('editModal').classList.add('open');
+}
+
+/* ── 開啟編輯 Modal ── */
+function openEdit(id){
+  var c=contacts.find(function(x){return x.id===id;});
+  if(!c) return;
+  editId=id;
+  document.getElementById('modalTitle').textContent='編輯：'+c.name;
+  document.getElementById('fShift').value=c.shift;
+  document.getElementById('fName').value=c.name;
+  document.getElementById('fRole').value=c.role;
+  document.getElementById('fPhone').value=c.phone;
+  document.getElementById('fEcName').value=c.ecName;
+  document.getElementById('fEcRel').value=c.ecRel;
+  document.getElementById('fEcPhone').value=c.ecPhone;
+  document.getElementById('editModal').classList.add('open');
+}
+
+/* ── 關閉 Modal ── */
+function closeModal(){document.getElementById('editModal').classList.remove('open');}
+
+/* ── 儲存聯絡人（新增或編輯） ── */
+function submitContact(){
+  var name=document.getElementById('fName').value.trim();
+  var phone=document.getElementById('fPhone').value.trim();
+  if(!name){toast('請填寫姓名','err');return;}
+  if(!phone){toast('請填寫電話','err');return;}
+
+  var d={
+    shift:document.getElementById('fShift').value,
+    name:name,role:document.getElementById('fRole').value,phone:phone,
+    ecName:document.getElementById('fEcName').value.trim(),
+    ecRel:document.getElementById('fEcRel').value.trim(),
+    ecPhone:document.getElementById('fEcPhone').value.trim()
+  };
+
+  if(editId!==null){
+    var i=contacts.findIndex(function(c){return c.id===editId;});
+    if(i!==-1) contacts[i]=Object.assign({},contacts[i],d);
+    toast('✅ 已更新 '+name,'ok');
+  }else{
+    contacts.push(Object.assign({id:nextId++},d));
+    toast('✅ 已新增 '+name,'ok');
+  }
+
+  save();render();closeModal();
+  /* 資料變動後直接觸發雲端推送（延遲1秒，避免連續操作時重複推送） */
+  clearTimeout(submitContact._t);
+  submitContact._t=setTimeout(pushToGAS,1000);
+}
+
+/* ── 開啟刪除確認 ── */
+function openDel(id){
+  var c=contacts.find(function(x){return x.id===id;});
+  if(!c) return;
+  delId=id;
+  document.getElementById('confirmMsg').textContent='確定要刪除「'+c.name+'」的聯絡資料？此操作無法復原。';
+  document.getElementById('confirmOkBtn').onclick=doDel;
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+/* ── 執行刪除 ── */
+function doDel(){
+  var c=contacts.find(function(x){return x.id===delId;});
+  contacts=contacts.filter(function(x){return x.id!==delId;});
+  save();render();closeConfirm();
+  toast('🗑 已刪除 '+(c?c.name:''),'ok');
+  /* 刪除後直接觸發雲端推送 */
+  clearTimeout(doDel._t);
+  doDel._t=setTimeout(pushToGAS,1000);
+}
+
+/* ── 關閉刪除確認 ── */
+function closeConfirm(){document.getElementById('confirmModal').classList.remove('open');delId=null;}
+
+/* ── 切換管理員設定面板 ── */
+function toggleSyncPanel(){document.getElementById('syncPanel').classList.toggle('hidden');}
+
+/* ── 管理員儲存覆寫 URL ── */
+function adminSaveUrl(){
+  var url=document.getElementById('gasUrlInput').value.trim();
+  if(url){
+    localStorage.setItem('hsh_ec_gasUrl_override',url);
+    toast('✅ URL 已儲存','ok');
+  }else{
+    /* 清空則恢復使用內建URL */
+    localStorage.removeItem('hsh_ec_gasUrl_override');
+    document.getElementById('gasUrlInput').value=BUILT_IN_GAS_URL;
+    toast('已恢復使用內建 URL','ok');
+  }
+}
+
+/* ── 更新同步狀態小字 ── */
+function setSyncStatus(msg,type){
+  var el=document.getElementById('syncStatus');
+  el.textContent=msg;
+  el.className='sync-status'+(type?' '+type:'');
+}
+
+/* ── 從 GAS 雲端拉取
+   silent=true：靜默模式（不彈 toast，只更新狀態列）
+   silent=false：手動觸發（顯示 toast）
+── */
+async function pullFromGAS(silent){
+  var url=getGasUrl();
+  if(!url) return;
+
+  setSyncStatus('☁ 同步中…','loading');
+  if(!silent) toast('⏳ 從雲端拉取中…');
+
+  try{
+    var r=await fetch(url+'?action=getContacts');
+    var d=await r.json();
+    if(d.status==='ok'&&d.contacts&&d.contacts.length){
+      contacts=d.contacts.map(function(c){c.phone=normalizePhone(c.phone);c.ecPhone=normalizePhone(c.ecPhone);return c;});
+      nextId=Math.max.apply(null,contacts.map(function(c){return c.id;}).concat([99]))+1;
+      save();render();
+      var now=new Date();
+      var timeStr=(now.getHours()<10?'0':'')+now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
+      setSyncStatus('✓ '+timeStr+' 已同步','ok');
+      if(!silent) toast('✅ 已同步 '+contacts.length+' 筆','ok');
+    }else{
+      setSyncStatus('—','');
+      if(!silent) toast('雲端暫無資料','');
+    }
+  }catch(e){
+    setSyncStatus('連線失敗','err');
+    if(!silent) toast('❌ 連線失敗','err');
+  }
+}
+
+/* ── 推送到 GAS 雲端（資料變動後自動呼叫） ── */
+async function pushToGAS(){
+  var url=getGasUrl();
+  if(!url) return;
+
+  setSyncStatus('☁ 推送中…','loading');
+  try{
+    var b=new URLSearchParams();
+    b.append('action','setContacts');
+    b.append('contacts',JSON.stringify(contacts));
+    var r=await fetch(url,{method:'POST',body:b});
+    var d=await r.json();
+    if(d.status==='ok'){
+      var now=new Date();
+      var timeStr=(now.getHours()<10?'0':'')+now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
+      setSyncStatus('✓ '+timeStr+' 已推送','ok');
+      logWorkflow('emergency','push-contacts','已完成');
+      toast('☁ 已同步到雲端','ok');
+    }else{
+      setSyncStatus('推送失敗','err');
+      toast('同步失敗：'+(d.msg||''),'err');
+    }
+  }catch(e){
+    setSyncStatus('推送失敗','err');
+    toast('❌ 推送失敗','err');
+  }
+}
+
+/* ── Toast 通知 ── */
+var _tt;
+function toast(msg,type){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast show'+(type?' '+type:'');
+  clearTimeout(_tt);
+  _tt=setTimeout(function(){t.classList.remove('show');},2400);
+}
+
+/* ── Modal 背景點擊關閉 ── */
+document.getElementById('editModal').addEventListener('click',function(e){if(e.target===e.currentTarget)closeModal();});
+document.getElementById('confirmModal').addEventListener('click',function(e){if(e.target===e.currentTarget)closeConfirm();});
+
+/* ── 啟動 ── */
+init();
+</script>
+</body>
+</html>
