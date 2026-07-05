@@ -624,6 +624,7 @@ function init(){
   setupInsSearch();
   updateGasStatus();
   renderQueue();
+  if(DB_GAS_URL)syncDBFromGAS(true); /* ★ 開啟工具即自動拉取雲端最新資料庫，避免跨裝置看到舊的監工/廠商/檢查者名單 */
   document.getElementById('gasCodeBox').textContent=GAS_CODE;
   document.getElementById('gasUrlInp').value=gasUrl;
   document.getElementById('sheetNameInp').value=sheetName;
@@ -1787,7 +1788,7 @@ async function deleteTodayRow(rowNum){
 
 // SYNC DB
 var syncStatus='idle';
-async function syncDBFromGAS(){
+async function syncDBFromGAS(silent){
   if(!DB_GAS_URL)return;
   syncStatus='loading';updateSyncBadge();
   try{
@@ -1805,7 +1806,7 @@ async function syncDBFromGAS(){
       if(d.db.inspectors&&d.db.inspectors.length){inspectors=d.db.inspectors;insNextId=Math.max(...inspectors.map(function(p){return p.id;}),0)+1;}
       if(d.db.workTypes&&d.db.workTypes.length)workTypes=d.db.workTypes;
       saveLocal();buildWtChips();buildInsChips();  /* 只存本地，不觸發推送 */
-      syncStatus='ok';showToast('✓ 資料庫已同步','ok');
+      syncStatus='ok';if(!silent)showToast('✓ 資料庫已同步','ok');
     }else{syncStatus='idle';}
   }catch(e){syncStatus='err';}
   updateSyncBadge();
