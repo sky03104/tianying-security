@@ -738,9 +738,9 @@ Object.entries(CHAR_IMG_MAP).forEach(([role, file]) => {
 // 沒有列在這裡的角色照舊使用 CHAR_IMAGES 靜態圖
 const RUN_IMG_MAP = {
   '羅賓': ['run_robin_f1.png','run_robin_f2.png','run_robin_f3.png','run_robin_f4.png','run_robin_f5.png','run_robin_f6.png'],
-  // 路飛只有單張乾淨去背姿勢（原圖是同姿勢重複4次+不透明背景，已裁切去背取一張），
-  // getRunFrame 對單張陣列一樣能運作，只是不會有連續動畫、維持這張跑步姿勢
-  '路飛': ['run_luffy_f1.png'],
+  // 路飛跑步循環（2026-07-05 咖哩提供路飛5檔run_luffy5.gif，從跑步段第61~76幀
+  // 抽6張側面跨步畫面，OpenCV GrabCut去背+去背景色去污法）：6張完整循環
+  '路飛': ['run_luffy_f1.png','run_luffy_f2.png','run_luffy_f3.png','run_luffy_f4.png','run_luffy_f5.png','run_luffy_f6.png'],
 };
 const RUN_IMAGES = {};
 Object.entries(RUN_IMG_MAP).forEach(([role, files]) => {
