@@ -19456,11 +19456,17 @@ function App() {
         try {
             const res = await fetch(ACCOUNT_GAS_URL + '?action=bootstrap');
             const d = await res.json();
-            if (d.status !== 'ok') return;
+            if (d.status !== 'ok') throw new Error(d.msg || 'bootstrap 未就緒');
             if (Array.isArray(d.applications)) setPending(d.applications);
             if (Array.isArray(d.leaveRequests)) setLeaveRequests(d.leaveRequests);
             applyCloudSettings(d.settings);
-        } catch (e) { /* 靜默失敗，沿用本機/預設值，不影響登入本身 */ }
+        } catch (e) {
+            /* GAS 尚未部署 bootstrap（或連線失敗）→ 退回原本三支個別呼叫，
+               確保前端先上線、後端還沒重新部署的空窗期不會整個登入資料開天窗 */
+            loadPendingFromCloud(true);
+            loadLeaveFromCloud(true);
+            loadLeaveSettings();
+        }
     };
     /* ── 管理員儲存早晚班上限到雲端 ── */
     const saveLeaveSettings = async (m, n) => {
