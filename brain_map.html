@@ -1292,7 +1292,9 @@ function drawLiveUsers(ctx, t) {
       const d = Math.hypot(scr.x - g.x, scr.y - g.y);
       if (d < minD) { minD = d; imgScale = NODE_IMG_SCALE[nid]; }
     });
-    const radius = (40 + Math.min(n, 6) * 7) * imgScale; // 人越多圈越大，設上限避免過度誇張
+    // 圓點縮小一倍後（PR #83），圍站半徑跟著縮短，對齊地點圖外圍（boxW/2＝55px）
+    // 而不是飄在圖外太遠；人越多圈越大，設上限避免過度誇張
+    const radius = (30 + Math.min(n, 6) * 5) * imgScale;
     g.members.forEach((m, i) => {
       const angle = (i / n) * Math.PI * 2 - Math.PI / 2; // 從正上方開始，順時針排列
       m.ox = Math.cos(angle) * radius;
