@@ -145,6 +145,8 @@ function doGet(e) {
 
     if (action === 'getSettings')       return getSettings();
 
+    if (action === 'bootstrap')         return bootstrap();
+
     if (action === 'resolveEmp')        return resolveEmp(e);
     if (action === 'previewTomorrowPost') return previewTomorrowPost(e);
     if (action === 'getTomorrowPost')     return getTomorrowPost(e);
@@ -2297,6 +2299,28 @@ function getSettings() {
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString(),
       leaveCapMorning: DEFAULT_CAP_MORNING, leaveCapNight: DEFAULT_CAP_NIGHT});
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// 【登入 Bootstrap】── 把 App 登入當下要拉的 getApplications／getLeaveRequests／
+//   getSettings 三支呼叫合併成一支，前端一次 fetch 拿齊，省掉 2 趟 GAS 冷啟往返。
+//   直接呼叫既有三支函式取其 ContentService 內容重新解析組合，不重寫個別邏輯，
+//   確保跟前端其他「重新整理」按鈕各自呼叫單一 action 時的行為完全一致、不會日後跑掉。
+// ════════════════════════════════════════════════════════════
+function bootstrap() {
+  try {
+    var appsRes    = JSON.parse(getApplications().getContent());
+    var leaveRes   = JSON.parse(getLeaveRequests().getContent());
+    var settingsRes = JSON.parse(getSettings().getContent());
+    return jsonRes({
+      status: 'ok',
+      applications: (appsRes && Array.isArray(appsRes.list)) ? appsRes.list : [],
+      leaveRequests: (leaveRes && Array.isArray(leaveRes.list)) ? leaveRes.list : [],
+      settings: settingsRes || null
+    });
+  } catch (err) {
+    return jsonRes({status:'err', msg:err.toString()});
   }
 }
 

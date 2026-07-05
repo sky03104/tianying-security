@@ -962,21 +962,47 @@ function showErr(msg){
 }
 
 /* ══════════════════════════════════════════
-   主載入
+   本機快取（stale-while-revalidate）：
+   開工具先顯示上次抓到的資料（秒開），背景同時重新抓最新的悄悄蓋上去，
+   避免每次都要等 Google Sheets JSONP 一來一回才看得到東西
 ══════════════════════════════════════════ */
-async function loadAll(){
-  S.loading=true; S.errors={con:null,hot:null};
+var WORK_CACHE_KEY = 'tianying_work_cache_v1';
+function loadWorkCache(){
+  try {
+    var c = JSON.parse(localStorage.getItem(WORK_CACHE_KEY) || 'null');
+    if(!c || !c.data) return false;
+    S.data.con = Array.isArray(c.data.con) ? c.data.con : [];
+    S.data.hot = Array.isArray(c.data.hot) ? c.data.hot : [];
+    S.errors = {con:null, hot:null};
+    S.loading = false;
+    return true;
+  } catch(e){ return false; }
+}
+function saveWorkCache(){
+  try { localStorage.setItem(WORK_CACHE_KEY, JSON.stringify({data:S.data, savedAt:Date.now()})); }
+  catch(e){}
+}
+
+/* ══════════════════════════════════════════
+   主載入
+   silent=true：已有快取資料先上畫面時的背景重新整理，不顯示全頁讀取動畫、
+   不彈成功/失敗 toast，悄悄把資料換成最新的就好
+══════════════════════════════════════════ */
+async function loadAll(silent){
+  if(!silent){
+    S.loading=true; S.errors={con:null,hot:null};
+    document.getElementById('sp-msg').textContent='正在讀取施工資料…';
+    render();
+  }
   setSpinning(true);
-  document.getElementById('sp-msg').textContent='正在讀取施工資料…';
-  render();
   try {
-    document.getElementById('sp-msg').textContent='載入施工單…';
+    if(!silent) document.getElementById('sp-msg').textContent='載入施工單…';
     S.data.con = dedupeRows(await fetchSheetJsonp(SN.con));
-  } catch(e){ S.errors.con = e.message; }
+  } catch(e){ if(!silent) S.errors.con = e.message; }
   try {
-    document.getElementById('sp-msg').textContent='載入動火申請…';
+    if(!silent) document.getElementById('sp-msg').textContent='載入動火申請…';
     S.data.hot = dedupeRows(await fetchSheetJsonp(SN.hot));
-  } catch(e){ S.errors.hot = e.message; }
+  } catch(e){ if(!silent) S.errors.hot = e.message; }
   S.loading=false;
   setSpinning(false);
   setUpdTime();
@@ -984,8 +1010,9 @@ async function loadAll(){
   render();
   hideSplash();
   if(!S.errors.con && !S.errors.hot){
-    toast('✓ 載入完成 · 施工單 '+S.data.con.length+' 筆 · 動火 '+S.data.hot.length+' 筆','ok');
-  } else {
+    saveWorkCache();
+    if(!silent) toast('✓ 載入完成 · 施工單 '+S.data.con.length+' 筆 · 動火 '+S.data.hot.length+' 筆','ok');
+  } else if(!silent){
     toast('⚠ 部分資料載入失敗，請確認試算表已公開分享','err');
   }
 }
@@ -1037,8 +1064,18 @@ async function checkWorkPermission(){
   return false;
 }
 
-/* 啟動 */
-checkWorkPermission().then(function(ok){ if(ok) loadAll(); });
+/* 啟動：有快取先上畫面秒開，背景悄悄重新整理；沒快取才走原本的全頁讀取動畫 */
+checkWorkPermission().then(function(ok){
+  if(!ok) return;
+  var hadCache = loadWorkCache();
+  if(hadCache){
+    hideSplash();
+    updateCounts();
+    setUpdTime();
+    render();
+  }
+  loadAll(hadCache);
+});
 </script>
 </body>
 </html>

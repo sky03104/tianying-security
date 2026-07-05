@@ -17250,17 +17250,19 @@ function b64decode(id) {
     const b64 = el ? el.textContent.trim() : '';
     return decodeURIComponent(escape(atob(b64)));
 }
-const TOOL_UPLOAD_HTML    = b64decode('tpl-upload');
-const TOOL_CLOSING_HTML   = b64decode('tpl-closing');
-const TOOL_EMERGENCY_HTML = b64decode('tpl-emergency');
-const TOOL_SIGNIN_HTML   = b64decode('tpl-signin');
+/* 內嵌工具模板改惰性解碼：啟動時不必一次解碼全部 5 份（約1.5MB base64），
+   只在使用者第一次真正點開該工具時才 decode，之後同一份快取重複使用 */
+const _toolHtmlCache = {};
+function getToolHtml(id) {
+    if (!_toolHtmlCache[id]) _toolHtmlCache[id] = b64decode(id);
+    return _toolHtmlCache[id];
+}
 const POST_PAGE_URL       = 'https://sky03104.github.io/tianying-security/post.html'; // 明日哨表改為 iframe 串接完整頁（永遠同步最新 post.html）
 const OPENING_PAGE_URL    = 'https://sky03104.github.io/tianying-security/tool_opening.html'; // 開店前進出快速登錄：獨立檔，iframe 串接（永遠同步最新 tool_opening.html）
 const AI_CHAT_URL         = 'https://sky03104.github.io/tianying-security/tool_ai_chat.html'; // 天鷹 AI 小助手（小天鷹）：獨立檔，iframe 串接（永遠同步最新 tool_ai_chat.html）
 const LOGISTICS_PAGE_URL  = 'https://sky03104.github.io/tianying-security/tool_logistics.html'; // 物流車輛統計：獨立檔，iframe 串接（永遠同步最新 tool_logistics.html）
 const HANDOVER_PAGE_URL   = 'https://sky03104.github.io/tianying-security/tool_handover.html'; // 帶班交接事項：獨立檔，iframe 串接（永遠同步最新 tool_handover.html）
 const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJyA79Cuzdh2IPRnBLUWm2YPEqXn5XJj4GVEUlCnNIv8hgRTJ7Xr198hZxG/exec'; // 事故報告／匿名表揚共用 GAS（主管待審卡片讀清單）
-const TOOL_CAR_HTML       = b64decode('tpl-car');
 // ─── COLOR TOKENS ────────────────────────────────────────────────
 // Primary: Deep Navy #0A0F1E   Surface: #111827   Card: #1A2235
 // Gold:    #C9A227              Amber:   #F0C040   Red:  #E53E3E
@@ -19193,9 +19195,12 @@ function App() {
         })();
     }, []);
     // 公告自動刷新：每 2 分鐘輪詢一次雲端，避免首頁公告欄長時間停留在舊資料
+    // App 切到背景（螢幕鎖定/切別的APP）時跳過，省 GAS 額度與手機電量；切回時見下方「切回首頁」的即時刷新
     useEffect(() => {
         if (!ACCOUNT_GAS_URL) return;
-        const timer = setInterval(loadAnnouncementsCloud, 120000);
+        const timer = setInterval(() => {
+            if (document.visibilityState === 'visible') loadAnnouncementsCloud();
+        }, 120000);
         return () => clearInterval(timer);
     }, []);
     // 切回首頁分頁時，順手刷新一次公告（避免切到其他分頁再切回還是看到舊公告）
@@ -19298,12 +19303,8 @@ function App() {
             const favKey = 'hsh_favs_' + sessionUser.empId;
             const savedFavs = localStorage.getItem(favKey);
             if (savedFavs) { try { setFavorites(JSON.parse(savedFavs)); } catch(e){} }
-            if (CAN_MANAGE_ROLES.includes(sessionUser.role)) {
-                loadPendingFromCloud(true);
-            }
+            loadLoginBootstrap();
             if (['executive', 'admin'].includes(sessionUser.role)) loadReviewCounts();
-            loadLeaveFromCloud(true);
-            loadLeaveSettings();
             setPage("main");
         } catch(e) {}
     }, []);
@@ -19344,12 +19345,8 @@ function App() {
         const favKey = 'hsh_favs_' + loginForm.id.trim();
         const savedFavs = localStorage.getItem(favKey);
         if (savedFavs) { try { setFavorites(JSON.parse(savedFavs)); } catch(e){} }
-        if (CAN_MANAGE_ROLES.includes(sessionUser.role)) {
-            loadPendingFromCloud(true);
-        }
+        loadLoginBootstrap();
         if (['executive', 'admin'].includes(sessionUser.role)) loadReviewCounts();
-        loadLeaveFromCloud(true);
-        loadLeaveSettings();
         setPage("main");
         showToast("✅ 登入成功，歡迎回來！");
     };
@@ -19404,48 +19401,66 @@ function App() {
         } catch (e) {}
     };
     /* ── 從雲端載入早晚班請假上限（系統設定分頁） ── */
+    /* 套用「早晚班上限／工具權限／施工單白名單」設定資料。抽成獨立函式讓 loadLeaveSettings()
+       與登入時的 bootstrap 合併呼叫（loadLoginBootstrap）共用同一套處理邏輯，
+       避免兩邊各自維護一份、日後改一邊忘了改另一邊 */
+    const applyCloudSettings = (d) => {
+        if (!d || d.status !== 'ok') return;
+        if (typeof d.leaveCapMorning === 'number') setLeaveCapMorning(d.leaveCapMorning);
+        if (typeof d.leaveCapNight === 'number') setLeaveCapNight(d.leaveCapNight);
+        if (d.toolPerms) {
+            try {
+                const cp = typeof d.toolPerms === 'string' ? JSON.parse(d.toolPerms) : d.toolPerms;
+                if (cp && typeof cp === 'object') {
+                    // ── 自動補「雲端資料產生後系統才新增的工具」之預設權限 ──
+                    //    依本機已知工具清單(known)比對，找出雲端舊值缺漏的新工具(如績效報表15)，
+                    //    僅補 DEFAULT_PERMS 有給該角色的新工具；管理員日後在後台關閉並儲存即不再補回。
+                    let prevKnown = new Set();
+                    try { const k = JSON.parse(localStorage.getItem('tianying_perms_known') || 'null'); if (Array.isArray(k)) prevKnown = new Set(k); } catch (e) { }
+                    const allIds = TOOLS.map(t => t.id);
+                    const newToolIds = prevKnown.size > 0 ? allIds.filter(id => !prevKnown.has(id)) : [];
+                    const fillNew = (arr, role) => {
+                        const base = Array.isArray(arr) ? [...arr] : [];
+                        newToolIds.forEach(id => { if (!base.includes(id) && (DEFAULT_PERMS[role] || []).includes(id)) base.push(id); });
+                        return base;
+                    };
+                    setPerms(prev => {
+                        const m = { ...prev };
+                        Object.keys(prev).forEach(role => { if (Array.isArray(cp[role])) m[role] = fillNew(cp[role], role); });
+                        return m;
+                    });
+                    const cpFilled = {};
+                    Object.keys(cp).forEach(role => { cpFilled[role] = fillNew(cp[role], role); });
+                    localStorage.setItem('tianying_perms', JSON.stringify(cpFilled));
+                    localStorage.setItem('tianying_perms_known', JSON.stringify(allIds));
+                    localStorage.setItem('tianying_perms_ver', PERMS_VER);
+                }
+            } catch (e) { }
+        }
+        if (Array.isArray(d.workAllowedIds)) {
+            setWorkAllowedIds(d.workAllowedIds);
+            try { localStorage.setItem('tianying_work_allowed_ids', JSON.stringify(d.workAllowedIds)); } catch (e) { }
+        }
+    };
     const loadLeaveSettings = async () => {
         try {
             const res = await fetch(ACCOUNT_GAS_URL + '?action=getSettings');
             const d = await res.json();
-            if (d.status === 'ok') {
-                if (typeof d.leaveCapMorning === 'number') setLeaveCapMorning(d.leaveCapMorning);
-                if (typeof d.leaveCapNight === 'number') setLeaveCapNight(d.leaveCapNight);
-                if (d.toolPerms) {
-                    try {
-                        const cp = typeof d.toolPerms === 'string' ? JSON.parse(d.toolPerms) : d.toolPerms;
-                        if (cp && typeof cp === 'object') {
-                            // ── 自動補「雲端資料產生後系統才新增的工具」之預設權限 ──
-                            //    依本機已知工具清單(known)比對，找出雲端舊值缺漏的新工具(如績效報表15)，
-                            //    僅補 DEFAULT_PERMS 有給該角色的新工具；管理員日後在後台關閉並儲存即不再補回。
-                            let prevKnown = new Set();
-                            try { const k = JSON.parse(localStorage.getItem('tianying_perms_known') || 'null'); if (Array.isArray(k)) prevKnown = new Set(k); } catch (e) { }
-                            const allIds = TOOLS.map(t => t.id);
-                            const newToolIds = prevKnown.size > 0 ? allIds.filter(id => !prevKnown.has(id)) : [];
-                            const fillNew = (arr, role) => {
-                                const base = Array.isArray(arr) ? [...arr] : [];
-                                newToolIds.forEach(id => { if (!base.includes(id) && (DEFAULT_PERMS[role] || []).includes(id)) base.push(id); });
-                                return base;
-                            };
-                            setPerms(prev => {
-                                const m = { ...prev };
-                                Object.keys(prev).forEach(role => { if (Array.isArray(cp[role])) m[role] = fillNew(cp[role], role); });
-                                return m;
-                            });
-                            const cpFilled = {};
-                            Object.keys(cp).forEach(role => { cpFilled[role] = fillNew(cp[role], role); });
-                            localStorage.setItem('tianying_perms', JSON.stringify(cpFilled));
-                            localStorage.setItem('tianying_perms_known', JSON.stringify(allIds));
-                            localStorage.setItem('tianying_perms_ver', PERMS_VER);
-                        }
-                    } catch (e) { }
-                }
-                if (Array.isArray(d.workAllowedIds)) {
-                    setWorkAllowedIds(d.workAllowedIds);
-                    try { localStorage.setItem('tianying_work_allowed_ids', JSON.stringify(d.workAllowedIds)); } catch (e) { }
-                }
-            }
+            applyCloudSettings(d);
         } catch (e) { /* 失敗用預設 早5晚3 */ }
+    };
+    /* 登入時雲端資料一次拉齊：合併 getApplications／getLeaveRequests／getSettings 三支呼叫成一支
+       bootstrap，省掉 2 趟 GAS 冷啟往返（GAS 每次呼叫執行延遲不等，3 支變 1 支登入體感快很多）。
+       待審清單/請假清單/早晚班設定各自的「重新整理」按鈕仍用回原本的獨立函式，這裡只省登入當下那一輪。 */
+    const loadLoginBootstrap = async () => {
+        try {
+            const res = await fetch(ACCOUNT_GAS_URL + '?action=bootstrap');
+            const d = await res.json();
+            if (d.status !== 'ok') return;
+            if (Array.isArray(d.applications)) setPending(d.applications);
+            if (Array.isArray(d.leaveRequests)) setLeaveRequests(d.leaveRequests);
+            applyCloudSettings(d.settings);
+        } catch (e) { /* 靜默失敗，沿用本機/預設值，不影響登入本身 */ }
     };
     /* ── 管理員儲存早晚班上限到雲端 ── */
     const saveLeaveSettings = async (m, n) => {
@@ -19545,10 +19560,6 @@ function App() {
         }
         catch (e) { if (!silent) showToast('❌ 網路錯誤，無法載入待審清單'); }
     };
-    // 管理員登入後自動從雲端載入待審申請
-    useEffect(() => {
-        if (currentUser && currentUser.role === 'admin') loadPendingFromCloud(true);
-    }, [currentUser]);
     // 開啟頁面時背景載入雲端「帳號管理」資料並合併：
     // 1. 雲端有、本地沒有 → 新增（新核准帳號同步，讓新員工能在自己裝置登入）
     // 2. 本地已有但「從未被本機App修改過」（即仍等於原始 USER_DB[id]）→ 用雲端版本覆蓋（管理員雲端改密碼/角色/部門即時生效）
@@ -20319,17 +20330,17 @@ function App() {
                      activeToolId === 'car' && '🅿️ 停車場車位數計算')),
             activeToolId === 'schedule' && (React.createElement("div", { style: { flex: 1, overflow: 'auto' } },
                 React.createElement(ScheduleApp, { currentUser: currentUser, externalScheduleData: externalScheduleData, onExternalApplied: () => setExternalScheduleData(null) }))),
-            activeToolId === 'closing' && (React.createElement("iframe", { srcDoc: TOOL_CLOSING_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u6253\u70CA\u5F8C\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
+            activeToolId === 'closing' && (React.createElement("iframe", { srcDoc: getToolHtml('tpl-closing'), style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u6253\u70CA\u5F8C\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
             activeToolId === 'opening' && (React.createElement("iframe", { src: OPENING_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u958B\u5E97\u524D\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
-            activeToolId === 'upload' && (React.createElement("iframe", { srcDoc: TOOL_UPLOAD_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u8CC7\u6599\u4E0A\u50B3\u5DE5\u5177" })),
-            activeToolId === 'emergency' && (React.createElement("iframe", { srcDoc: TOOL_EMERGENCY_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7DCA\u6025\u806F\u7D61\u6E05\u55AE" })),
-            activeToolId === 'signin' && (React.createElement("iframe", { srcDoc: TOOL_SIGNIN_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u904E\u591C\u8ECA\u8F1B\u767B\u8A18" })),
+            activeToolId === 'upload' && (React.createElement("iframe", { srcDoc: getToolHtml('tpl-upload'), style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u8CC7\u6599\u4E0A\u50B3\u5DE5\u5177" })),
+            activeToolId === 'emergency' && (React.createElement("iframe", { srcDoc: getToolHtml('tpl-emergency'), style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7DCA\u6025\u806F\u7D61\u6E05\u55AE" })),
+            activeToolId === 'signin' && (React.createElement("iframe", { srcDoc: getToolHtml('tpl-signin'), style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u904E\u591C\u8ECA\u8F1B\u767B\u8A18" })),
             activeToolId === 'post' && (React.createElement("iframe", { src: POST_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u4ECA/\u660E\u65E5\u54E8\u8868" })),
             activeToolId === 'aichat' && (React.createElement("iframe", { src: AI_CHAT_URL, allow: "microphone", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5929\u9DF9 AI \u5C0F\u52A9\u624B" })),
             activeToolId === 'logistics' && (React.createElement("iframe", { src: LOGISTICS_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7269\u6D41\u8ECA\u8F1B\u7D71\u8A08" })),
             activeToolId === 'handover' && (React.createElement("iframe", { src: HANDOVER_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5E36\u73ED\u4EA4\u63A5\u4E8B\u9805" })),
             activeToolId === 'aiwork' && (React.createElement("iframe", { src: "https://sky03104.github.io/tianying-security/tool_work.html", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u65BD\u5DE5\u55AE\u67E5\u8A62" })),
-            activeToolId === 'car' && (React.createElement("iframe", { srcDoc: TOOL_CAR_HTML, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u505C\u8ECA\u5834\u8ECA\u4F4D\u6578\u8A08\u7B97" })))),
+            activeToolId === 'car' && (React.createElement("iframe", { srcDoc: getToolHtml('tpl-car'), style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u505C\u8ECA\u5834\u8ECA\u4F4D\u6578\u8A08\u7B97" })))),
         showLeave && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10',
                 display: 'flex', flexDirection: 'column', fontFamily: "'Microsoft JhengHei',sans-serif" } },
             React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
