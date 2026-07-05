@@ -425,8 +425,8 @@ select.txt{-webkit-appearance:none;}
         <input class="txt" type="number" id="tedCount" min="1" inputmode="numeric">
       </div>
     </div>
-    <div class="form-row"><div class="lbl">廠商／專櫃</div><input class="txt" type="text" id="tedShop"></div>
     <div class="form-row"><div class="lbl">監工姓名</div><input class="txt" type="text" id="tedSup"></div>
+    <div class="form-row"><div class="lbl">廠商／專櫃</div><input class="txt" type="text" id="tedShop"></div>
     <div class="two-col">
       <div class="form-row"><div class="lbl">進場時間</div>
         <input class="tinp" type="time" id="tedEntry">
@@ -457,9 +457,9 @@ select.txt{-webkit-appearance:none;}
     <div class="modal-title">✏️ 編輯紀錄</div>
     <input type="hidden" id="eId">
     <div class="form-row"><div class="lbl">樓層</div><select class="txt" id="eFloor"><option>B1F</option><option>1F</option><option>2F</option><option>3F</option><option>4F</option><option>5F</option><option>6F</option><option>7F</option><option>8F</option><option>9F</option><option>10F</option></select></div>
+    <div class="form-row"><div class="lbl">監工</div><input class="txt" type="text" id="eSup"></div>
     <div class="form-row"><div class="lbl">廠商</div><input class="txt" type="text" id="eShop"></div>
     <div class="form-row"><div class="lbl">人數</div><input class="txt" type="number" id="eCnt" min="1" inputmode="numeric"></div>
-    <div class="form-row"><div class="lbl">監工</div><input class="txt" type="text" id="eSup"></div>
     <div class="two-col">
       <div class="form-row"><div class="lbl">進場</div><input class="tinp" type="time" id="eEntry"></div>
       <div class="form-row"><div class="lbl">退場</div><input class="tinp" type="time" id="eExit"></div>
@@ -655,9 +655,15 @@ function renderShopRows(){
   document.getElementById('shopRowsBox').innerHTML=shopRows.map((r,i)=>`
     <div class="shop-row" id="shopRowEl${r.id}">
       <div class="row-head">
-        <div class="row-lbl">專櫃／廠商 ${i+1}${r.floor?` <span class="fpill">${r.floor}</span>`:''}</div>
+        <div class="row-lbl">監工登記 ${i+1}${r.floor?` <span class="fpill">${r.floor}</span>`:''}</div>
         ${shopRows.length>1?`<button class="row-del" onclick="removeRow(${r.id})">✕</button>`:''}
       </div>
+      <div class="swrap" style="margin-bottom:5px">
+        <input class="sinp" id="sp${r.id}" type="text" value="${x(r.supervisor)}" placeholder="監工姓名..." autocomplete="off"
+          oninput="fspRow(${r.id},this.value)" onfocus="fspRow(${r.id},this.value)">
+        <span class="sico">🔍</span>
+      </div>
+      <div class="dd" id="spdd${r.id}"></div>
       <div class="swrap" style="margin-bottom:${r.shopName&&!r.floor?'0':'5px'}">
         <input class="sinp" id="ss${r.id}" type="text" value="${x(r.shopName)}"
           placeholder="搜尋或輸入專櫃／廠商名稱..." autocomplete="off"
@@ -671,17 +677,10 @@ function renderShopRows(){
           ${FLOORS.map(f=>`<button class="fs-btn" onclick="setRowFloor(${r.id},'${f}')">${f}</button>`).join('')}
         </div>`:''}
       ${r.shopName&&r.floor?`<div class="seldis show" id="selDis${r.id}" style="margin-bottom:4px">✓ ${x(r.shopName)} (${r.floor})${r.isNew?' 🆕新廠商':''}</div>`:`<div class="seldis" id="selDis${r.id}" style="margin-bottom:4px"></div>`}
-      <div class="cs-row">
-        <div class="mini-cnt">
-          <button class="cbtnsm" ontouchstart="startRC(${r.id},-1,event)" ontouchend="stopRC()" onmousedown="startRC(${r.id},-1,event)" onmouseup="stopRC()" onmouseleave="stopRC()">−</button>
-          <input class="cntsm" type="number" id="cc${r.id}" value="${r.count}" min="1" inputmode="numeric" onchange="upRow(${r.id},'count',parseInt(this.value)||1)">
-          <button class="cbtnsm" ontouchstart="startRC(${r.id},1,event)" ontouchend="stopRC()" onmousedown="startRC(${r.id},1,event)" onmouseup="stopRC()" onmouseleave="stopRC()">＋</button>
-        </div>
-        <div class="sup-mini">
-          <input class="sinp" id="sp${r.id}" type="text" value="${x(r.supervisor)}" placeholder="監工姓名..." autocomplete="off"
-            oninput="fspRow(${r.id},this.value)" onfocus="fspRow(${r.id},this.value)">
-          <div class="dd" id="spdd${r.id}"></div>
-        </div>
+      <div class="mini-cnt" style="margin-top:7px">
+        <button class="cbtnsm" ontouchstart="startRC(${r.id},-1,event)" ontouchend="stopRC()" onmousedown="startRC(${r.id},-1,event)" onmouseup="stopRC()" onmouseleave="stopRC()">−</button>
+        <input class="cntsm" type="number" id="cc${r.id}" value="${r.count}" min="1" inputmode="numeric" onchange="upRow(${r.id},'count',parseInt(this.value)||1)">
+        <button class="cbtnsm" ontouchstart="startRC(${r.id},1,event)" ontouchend="stopRC()" onmousedown="startRC(${r.id},1,event)" onmouseup="stopRC()" onmouseleave="stopRC()">＋</button>
       </div>
     </div>`).join('');
 }
@@ -768,7 +767,7 @@ function updateRowLabel(id){
   const lbl=document.querySelector('#shopRowEl'+id+' .row-lbl');
   if(!lbl)return;
   const idx=shopRows.findIndex(rr=>rr.id===id);
-  lbl.innerHTML='專櫃／廠商 '+(idx+1)+(r.floor?` <span class="fpill">${r.floor}</span>`:'');
+  lbl.innerHTML='監工登記 '+(idx+1)+(r.floor?` <span class="fpill">${r.floor}</span>`:'');
   // Update selected display
   const sel=document.getElementById('selDis'+id);
   if(sel){
