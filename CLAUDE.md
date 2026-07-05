@@ -1203,6 +1203,20 @@ python3 snapshot-generator-simple.py
 
 **技術筆記（可複用）**：GAS 判斷儲存格是否為 Date 型別時 `instanceof Date` 在部署環境會誤判 `false`（跨 realm 問題），改用 `Object.prototype.toString.call(v) === '[object Date]'`；此坑於 2026-07-02 物流統計除錯中發現，已寫入下方技術經驗筆記區。
 
+### 🟢 2026-07-04 ~ 07-05 已上線 main（效能體檢 + 帳號安全修復）
+
+#### 效能體檢報告（`效能體檢報告_2026-07-04.md`）P0～P2 全部完成並部署
+- **P0（PR #71）LOGO 圖片瘦身 + SheetJS defer**：同一張老鷹 LOGO 以 1120x980／617x554 兩種解析度全站重複內嵌 15+ 次（index.html 兩份 EAGLE_SRC、3 個 base64 內嵌模板、6 支獨立工具檔各 1~2 份），畫面實際只顯示 60~90px。用 Pillow resize 至 300x262 + 32 色量化壓到 4.2KB，同一份小圖回填所有位置。index.html：3345KB→1306KB（省60%，gzip 1825KB→325KB）；6 支獨立工具檔省 88~96%。SheetJS（900KB，僅班表匯入用）加 `defer` 不再阻塞首屏。
+- **P1（PR #72）啟動誤跳錯誤 Toast + 錯誤提示補紅色**：`loadLeaveFromCloud(true)` 靜默模式兩個錯誤分支沒判斷 `silent`，網路稍慢就對所有人跳錯誤；`showToast(msg,'err')` 第二參數一直被丟棄，錯誤提示從沒紅過。修法比照 `ScheduleApp` scope 內已正確實作的 `T(msg,type)` 模式，`toast` 狀態改存 `{msg,type}` + CSS 補 `.toast-err`。
+- **P2（PR #74）公告輪詢背景暫停／內嵌模板惰性解碼／施工單快取秒開／登入GAS呼叫合併**：公告輪詢加 `visibilityState` 判斷背景不打；5 個 base64 內嵌工具模板改成第一次點開才 decode（原本開機當下全解碼 1.5MB）；`tool_work.html` 加 stale-while-revalidate 本機快取，開工具先秒開上次資料、背景悄悄重新整理；登入時 `getApplications`/`getLeaveRequests`/`getSettings` 三支呼叫合併成一支 `action=bootstrap`（GAS 端直接複用既有三支函式輸出重組，前端抽出 `applyCloudSettings()` 共用）。**帶部署順序安全網**：`loadLoginBootstrap` 拿不到 `status:'ok'` 時（GAS 還沒重新部署，`doGet` 對未知 action 回錯誤）自動退回原本三支個別呼叫，前端可先上線不必等 GAS 同步部署，不會有「舊功能整個消失」的空窗期。GAS 已由咖哩手動部署完成。
+
+#### 帳號安全／權限修復（同一輪效能體檢中順帶抓到的真 bug）
+- **PR #67**：施工單個別授權每次重開就消失——GAS `setSettings`/`getSettings` 根本沒存沒回 `workAllowedIds`，前端送出的資料直接蒸發；帳號密碼換裝置就變回預設 123——重設/改密碼三處都只寫本機 `localStorage` 從未同步雲端。兩者皆補上雲端讀寫。另外 LINE 明日哨表個人版逐人推播沒清乾淨，新增「一鍵重建哨表觸發器()」清舊觸發器重建正確的群組版。**關鍵觀念**：GAS 時間觸發器執行的是「編輯器目前儲存的程式碼」而非部署版本，光改 repo 沒用。
+- **PR #68**：管理員停用帳號後，該帳號手機仍可正常登入——三層破口：①登入只驗工號+密碼從未查 `status`；②自動登入(記住我/session)也不查；③雲端同步走 `getApprovedUsers`，GAS 端直接把 inactive 帳號過濾掉，手機端永遠拿不到「已停用」狀態。改用既有 `getUserDB` 端點（含停用帳號）同步，狀態比照班別「永遠以雲端為準」，並加停用即時登出。
+- **PR #69**：帳號編輯（停用/改角色/重設密碼）原本 `leader`/`vicecaptain` 也能操作，依咖哩指示收緊為僅 `captain`/`executive`/`admin`，組長/副隊長只能瀏覽名單。
+
+**這輪的方法論教訓**：效能體檢不只是量指標，實測（沙盒 Chromium + Playwright 跑真實登入流程）順手就抓到 3 個影響資安/資料正確性的真 bug（停用帳號能登入、密碼不同步、白名單存不進去）——**跑效能測試時把眼睛張大，不要只看數字**。
+
 #### [TODO-17] 明日哨表 → 今/明日哨表雙分頁切換
 - **需求**：原本只有「明日哨表」單一畫面，改成今日／明日雙分頁切換；每天 08:00 自動把當時的明日哨表內容搬到今日哨表；明日哨表若還沒更新要顯示「尚未更新」而非舊資料；同步處理試算表與 LINE 機器人
 - **狀態**：✅ 完成（2026-07-03）
@@ -1289,6 +1303,17 @@ python3 snapshot-generator-simple.py
 ## 🧠 技術經驗筆記 / Lessons Learned
 
 > 此區累積實作中踩過的坑與解法，供未來 AI 與工程師快速避雷。每次大更新後補充。
+
+### 📅 2026-07-05：brain_map 跑步序列幀動畫機制（路飛/咖哩要補完整跑步循環時查這篇）
+
+> 派 Explore agent 查證 `brain_map.html` 既有的「跑步序列幀動畫」怎麼做的，順便確認路飛（代表咖哩本人）目前的動畫缺口。
+
+- **三個零件**：`CHAR_IMG_MAP`（第719行，站崗靜態圖，`'路飛':'luffy.png'`）／`RUN_IMG_MAP`（第739行，跑步序列幀，只有「動作跑者」在跑路線時才查）／`getRunFrame(role)`（第750行，`Math.floor(performance.now()/RUN_FRAME_MS) % frames.length` 算目前第幾幀，圖沒載完會回 null 退回靜態圖）。兩張表**互不干涉**，各自有自己的 preload 迴圈。
+- **確認现狀**：`RUN_IMG_MAP` 裡羅賓有 6 張（`run_robin_f1~f6.png`），**路飛目前只有 1 張**（`run_luffy_f1.png`）——陣列長度1，`%1` 恆為0，所以路飛用「動作跑者」送資料時只會定格在一個跑步姿勢，不會有真正的循環動畫。
+- **`animated` 開關**：`drawCharacter(ctx,x,y,role,count,alpha,extraScale,animated)` 第855行 `(animated && getRunFrame(role)) || CHAR_IMAGES[role]`——`animated=true` 才查跑步幀。待機站崗的 `drawAllCharacters()` 呼叫時沒傳這參數（恆靜態圖）；只有 `drawActionRunners()`（第1236行）會傳 `true`。主控台節點的角色固定是路飛（`NODE_CHAR[0]='路飛'`），所以**只要有人在主控台送資料，就是路飛在跑，此時最容易看到動畫斷幀感**。
+- **素材規格**：命名 `run_{英文角色名}_f{序號}.png`，放 `brain_map_img/`。羅賓 6 張實測都是 260×450（完全一致）；路飛現有那張是 85×300（比例不同）。繪圖不強制寫死尺寸（逐張讀 `naturalWidth/Height` 算比例縮放進同一顯示框），任意尺寸技術上都能跑，**但強烈建議新增的幀跟現有那張同尺寸同比例**——不然循環播放時角色會忽大忽小閃爍（羅賓能跑得順就是因為 6 張完全等尺寸）。
+- **補完路飛跑步循環只需改一行**：把裁好的 `run_luffy_f2.png`～`f6.png`（幾張都行，同尺寸）丟進 `brain_map_img/`，然後 `RUN_IMG_MAP` 裡路飛那行陣列加上檔名即可；`getRunFrame`/`RUN_FRAME_MS`/`drawCharacter`/`drawActionRunners` 全是通用邏輯，陣列變長會自動跑循環，**不用動其他任何程式碼**。
+- **跟已知 clearRect 地雷（見下一篇）無關**：每幀畫布只在 `charCtx.clearRect(...)` 清一次，之後依序疊加畫 `drawNodeLocations→drawAllCharacters→drawLiveUsers→drawActionRunners`；新增跑步幀只是換 `drawActionRunners()` 內部畫哪張圖，不涉及清畫布時機，不會踩到下面那個舊坑。
 
 ### 📅 2026-07-03：brain_map 地點圖被每幀清畫布蓋掉 + 新增地點圖的標準流程
 
@@ -1515,9 +1540,10 @@ python3 snapshot-generator-simple.py
 | 2.3 | 2026-07-03 | TODO-18 完成：帶班幹部交接事項工具（`tool_handover.html` + `帶班交接_GAS.gs` + 部署說明，新增/編輯/刪除/狀態切換三態，青綠主題，組長以上雙層權限），GAS 已部署並回填 `BUILT_IN_GAS_URL`；brain_map 新增節點 43~45（工具/GAS/試算表）+ 對應關聯 |
 | 2.4 | 2026-07-03 | TODO-19 完成：事故報告/匿名表揚新資料自動轉發 LINE 推播給主管(executive)/管理員(admin)（`事故與表揚_後端_GAS_v3.1.gs` 新增 `notifyReportToLine_`/`notifyFeedbackToLine_` 轉發、`天鷹保全APP_後端_GAS.gs` 新增 `notifyNewReportAction_`/`notifyNewFeedbackAction_` + `getExecutivesAndAdmins_`/`buildNotifyCardFlex_` 實際推播）；brain_map 新增關聯 `[13,14]`（事故/表揚 GAS 跨 GAS 轉發） |
 | 2.5 | 2026-07-03 | 補登 2026-07-02~07-03 已上線 main 但未記錄的完成項目：施工單監工姓名遮蔽、車牌辨識每日摘要 email、公告欄未讀/置頂/排序連環修正、LINE 明日哨表推播顏色修正、簽到/公告/車輛三筆資料完整性修正 |
+| 2.6 | 2026-07-05 | 效能體檢報告 P0~P2 全部完成並部署（PR #71/#72/#74）：LOGO 全站瘦身+SheetJS defer、啟動誤跳錯誤toast+紅色樣式修正、公告輪詢背景暫停+內嵌模板惰性解碼+施工單快取秒開+登入GAS呼叫合併bootstrap（帶部署順序安全網）；同輪順帶抓到並修復 3 個帳號安全真bug（PR #67/#68/#69）：施工單白名單/密碼雲端同步失效、停用帳號仍可登入、帳號編輯權限收緊至隊長以上 |
 
 ---
 
-**Last Updated**: 2026-07-03  
+**Last Updated**: 2026-07-05  
 **For Questions**: Refer to project documentation or contact the project owner  
-**Branch**: `claude/claude-md-docs-4bz58p`
+**Branch**: `claude/app-performance-review-65peg2`
