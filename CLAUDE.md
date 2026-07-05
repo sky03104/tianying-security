@@ -1541,9 +1541,10 @@ python3 snapshot-generator-simple.py
 | 2.4 | 2026-07-03 | TODO-19 完成：事故報告/匿名表揚新資料自動轉發 LINE 推播給主管(executive)/管理員(admin)（`事故與表揚_後端_GAS_v3.1.gs` 新增 `notifyReportToLine_`/`notifyFeedbackToLine_` 轉發、`天鷹保全APP_後端_GAS.gs` 新增 `notifyNewReportAction_`/`notifyNewFeedbackAction_` + `getExecutivesAndAdmins_`/`buildNotifyCardFlex_` 實際推播）；brain_map 新增關聯 `[13,14]`（事故/表揚 GAS 跨 GAS 轉發） |
 | 2.5 | 2026-07-03 | 補登 2026-07-02~07-03 已上線 main 但未記錄的完成項目：施工單監工姓名遮蔽、車牌辨識每日摘要 email、公告欄未讀/置頂/排序連環修正、LINE 明日哨表推播顏色修正、簽到/公告/車輛三筆資料完整性修正 |
 | 2.6 | 2026-07-05 | 效能體檢報告 P0~P2 全部完成並部署（PR #71/#72/#74）：LOGO 全站瘦身+SheetJS defer、啟動誤跳錯誤toast+紅色樣式修正、公告輪詢背景暫停+內嵌模板惰性解碼+施工單快取秒開+登入GAS呼叫合併bootstrap（帶部署順序安全網）；同輪順帶抓到並修復 3 個帳號安全真bug（PR #67/#68/#69）：施工單白名單/密碼雲端同步失效、停用帳號仍可登入、帳號編輯權限收緊至隊長以上 |
+| 2.7 | 2026-07-05 | 操作手冊更新至 v1.1（`操作手冊/` 三份 PDF 重產）：員工版補「今/明日哨表」「物流車輛統計」；主管版新增「帶班交接事項」「新案件 LINE 即時通知」「天鷹 AI 小助手（管理員限定）」三章；LINE 機器人手冊補「查詢班表與哨點」章節（本月/本週/今日/明日班表、今日哨點、哨點指令，先前未文件化）；新增 4 張實機截圖（logistics_form/handover_list/post_today/ai_chat，皆假資料） |
 
 ---
 
 **Last Updated**: 2026-07-05  
 **For Questions**: Refer to project documentation or contact the project owner  
-**Branch**: `claude/app-performance-review-65peg2`
+**Branch**: `claude/app-manual-pdf-d8ep58`

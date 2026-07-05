@@ -8,7 +8,7 @@
   <div class="en">TIANYING SECURITY · LINE BOT</div>
   <div class="doctitle">LINE 機器人操作使用手冊</div>
   <div class="badge">全員適用</div>
-  <div class="meta">功能：用 LINE 線上請假 · 接收審核通知<br>版本 v1.0　·　2026 年 6 月</div>
+  <div class="meta">功能：用 LINE 線上請假 · 查班表／哨點 · 接收審核通知<br>版本 v1.1　·　2026 年 7 月</div>
 </div>
 
 <div class="section">
@@ -17,6 +17,7 @@
   <li>這是什麼</li>
   <li>第一次使用：綁定工號</li>
   <li>用 LINE 請假</li>
+  <li>查詢班表與哨點</li>
   <li>接收審核通知</li>
   <li>常見問題 FAQ</li>
 </ol>
@@ -28,6 +29,7 @@
 <p>天鷹保全 LINE 機器人讓你<b>不用打開 APP</b>，直接在 LINE 裡：</p>
 <ul>
   <li>📝 <b>線上請假</b>：選日期、填原因，一鍵送出。</li>
+  <li>📅 <b>查班表／哨點</b>：打字問就直接回覆，不用開 APP 查。</li>
   <li>🔔 <b>接收通知</b>：請假審核結果（核准／駁回）直接用 LINE 通知你。</li>
 </ul>
 <div class="tip">使用前需先「綁定工號」一次（見第 2 章），讓機器人知道你是誰。綁定後長期有效。</div>
@@ -57,7 +59,23 @@
 </div>
 
 <div class="section">
-<h2><span class="num">4</span>接收審核通知</h2>
+<h2><span class="num">4</span>查詢班表與哨點</h2>
+<p>不用打開 APP，直接在 LINE 對話框<b>輸入文字</b>，機器人立即回覆（需先完成第 2 章綁定）：</p>
+<table>
+<tr><th>輸入文字</th><th>機器人回覆</th></tr>
+<tr><td>本月班表 / 這個月</td><td>彈出選單，選班別後查看整月班表</td></tr>
+<tr><td>本週班表 / 本周 / 這週</td><td>彈出選單，選班別後查看本週班表</td></tr>
+<tr><td>今日班表 / 今天</td><td>直接回覆你今天的班別與時間</td></tr>
+<tr><td>明日班表 / 明天</td><td>直接回覆你明天的班別與時間</td></tr>
+<tr><td>今日哨點</td><td>回覆你<b>今天</b>執勤的哨點位置</td></tr>
+<tr><td>哨點 / 上哪</td><td>回覆你<b>明天</b>執勤的哨點位置</td></tr>
+</table>
+<div class="tip">💬 這些查詢都是「你問、機器人立刻回」，屬於回覆訊息，不會佔用公司每月的群組推播額度，可以放心常用。</div>
+<div class="warn">⚠️ 查今日／明日班表前需先綁定工號，否則機器人會提示「尚未綁定工號」。</div>
+</div>
+
+<div class="section">
+<h2><span class="num">5</span>接收審核通知</h2>
 <ul>
   <li>主管在 APP 後台審核你的請假後，<b>結果會透過 LINE 通知你</b>（核准或駁回）。</li>
   <li>不需一直開 APP 查詢，留意 LINE 訊息即可。</li>
@@ -65,7 +83,7 @@
 </div>
 
 <div class="section">
-<h2><span class="num">5</span>常見問題 FAQ</h2>
+<h2><span class="num">6</span>常見問題 FAQ</h2>
 <table>
 <tr><th>問題</th><th>解決方式</th></tr>
 <tr><td>顯示「尚未綁定工號」</td><td>此 LINE 帳號未綁定。開 APP →「設定」→「綁定 LINE 通知」產生 6 位數驗證碼，於 LINE 輸入完成綁定。</td></tr>
@@ -73,8 +91,10 @@
 <tr><td>換手機 / 換 LINE 帳號</td><td>新帳號需重新綁定一次（重做第 2 章）。</td></tr>
 <tr><td>請假送不出去</td><td>確認網路正常；仍失敗請改用 APP 內「請假申請」，或回報主管。</td></tr>
 <tr><td>想取消已送出的請假</td><td>請直接聯繫主管處理。</td></tr>
+<tr><td>查班表說「查無班表資料」</td><td>該工號尚未建立班表，請聯絡管理員確認班表是否已上傳。</td></tr>
+<tr><td>不小心解除綁定了</td><td>輸入「解除綁定」可主動解除；要重新使用，回 APP 重新產生驗證碼綁定即可。</td></tr>
 </table>
-<div class="foot">天鷹保全 · TIANYING SECURITY · LINE BOT　|　LINE 機器人操作手冊 v1.0　|　內部使用</div>
+<div class="foot">天鷹保全 · TIANYING SECURITY · LINE BOT　|　LINE 機器人操作手冊 v1.1　|　內部使用</div>
 </div>
 
 </body></html>

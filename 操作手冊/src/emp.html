@@ -8,7 +8,7 @@
   <div class="en">TIANYING SECURITY · DATA SYSTEM</div>
   <div class="doctitle">APP 操作使用手冊</div>
   <div class="badge">員工版</div>
-  <div class="meta">適用對象：第一線保全人員<br>版本 v1.0　·　2026 年 6 月<br>請搭配 APP 實機操作閱讀</div>
+  <div class="meta">適用對象：第一線保全人員<br>版本 v1.1　·　2026 年 7 月<br>請搭配 APP 實機操作閱讀</div>
 </div>
 
 <div class="section">
@@ -57,14 +57,16 @@
 <table>
 <tr><th>分類</th><th>工具</th><th>用途</th></tr>
 <tr><td>核心工具</td><td>打烊後 / 開店前進出快速登錄</td><td>登記廠商、監工、檢查者進出場時間</td></tr>
-<tr><td>核心工具</td><td>明日哨表</td><td>查看明日哨點排班</td></tr>
+<tr><td>核心工具</td><td>今/明日哨表</td><td>查看今日／明日哨點排班（可切換）</td></tr>
 <tr><td>核心工具</td><td>資料上傳工具</td><td>上傳班表等 Excel 資料</td></tr>
 <tr><td>核心工具</td><td>停車場車位數計算</td><td>計算可用車位</td></tr>
+<tr><td>核心工具</td><td>物流車輛統計</td><td>登記物流貨車進出數量（三分類）</td></tr>
 <tr><td>人事管理</td><td>班表查詢 / 請假申請</td><td>查自己的班、線上請假</td></tr>
 <tr><td>現場管理</td><td>事故報告填寫</td><td>回報現場事故（含照片）</td></tr>
 <tr><td>門禁管理</td><td>過夜車輛登記</td><td>登記夜間停放車輛</td></tr>
 <tr><td>緊急應變</td><td>緊急聯絡清單 / 匿名表揚‧反應</td><td>查緊急電話、匿名回報</td></tr>
 </table>
+<div class="tip">🐦 部分工具（如天鷹 AI 小助手）目前僅開放給管理員帳號測試，尚未全面開放，之後會依角色逐步開放。</div>
 </div>
 
 <div class="section">
@@ -116,10 +118,31 @@
 <p>查詢各單位緊急聯絡電話。手機號碼開頭的 0 會正確顯示。</p>
 </div>
 
-<div class="toolcard"><div class="t">☁️ 資料上傳工具　·　📋 明日哨表　·　🅿️ 停車場車位　·　🚗 過夜車輛登記</div><div class="c">核心 / 門禁</div>
+<div class="toolcard"><div class="t">📋 今/明日哨表</div><div class="c">核心工具</div>
+<ol>
+  <li>頂部有 <span class="kbd">☀️ 今日</span> / <span class="kbd">🌙 明日</span> 兩個切換鈕，點一下即可切換查看。</li>
+  <li>畫面依<b>早班（08:00~20:00）</b>、<b>晚班（20:00~08:00）</b>分區，各哨點的<b>姓名／進場時間</b>一目瞭然。</li>
+  <li>右上角 <span class="kbd">⟳</span> 可手動重新整理。</li>
+</ol>
+<div class="tip">🕒 每天 08:00 系統會自動把「明日哨表」內容轉為「今日哨表」；若當天哨表還沒排定，會顯示「尚未更新」提示，不會誤看到舊資料。</div>
+<figure><img src="img/post_today.png" alt="今明日哨表"><figcaption>▲ 今/明日哨表（今日／明日切換＋早晚班分區）</figcaption></figure>
+</div>
+
+<div class="toolcard"><div class="t">🚚 物流車輛統計</div><div class="c">核心工具</div>
+<ol>
+  <li>於「登記」頁選擇車輛<b>分類</b>：1.9噸／3.5噸／8噸以上。</li>
+  <li>用 <span class="kbd">－</span> / <span class="kbd">＋</span> 輸入<b>幾輛</b>，登記時間自動採「送出當下」。</li>
+  <li>有常用組合時，直接點下方<b>快捷登記</b>按鈕一鍵送出，不用重選分類與數量。</li>
+  <li>「今日累計」小卡即時顯示當天三分類各自的總數。</li>
+  <li>切到「查紀錄」頁可選日期查當天明細，或「查看整月」看每日 × 分類統計。</li>
+</ol>
+<div class="tip">「設定」頁（管理員限定）可維護快捷登記組合，全員登記頁會同步看到最新快捷按鈕。</div>
+<figure><img src="img/logistics_form.png" alt="物流車輛統計"><figcaption>▲ 物流車輛統計登記頁（分類＋數量＋快捷登記＋今日累計）</figcaption></figure>
+</div>
+
+<div class="toolcard"><div class="t">☁️ 資料上傳工具　·　🅿️ 停車場車位　·　🚗 過夜車輛登記</div><div class="c">核心 / 門禁</div>
 <ul>
   <li><b>資料上傳</b>：依畫面選擇檔案（如班表 Excel）上傳。</li>
-  <li><b>明日哨表</b>：直接查看明日各哨點排班。</li>
   <li><b>停車場車位</b>：輸入數據計算可用車位。</li>
   <li><b>過夜車輛登記</b>：登記夜間停放車輛車牌與資訊。</li>
 </ul>

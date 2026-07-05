@@ -8,7 +8,7 @@
   <div class="en">TIANYING SECURITY · DATA SYSTEM</div>
   <div class="doctitle">APP 操作使用手冊</div>
   <div class="badge">主管版</div>
-  <div class="meta">適用對象：公司主管 / 管理員（含各級管理職）<br>版本 v1.0　·　2026 年 6 月<br>本手冊涵蓋主管專屬功能；一般操作請參閱員工版</div>
+  <div class="meta">適用對象：公司主管 / 管理員（含各級管理職）<br>版本 v1.1　·　2026 年 7 月<br>本手冊涵蓋主管專屬功能；一般操作請參閱員工版</div>
 </div>
 
 <div class="section">
@@ -19,6 +19,9 @@
   <li>事故報告審閱</li>
   <li>匿名表揚／反應審閱</li>
   <li>請假審核</li>
+  <li>帶班交接事項</li>
+  <li>新案件 LINE 即時通知</li>
+  <li>天鷹 AI 小助手（管理員限定）</li>
   <li>狀態定義總表</li>
   <li>常見問題 FAQ</li>
 </ol>
@@ -30,9 +33,9 @@
 <h2><span class="num">1</span>主管角色與權限</h2>
 <table>
 <tr><th>角色</th><th>能看到的審核功能</th></tr>
-<tr><td>管理職（組長/副隊長/隊長）</td><td>首頁待審請假卡片、請假審核</td></tr>
-<tr><td><b>公司主管 executive</b></td><td>以上 ＋ 待審報告、待處理表揚反應、兩個審閱畫面</td></tr>
-<tr><td><b>管理員 admin</b></td><td>以上全部 ＋ 待審帳號審核</td></tr>
+<tr><td>管理職（組長/副隊長/隊長）</td><td>首頁待審請假卡片、請假審核、<b>帶班交接事項</b></td></tr>
+<tr><td><b>公司主管 executive</b></td><td>以上 ＋ 待審報告、待處理表揚反應、兩個審閱畫面、新案件 LINE 通知</td></tr>
+<tr><td><b>管理員 admin</b></td><td>以上全部 ＋ 待審帳號審核、天鷹 AI 小助手（目前僅限管理員測試）</td></tr>
 </table>
 <div class="tip">「待審報告」「待處理表揚／反應」兩格卡片與兩個審閱畫面，<b>僅公司主管與管理員</b>看得到。</div>
 </div>
@@ -120,25 +123,66 @@
 </div>
 
 <div class="section">
-<h2><span class="num">6</span>狀態定義總表</h2>
+<h2><span class="num">6</span>帶班交接事項</h2>
+<p>適用對象：組長／副隊長／隊長／主管／管理員（帶班以上）。用於換班時把現場注意事項交接給下一班，避免口頭交接遺漏。</p>
+<h3>新增交接事項</h3>
+<div class="step"><b>步驟 1</b>　在頂部輸入框填寫要交接的事項內容（如：故障設備、待追蹤事件）。</div>
+<div class="step"><b>步驟 2</b>　按「送出」，新事項預設狀態為 <span class="pill p-red">未完成</span>，並排在清單最上方。</div>
+<h3>清單與狀態切換</h3>
+<ul>
+  <li>頂部分頁：<span class="pill p-gold">全部</span> <span class="pill p-red">未完成</span> <span class="pill p-org">進行中</span> <span class="pill p-grn">已完成</span>。</li>
+  <li>每筆事項顯示<b>建立人／時間</b>與<b>最後修改人／時間</b>，方便追查是誰交接、誰處理。</li>
+  <li>點事項卡片上的狀態徽章或編輯鈕，可切換<b>未完成 → 進行中 → 已完成</b>三種狀態，或修改內容、刪除該筆。</li>
+</ul>
+<div class="tip">下一班接手時，先看「未完成」「進行中」分頁，把前一班留下的事項處理掉，處理完記得切回「已完成」，讓交接紀錄保持乾淨。</div>
+<figure><img src="img/handover_list.png" alt="帶班交接事項"><figcaption>▲ 帶班交接事項（狀態分頁＋建立人／最後修改人紀錄）</figcaption></figure>
+</div>
+
+<div class="section">
+<h2><span class="num">7</span>新案件 LINE 即時通知</h2>
+<p>員工送出<b>事故報告</b>或<b>匿名表揚／反應</b>後，系統會<b>立即用 LINE 推播</b>通知全公司的<b>公司主管（executive）與管理員（admin）</b>，不用等主管自己點進首頁待審卡片才發現。</p>
+<ul>
+  <li>推播卡片會顯示案件摘要，點卡片上的按鈕可直接開啟對應的審閱畫面（事故報告審閱／表揚反應審閱）。</li>
+  <li>此通知不分部門，公司所有主管／管理員帳號都會收到。</li>
+  <li>此為<b>額外提醒</b>，即使沒收到 LINE 通知，首頁「待審報告」「待處理表揚／反應」卡片數字仍會照常累計，不影響審核流程。</li>
+</ul>
+<div class="tip">若一直沒收到通知，先確認 LINE 帳號已完成綁定（見《LINE 機器人操作手冊》第 2 章），仍異常請回報管理員。</div>
+</div>
+
+<div class="section">
+<h2><span class="num">8</span>天鷹 AI 小助手（管理員限定）</h2>
+<p>APP 內建的對話式 AI 助手「小天鷹」，可用文字或語音提問，查詢班表、哨表、施工單等資料時會自動幫你彈出對應的真實畫面（而非由 AI 憑空回答數字），確保資料正確。</p>
+<ul>
+  <li>目前僅開放<b>管理員（admin）</b>帳號使用，供內部測試；尚未開放給一般主管與員工。</li>
+  <li>支援語音輸入與語音回覆（可調語速、聲音），並會依使用習慣調整回答方式。</li>
+  <li>管理員可在工具內的 ⚙️ 控制台設定「禁止話題」與「強制表達層級」。</li>
+</ul>
+<figure><img src="img/ai_chat.png" alt="天鷹AI小助手"><figcaption>▲ 天鷹 AI 小助手待機畫面（管理員限定）</figcaption></figure>
+</div>
+
+<div class="section">
+<h2><span class="num">9</span>狀態定義總表</h2>
 <table>
 <tr><th>畫面</th><th>狀態流程</th><th>待審卡片計算</th></tr>
 <tr><td>事故報告</td><td>未讀 →（打開）待處理 → 已知悉再觀察／持續追蹤 → 已處理</td><td>狀態 ≠ 已處理</td></tr>
 <tr><td>表揚／反應</td><td>未讀 →（打開）已讀 →（裁決）已處理</td><td>狀態 ≠ 已處理</td></tr>
 <tr><td>請假</td><td>待審 → 核准／駁回</td><td>待審件數</td></tr>
+<tr><td>帶班交接事項</td><td>未完成 → 進行中 → 已完成</td><td>（無待審卡片，清單內自行篩選）</td></tr>
 </table>
 </div>
 
 <div class="section">
-<h2><span class="num">7</span>常見問題 FAQ</h2>
+<h2><span class="num">10</span>常見問題 FAQ</h2>
 <table>
 <tr><th>問題</th><th>解決方式</th></tr>
 <tr><td>按狀態鈕說「更新失敗」但資料有變</td><td>已修正。請確認 APP 已更新到最新版。</td></tr>
 <tr><td>看不到審閱卡片</td><td>需公司主管／管理員角色，請確認帳號職務。</td></tr>
 <tr><td>照片連結點開要權限</td><td>照片存於公司雲端資料夾，主管帳號需有該資料夾存取權。</td></tr>
 <tr><td>翻頁順序怪怪的</td><td>正常：上一篇／下一篇依「進入詳情時的分頁順序」固定，不會因自動轉狀態而跳動。</td></tr>
+<tr><td>看不到「帶班交接事項」</td><td>需組長以上（帶班）角色；一般保全員不開放。</td></tr>
+<tr><td>看不到「天鷹 AI 小助手」</td><td>目前僅開放管理員帳號測試，尚未全面開放。</td></tr>
 </table>
-<div class="foot">天鷹保全 · TIANYING SECURITY · DATA SYSTEM　|　主管版操作手冊 v1.0　|　內部使用</div>
+<div class="foot">天鷹保全 · TIANYING SECURITY · DATA SYSTEM　|　主管版操作手冊 v1.1　|　內部使用</div>
 </div>
 
 </body></html>
