@@ -754,6 +754,10 @@ function getRunFrame(role) {
   const f = frames[idx];
   return (f && f.complete && f.naturalWidth > 0) ? f : null;
 }
+// 真正有完整跑步循環（幀數>1）的角色清單。動作跑者若原本該用的角色不在這裡
+// （例如尚未補跑步幀），一律代打路飛先跑，待該角色補齊幀數後這裡自動納入、
+// 不用再回頭改 fetchActiveUsers 那段代打邏輯（2026-07-05 咖哩指示）
+const ANIMATED_ROLES = new Set(Object.entries(RUN_IMG_MAP).filter(([, files]) => files.length > 1).map(([role]) => role));
 
 // 節點地點圖（工具節點專屬場景，取代發光球體；未列在這裡的節點照舊顯示球體）
 const NODE_IMG_MAP = {
@@ -1148,7 +1152,9 @@ async function fetchActiveUsers() {
         } else if (SUBMIT_ACTIONS.has(ev.actionType)) {
           const nodeId = parseInt(ev.nodeId);
           queueMoveTo(u, nodeId); // 保險：若還沒收到對應的 open 事件，先確保使用者站在地點上
-          const role = ev.role || NODE_CHAR[nodeId] || '路飛';
+          const intendedRole = ev.role || NODE_CHAR[nodeId] || '路飛';
+          // 該角色還沒有完整跑步幀 → 代打路飛先跑；等該角色補齊幀數，ANIMATED_ROLES 會自動納入
+          const role = ANIMATED_ROLES.has(intendedRole) ? intendedRole : '路飛';
           const runner = spawnActionRunner(ev.tool, role, nodeId, () => queueMoveTo(u, 0));
           if (!runner) queueMoveTo(u, 0); // 沒有巡航路線可跑（未知工具）就直接回主控台
         } else {
