@@ -767,6 +767,8 @@ const NODE_IMG_MAP = {
   9:  'loc_crowsnest.png',     // 緊急聯絡清單（烏索普／瞭望台，示警崗位貼題）
   10: 'loc_workshop.png',      // 資料上傳工具（弗蘭奇／工房 Franky House）
 };
+// 特定地點圖的顯示倍率（預設1，同其他地點圖）：黃金梅利號是主控台門面，該比一般地點圖明顯大一號
+const NODE_IMG_SCALE = { 0: 1.4 };
 const NODE_IMAGES = {};
 Object.entries(NODE_IMG_MAP).forEach(([nodeId, file]) => {
   const img = new Image();
@@ -944,7 +946,8 @@ function drawNodeLocations() {
     if (scr.x < -80 || scr.x > window.innerWidth + 80) return;
     if (scr.y < -80 || scr.y > window.innerHeight + 80) return;
 
-    const boxW = 110, boxH = 110;
+    const scale = NODE_IMG_SCALE[nodeId] || 1;
+    const boxW = 110 * scale, boxH = 110 * scale;
     const ratio = img.naturalWidth / img.naturalHeight;
     let iw = boxW, ih = boxH;
     if (ratio >= 1) { ih = boxW / ratio; } else { iw = boxH * ratio; }
