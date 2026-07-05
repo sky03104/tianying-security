@@ -92,10 +92,13 @@
     }
     #claude-fab:active { transform: scale(0.92); }
 
-    /* ── 上方工具捷徑列（依角色權限過濾）───────────── */
+    /* ── 上方工具捷徑列（依角色權限過濾）───────────────
+       位置卡在「天鷹保全APP」標題區塊（寬約300px）與右上「線上N人」徽章
+       （固定 right:26px，寬約110px）中間；用 left/right 固定距離（非置中算式）
+       是刻意的，這樣不論螢幕寬度多少，兩側都會自動留出相同間距，不會撞到 ───── */
     #tool-launcher-bar {
-      position: fixed; top: 90px; left: 0; right: 0; z-index: 120;
-      display: flex; gap: 8px; padding: 6px 16px 8px;
+      position: fixed; top: 18px; left: 360px; right: 170px; z-index: 120;
+      display: flex; justify-content: center; gap: 8px; padding: 0;
       overflow-x: auto; -webkit-overflow-scrolling: touch;
     }
     #tool-launcher-bar::-webkit-scrollbar { height: 4px; }
