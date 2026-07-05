@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_eval",
+      "mcp__Claude_Preview__preview_screenshot"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["scripts/hooks/check-tool-html.js"],
+            "statusMessage": "檢查 React 版本與 JS 語法（天鷹 QA 規範）"
+          }
+        ]
+      }
+    ]
+  }
+}

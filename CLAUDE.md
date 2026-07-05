@@ -1342,6 +1342,15 @@ python3 snapshot-generator-simple.py
 - **除錯關鍵工具**：`curl -sS "$HTTPS_PROXY/__agentproxy/status"` 的 `recentRelayFailures` 欄位會直接列出最近被擋的請求（含目標網域），比對照 README 的失敗分類表比亂猜快很多。
 - **教訓**：雲端 session 裝的東西（npm/pip 全域套件）跟使用者本機是兩台完全獨立機器，不會同步；使用者若也要在本機用同一工具，需要在本機重新跑安裝指令。
 
+### 📅 2026-07-06：PostToolUse hook 把 QA 規範從「軟性提醒」變「硬性阻擋」
+
+> 起因：研究 `claude-prompt-engineering-guide` 時發現 CLAUDE.md/AGENTS.md 裡「React必18.3.1」「node --check要過」這類規則全靠 AI「記得做」，本質是軟性建議，有機會被漏掉。
+
+- **做法**：新增 `scripts/hooks/check-tool-html.js` + `.claude/settings.json` 的 `PostToolUse` hook，`matcher: "Edit|Write"`。命中檔名為 `index.html` 或 `tool_*.html` 時，自動做兩件事：① grep 版本字串擋 React 19.x（`react(?:-dom)?[@/]19`）② 抽出非 `src=`/非 `octet-stream` 的 `<script>` 內容丟進暫存檔跑 `node --check`。任一失敗直接 `process.exit(2)`，附中文錯誤訊息，逼修正後才能繼續。
+- **關鍵細節**：`<script src=...>`（外部引入）與 `type="application/octet-stream"`（base64 內嵌模板，如 `tpl-*`）要排除在語法檢查之外，否則會誤判或重複檢查已編碼內容。
+- **驗證方式**：造一個假的壞檔案（含 `react@19.0.0` + 故意漏括號的語法錯誤），直接把 hook 輸入的 stdin JSON 用 echo 管進腳本測試，確認 exit code 2 且訊息正確；正常檔案（`tool_report.html`）測過會放行 exit 0。**注意 Windows 下用 Git Bash 測試時 `/tmp/xxx` 路徑對 Windows 版 node.exe 是無效路徑**（bash 的 MSYS 虛擬路徑，Windows 程式看不懂），測試檔要放在專案內的 Windows 相對路徑，不要用 `/tmp`。
+- **限制**：這個 hook 只在「透過 Claude Code 的 Edit/Write 工具改檔」時觸發，咖哩自己手動用編輯器改檔不會被攔——手動改動時規則依然只是「文件上的提醒」，這塊沒辦法用專案層級的 hook 解決。
+
 ### 📅 2026-07-05：brain_map 跑步序列幀動畫機制（路飛/咖哩要補完整跑步循環時查這篇）
 
 > 派 Explore agent 查證 `brain_map.html` 既有的「跑步序列幀動畫」怎麼做的，順便確認路飛（代表咖哩本人）目前的動畫缺口。
@@ -1581,9 +1590,10 @@ python3 snapshot-generator-simple.py
 | 2.6 | 2026-07-05 | 效能體檢報告 P0~P2 全部完成並部署（PR #71/#72/#74）：LOGO 全站瘦身+SheetJS defer、啟動誤跳錯誤toast+紅色樣式修正、公告輪詢背景暫停+內嵌模板惰性解碼+施工單快取秒開+登入GAS呼叫合併bootstrap（帶部署順序安全網）；同輪順帶抓到並修復 3 個帳號安全真bug（PR #67/#68/#69）：施工單白名單/密碼雲端同步失效、停用帳號仍可登入、帳號編輯權限收緊至隊長以上 |
 | 2.7 | 2026-07-05 | 操作手冊更新至 v1.1（`操作手冊/` 三份 PDF 重產）：員工版補「今/明日哨表」「物流車輛統計」；主管版新增「帶班交接事項」「新案件 LINE 即時通知」「天鷹 AI 小助手（管理員限定）」三章；LINE 機器人手冊補「查詢班表與哨點」章節（本月/本週/今日/明日班表、今日哨點、哨點指令，先前未文件化）；新增 4 張實機截圖（logistics_form/handover_list/post_today/ai_chat，皆假資料） |
 | 2.8 | 2026-07-05 | brain_map.html：咖哩海域使用者圓點縮小一倍（光暈22→11、本體9→4.5、邊框2→1，PR #83）；補上艾斯角色圖檔 `brain_map_img/ace.png`（node 1「登入與角色系統」既有配置但缺圖，PR #86，等待補地點圖後轉圓形徽章顯示）；新增 2026-07-05 技術經驗筆記（firecrawl-cli 在 agent proxy 環境下的 405/403 排查） |
+| 2.9 | 2026-07-06 | 新增 `.claude/settings.json` PostToolUse hook（`scripts/hooks/check-tool-html.js`）：Edit/Write 命中 `index.html`/`tool_*.html` 時強制檢查 React 版本(禁19.x)＋`<script>`內容 node --check 語法，任一失敗 exit 2 擋下，把既有 QA 規範從「軟性提醒」變「硬性阻擋」；同步加 `fewer-permission-prompts` 白名單（preview_eval/preview_screenshot）；AGENTS.md 新增「姊妹專案 Xinyu-jarvis（小鈺）」段落，記錄咖哩另立的獨立桌面 AI 助手專案（PR #92 已合併）；新增 2026-07-06 技術經驗筆記 |
 
 ---
 
-**Last Updated**: 2026-07-05  
+**Last Updated**: 2026-07-06  
 **For Questions**: Refer to project documentation or contact the project owner  
-**Branch**: `claude/merge-notification-emails-8jn0n6`
+**Branch**: `claude/dazzling-chandrasekhar-dccf5e`
