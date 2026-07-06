@@ -493,7 +493,8 @@ function toInt(v){
 function isEveningSplitActive(view){
   if(view!=='tonight') return false;
   var now=new Date();
-  return (now.getHours()*100+now.getMinutes())>=2000;
+  var t=now.getHours()*100+now.getMinutes();
+  return t>=2000 || t<800; // 晚班20:00~隔天08:00跨夜整段維持分組，08:00才恢復早班顯示
 }
 function isNightEntry(rec){
   return toInt(rec['進場時間輸入'])>=2000;
