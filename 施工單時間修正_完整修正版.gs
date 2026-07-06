@@ -164,7 +164,11 @@ function onOpen() {
     .addToUi();
 }
 
-function getOrders() {
+// mode='closing'（預設，打烊工具晚上用）：dayA=今天 dayB=明天 → tonight=今晚(含跨夜) morning=明早
+// mode='opening'（開店工具早上用）：dayA=昨天 dayB=今天 → tonight=昨晚(含跨夜) morning=今天
+//   開店前查的是「早上開門前」，需要的是今天白天(08:00~20:00)要進場的施工單，
+//   若沿用 closing 的 dayA=今天/dayB=明天，今天白天的資料會兩邊都比對不到、永遠看不到。
+function getOrders(mode) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('施工單查詢');
   if (!sheet) return { status: 'error', msg: '找不到分頁：施工單查詢' };
@@ -172,18 +176,20 @@ function getOrders() {
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return { status: 'ok', tonight: [], morning: [] };
 
-  var today    = new Date();
-  var tomorrow = new Date(today.getTime() + 86400000);
-  var tM = today.getMonth() + 1,    tD = today.getDate();
-  var nM = tomorrow.getMonth() + 1, nD = tomorrow.getDate();
+  var now = new Date();
+  var dayA = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (mode === 'opening') dayA.setDate(dayA.getDate() - 1); // 昨天
+  var dayB = new Date(dayA.getTime() + 86400000);           // dayA 隔天
+  var aM = dayA.getMonth() + 1, aD = dayA.getDate();
+  var bM = dayB.getMonth() + 1, bD = dayB.getDate();
 
   // ★ 改用 月/日 + 進場時間 判斷，不再依賴不可靠的分頁名
   // 班別（天鷹定義）：早班 08:00~20:00、晚班 20:00~隔天 08:00
-  //   今晚 = 今天晚班(進場≥2000) ＋ 明天凌晨(進場<0800，屬今晚的跨夜段)
-  //   明早 = 明天早班(進場 08:00~20:00)
+  //   bucketA = dayA晚班(進場≥2000) ＋ dayB凌晨(進場<0800，屬跨夜段)
+  //   bucketB = dayB早班(進場 08:00~20:00)
   function toT(v) { var n = parseInt(String(v).replace(/\D/g, '')); return isNaN(n) ? -1 : n; }
 
-  var tonight = [], morning = [];
+  var bucketA = [], bucketB = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
@@ -206,17 +212,17 @@ function getOrders() {
       tabName:    String(row[13] || '')
     };
 
-    var isToday    = (m === tM && d === tD);
-    var isTomorrow = (m === nM && d === nD);
+    var isDayA = (m === aM && d === aD);
+    var isDayB = (m === bM && d === bD);
 
-    if ((isToday && t >= 2000) || (isTomorrow && t >= 0 && t < 800)) {
-      tonight.push(obj);                  // 今晚（含跨夜到明晨）
-    } else if (isTomorrow && t >= 800 && t < 2000) {
-      morning.push(obj);                  // 明早
+    if ((isDayA && t >= 2000) || (isDayB && t >= 0 && t < 800)) {
+      bucketA.push(obj);                  // 今晚/昨晚（含跨夜）
+    } else if (isDayB && t >= 800 && t < 2000) {
+      bucketB.push(obj);                  // 明早/今天
     }
   }
 
-  return { status: 'ok', tonight: tonight, morning: morning };
+  return { status: 'ok', tonight: bucketA, morning: bucketB };
 }
 
 function doPost(e) {
@@ -227,7 +233,7 @@ function doPost(e) {
     const tz = Session.getScriptTimeZone();
 
     if (payload.action === 'getOrders') {
-      const result = getOrders();
+      const result = getOrders(payload.mode);
       return ContentService
         .createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);

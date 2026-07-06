@@ -1940,14 +1940,14 @@ function genShopCode(floor){
 
 // ===== 施工單查詢 Drawer =====
 var conOrders = {tonight: [], morning: []};
-var conTabIdx = 0;
+var conTabIdx = 1; // 開店前預設看「今天」白天要進場的施工單
 var conSearchKw = '';
-// ── 施工單班別實際日期：凌晨(<8點)仍算昨晚開始的夜班 ──
+// ── 開店前工具查的是「今天早上開門前」，分頁為 昨晚(含跨夜) / 今天白天 ──
+//   固定用「昨天/今天」而非依當下時辰位移，跟後端 getOrders(mode:'opening') 邏輯一致
 function conShiftDates() {
   var now = new Date();
-  var night = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (now.getHours() < 8) night.setDate(night.getDate() - 1);
-  var morn = new Date(night); morn.setDate(morn.getDate() + 1);
+  var night = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1); // 昨晚
+  var morn  = new Date(now.getFullYear(), now.getMonth(), now.getDate());     // 今天
   return { night: night, morn: morn };
 }
 function fmtConDate(d) {
@@ -1958,8 +1958,8 @@ function updateConTabLabels() {
   var sd = conShiftDates();
   var t0 = document.getElementById('conTab0');
   var t1 = document.getElementById('conTab1');
-  if (t0) t0.innerHTML = '\uD83C\uDF19 \u4ECA\u665A <span class="con-tab-date">' + fmtConDate(sd.night) + '</span>';
-  if (t1) t1.innerHTML = '\uD83C\uDF05 \u660E\u65E9 <span class="con-tab-date">' + fmtConDate(sd.morn) + '</span>';
+  if (t0) t0.innerHTML = '\uD83C\uDF19 \u6628\u665A <span class="con-tab-date">' + fmtConDate(sd.night) + '</span>';
+  if (t1) t1.innerHTML = '\u2600\uFE0F \u4ECA\u5929 <span class="con-tab-date">' + fmtConDate(sd.morn) + '</span>';
 }
 
 function openConDrawer() {
@@ -1988,7 +1988,7 @@ function loadConOrders() {
   fetch(CON_GAS_URL, {
     method: 'POST',
     headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify({action: 'getOrders', ts: Date.now()}),
+    body: JSON.stringify({action: 'getOrders', mode: 'opening', ts: Date.now()}),
     redirect: 'follow'
   })
   .then(function(res) { return res.json(); })
@@ -2022,11 +2022,11 @@ function renderConBody() {
   }
   var body_el = document.getElementById('conBody');
   if (!list || !list.length) {
-    body_el.innerHTML = '<div class="con-empty">📋 ' + (conSearchKw ? '無符合「' + x(conSearchKw) + '」的施工單' : (conTabIdx === 0 ? '今晚' : '明早') + ' 目前無施工單資料') + '</div>';
+    body_el.innerHTML = '<div class="con-empty">📋 ' + (conSearchKw ? '無符合「' + x(conSearchKw) + '」的施工單' : (conTabIdx === 0 ? '昨晚' : '今天') + ' 目前無施工單資料') + '</div>';
     return;
   }
   var html = '';
-  // 當前分頁對應的實際日期（今晚 or 明早）
+  // 當前分頁對應的實際日期（昨晚 or 今天）
   var _sd = conShiftDates();
   var curDateStr = fmtConDate(conTabIdx === 0 ? _sd.night : _sd.morn);
   for (var i = 0; i < list.length; i++) {
@@ -2145,8 +2145,8 @@ function switchPreviewSheet(gid, btn){
     <button class="con-close" onclick="closeConDrawer()">✕</button>
   </div>
   <div class="con-tabs">
-    <button class="con-tab active" id="conTab0" onclick="switchConTab(0)">🌙 今晚</button>
-    <button class="con-tab" id="conTab1" onclick="switchConTab(1)">🌅 明早</button>
+    <button class="con-tab" id="conTab0" onclick="switchConTab(0)">🌙 昨晚</button>
+    <button class="con-tab active" id="conTab1" onclick="switchConTab(1)">☀️ 今天</button>
   </div>
   <div class="con-search-wrap">
     <input class="con-search-input" id="conSearchInput" type="text"
