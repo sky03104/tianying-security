@@ -596,14 +596,14 @@ function filterRows(rows, view, search, histDate){
 
   var eveningSplit=isEveningSplitActive(view);
   return res.slice().sort(function(a,b){
+    if(eveningSplit){
+      var ga=isNightEntry(a)?0:1, gb=isNightEntry(b)?0:1;
+      if(ga!==gb) return ga-gb; // 時段分組優先於施工日期，避免跨天施工單(如7/1~7/31)蓋掉分組
+    }
     var da=a['施工日期'] instanceof Date?a['施工日期']:new Date(0);
     var db=b['施工日期'] instanceof Date?b['施工日期']:new Date(0);
     var dd=view==='history'?db-da:da-db;
     if(dd!==0) return dd;
-    if(eveningSplit){
-      var ga=isNightEntry(a)?0:1, gb=isNightEntry(b)?0:1;
-      if(ga!==gb) return ga-gb;
-    }
     return toInt(a['進場時間輸入'])-toInt(b['進場時間輸入']);
   });
 }
@@ -648,7 +648,7 @@ function cardHtml(rec, view, isHot, idx){
   // badges（移除日期badge，日期改至左上）
   var bdgs='';
   if(isOvernight) bdgs+='<span class="bdg b-ov"><i class="ti ti-moon"></i> 通宵退場</span>';
-  if(eveningDim) bdgs+='<span class="bdg b-day"><i class="ti ti-sun"></i> 日間已進場</span>';
+  if(eveningDim) bdgs+='<span class="bdg b-day"><i class="ti ti-sun"></i> 日間施工單</span>';
   if(unit) bdgs+='<span class="bdg b-un">'+esc(unit)+'</span>';
   if(isHot) bdgs+='<span class="bdg b-fw"><i class="ti ti-flame"></i> 動火</span>';
 
