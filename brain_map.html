@@ -1213,7 +1213,7 @@ function ensureUser(empId, name, nodeId) {
   const wp = nodeWorldById(nodeId) || nodeWorldById(0);
   liveUsers[empId] = {
     empId: empId, name: name || empId, color: userColor(empId),
-    node: nodeId, pos: wp.clone(), waypoints: [], seg: null,
+    node: nodeId, displayNode: nodeId, pos: wp.clone(), waypoints: [], seg: null,
     alpha: 0, leaving: false, tool: 'app', action: 'login',
     lastSeen: Date.now(), screen: null,
   };
@@ -1341,6 +1341,9 @@ function updateLiveUsers(dt) {
       u.pos.lerpVectors(u.seg.from, u.seg.to, ease);
       if (k >= 1) { u.pos.copy(u.seg.to); u.seg = null; }
     }
+    // 完全到站（沒有進行中的segment、也沒有排隊路點）才切換成目的地節點的角色外觀，
+    // 移動途中一律顯示跑步中的代打角色，避免中途就變身看起來很怪
+    if (!u.seg && !u.waypoints.length) u.displayNode = u.node;
   });
 }
 
@@ -1450,22 +1453,39 @@ function drawLiveUsers(ctx, t) {
       }
     }
 
-    // 光暈 + 本體圓點
-    const gr = ctx.createRadialGradient(x, y, 0, x, y, 11);
-    gr.addColorStop(0, u.color + '66');
+    // 角色化身：移動中一律代打路飛跑步（大部分角色跑步幀還沒補齊前的過渡方案），
+    // 完全到站後變身成所在節點的專屬角色（靜態站姿）。2026-07-06 咖哩需求：
+    // 使用者不再是單純圓點，而是「人在哪個工具就是那個工具的角色」
+    const role = moving ? '路飛' : (NODE_CHAR[u.displayNode] || '路飛');
+    const avImg = (moving && getRunFrame('路飛')) || CHAR_IMAGES[role] || CHAR_IMAGES['路飛'];
+    const avBoxW = 80 * DEFAULT_CHAR_SCALE, avBoxH = 80 * DEFAULT_CHAR_SCALE;
+    let avIw = avBoxW, avIh = avBoxH;
+    if (avImg && avImg.complete && avImg.naturalWidth > 0) {
+      const ratio = avImg.naturalWidth / avImg.naturalHeight;
+      if (ratio >= 1) { avIw = avBoxW; avIh = avBoxW / ratio; } else { avIh = avBoxH; avIw = avBoxH * ratio; }
+    }
+    const avIx = x - avIw / 2, avIy = y - avIh; // 底部對齊節點位置（腳站在原本圓點的位置）
+
+    // 光暈（沿用原本圓點的專屬色，跟名字牌顏色一致，方便不看名字也能一眼認人）
+    const gr = ctx.createRadialGradient(x, y - avBoxH * 0.5, 0, x, y - avBoxH * 0.5, avBoxW * 0.9);
+    gr.addColorStop(0, u.color + '55');
     gr.addColorStop(1, u.color + '00');
     ctx.fillStyle = gr;
-    ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y - avBoxH * 0.5, avBoxW * 0.9, 0, Math.PI * 2); ctx.fill();
 
-    ctx.fillStyle = u.color;
-    ctx.strokeStyle = '#F5F5F5'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (avImg && avImg.complete && avImg.naturalWidth > 0) {
+      ctx.drawImage(avImg, avIx, avIy, avIw, avIh);
+    } else {
+      // 圖片未載入完成：彩色圓圈佔位，不留空白
+      ctx.fillStyle = u.color + '88';
+      ctx.beginPath(); ctx.arc(x, y - avBoxH * 0.5, avBoxW * 0.4, 0, Math.PI * 2); ctx.fill();
+    }
 
-    // 名字標籤（深色底 + 顏色邊框）
+    // 名字標籤（深色底 + 顏色邊框；掛真實姓名而非角色名，多人共用同一角色時才分得出是誰）
     ctx.font = "bold 12px 'Microsoft JhengHei', sans-serif";
     const label = u.name;
     const tw = ctx.measureText(label).width;
-    const lx = x - tw / 2 - 7, ly = y + 14, lw = tw + 14, lh = 20;
+    const lx = x - tw / 2 - 7, ly = y + 5, lw = tw + 14, lh = 20;
     ctx.fillStyle = 'rgba(10,12,16,.88)';
     ctx.strokeStyle = u.color + 'AA'; ctx.lineWidth = 1;
     ctx.beginPath();
