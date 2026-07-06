@@ -102,6 +102,12 @@ function doPost(e) {
     if (action === 'updateExit') {
       return updateExitTime(e);
     }
+    if (action === 'updateRow') {
+      return updateRow(e);
+    }
+    if (action === 'deleteRow') {
+      return deleteRow(e);
+    }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetNm = e.parameter.sheetName || '進出資料表';
@@ -184,6 +190,54 @@ function getTodayRows(e) {
     }
     result.reverse();
     return jsonRes({status:'ok', rows:result});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// 編輯今日紀錄（覆寫 C樓層~K檢查者，共9欄）
+function updateRow(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = e.parameter.sheet || '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var rowNum = parseInt(e.parameter.rowNum);
+    if (isNaN(rowNum) || rowNum < 2) return jsonRes({status:'error', msg:'列號無效'});
+
+    sheet.getRange(rowNum, 3, 1, 9).setValues([[
+      e.parameter.floor || '',
+      e.parameter.shop || '',
+      parseInt(e.parameter.count) || 1,
+      e.parameter.supervisor || '',
+      e.parameter.entryTime || '',
+      e.parameter.location || '',
+      e.parameter.workType || '',
+      e.parameter.exitTime || '',
+      e.parameter.inspector || ''
+    ]]);
+
+    return jsonRes({status:'ok'});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// 刪除今日紀錄（整列刪除）
+function deleteRow(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = e.parameter.sheet || '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var rowNum = parseInt(e.parameter.rowNum);
+    if (isNaN(rowNum) || rowNum < 2) return jsonRes({status:'error', msg:'列號無效'});
+
+    sheet.deleteRow(rowNum);
+
+    return jsonRes({status:'ok'});
   } catch(err) {
     return jsonRes({status:'error', msg:err.toString()});
   }
@@ -287,5 +341,9 @@ function jsonRes(obj) {
 - [ ] 工具設定頁貼上網址後顯示「✓ 連線成功」
 - [ ] 送出一筆進出 → 「進出資料表」新增一列，A 欄為純數字（1、2、3…）
 - [ ] 今日頁可載入剛送出的紀錄
+- [ ] 今日頁點✏️編輯、修改後儲存 → 顯示「已儲存」，試算表該列內容確實更新
+- [ ] 今日頁點🗑刪除 → 顯示「已刪除」，試算表該列確實移除
 - [ ] 廠商／監工／檢查者清單與打烊後工具一致（共用 `_SharedDB`）
 - [ ] 打烊後工具不受影響
+
+> **2026-07-06 修復**：原本 GAS 沒有處理 `updateRow`／`deleteRow` 兩個 action，今日頁編輯/刪除一律回「失敗」。若你在此之前已部署過開店 GAS，**務必重新貼上最新程式碼並「管理部署 → 編輯 → 新版本」**（URL 不變），否則編輯/刪除仍會失敗。

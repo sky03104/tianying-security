@@ -1236,6 +1236,16 @@ function doPost(e) {
       return updateExitTime(e);
     }
 
+    // 編輯今日紀錄（整列覆寫 C~K）
+    if (action === 'updateRow') {
+      return updateRow(e);
+    }
+
+    // 刪除今日紀錄
+    if (action === 'deleteRow') {
+      return deleteRow(e);
+    }
+
     // 一般進出資料寫入
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetNm = e.parameter.sheetName || '進出資料表';
@@ -1342,6 +1352,58 @@ function getTodayRows(e) {
     result.reverse();
     return jsonRes({status:'ok', rows:result});
 
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// ============================
+// 編輯今日紀錄（覆寫 C樓層~K檢查者，共9欄）
+// ============================
+function updateRow(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = e.parameter.sheet || '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var rowNum = parseInt(e.parameter.rowNum);
+    if (isNaN(rowNum) || rowNum < 2) return jsonRes({status:'error', msg:'列號無效'});
+
+    sheet.getRange(rowNum, 3, 1, 9).setValues([[
+      e.parameter.floor || '',
+      e.parameter.shop || '',
+      parseInt(e.parameter.count) || 1,
+      e.parameter.supervisor || '',
+      e.parameter.entryTime || '',
+      e.parameter.location || '',
+      e.parameter.workType || '',
+      e.parameter.exitTime || '',
+      e.parameter.inspector || ''
+    ]]);
+
+    return jsonRes({status:'ok'});
+  } catch(err) {
+    return jsonRes({status:'error', msg:err.toString()});
+  }
+}
+
+// ============================
+// 刪除今日紀錄（整列刪除）
+// ============================
+function deleteRow(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetNm = e.parameter.sheet || '進出資料表';
+    var sheet = ss.getSheetByName(sheetNm);
+    if (!sheet) return jsonRes({status:'error', msg:'找不到分頁: '+sheetNm});
+
+    var rowNum = parseInt(e.parameter.rowNum);
+    if (isNaN(rowNum) || rowNum < 2) return jsonRes({status:'error', msg:'列號無效'});
+
+    sheet.deleteRow(rowNum);
+
+    return jsonRes({status:'ok'});
   } catch(err) {
     return jsonRes({status:'error', msg:err.toString()});
   }
