@@ -154,6 +154,10 @@ input[type=date]{color-scheme:dark}
 .b-un{background:rgba(255,255,255,.05);color:var(--t2);border:1px solid var(--bdr)}
 .b-fw{background:rgba(251,146,60,.11);color:var(--wrn);border:1px solid rgba(251,146,60,.24)}
 .b-ov{background:rgba(251,146,60,.1);color:var(--wrn);border:1px solid rgba(251,146,60,.25)}
+.b-day{background:rgba(129,140,248,.11);color:var(--ind);border:1px solid rgba(129,140,248,.26)}
+/* 晚上8點後，20:00前進場的今晚舊資料弱化顯示，凸顯20:00~24:00的夜班進場 */
+.card-day-dim{opacity:.62}
+.card-day-dim::before{background:var(--ind)!important}
 .cvendor{font-size:1.08rem;font-weight:700;color:var(--t1);margin-bottom:.3rem;line-height:1.35}
 /* 施工地點 圖標改紅色 */
 .cloc{display:flex;align-items:center;gap:.26rem;font-size:1rem;font-weight:600;color:var(--red);margin-bottom:.42rem}
@@ -485,6 +489,15 @@ function toInt(v){
   var n = parseInt(String(v).replace(/[^0-9]/g,''));
   return isNaN(n) ? -1 : n;
 }
+// 晚上8點後，今晚頁籤把「20:00~24:00(含跨夜)進場」排到「20:00前進場」上面
+function isEveningSplitActive(view){
+  if(view!=='tonight') return false;
+  var now=new Date();
+  return (now.getHours()*100+now.getMinutes())>=2000;
+}
+function isNightEntry(rec){
+  return toInt(rec['進場時間輸入'])>=2000;
+}
 function fmtT(v){
   if(v==null||v==='') return '--';
   var s = String(v).trim();
@@ -581,11 +594,16 @@ function filterRows(rows, view, search, histDate){
     });
   }
 
+  var eveningSplit=isEveningSplitActive(view);
   return res.slice().sort(function(a,b){
     var da=a['施工日期'] instanceof Date?a['施工日期']:new Date(0);
     var db=b['施工日期'] instanceof Date?b['施工日期']:new Date(0);
     var dd=view==='history'?db-da:da-db;
     if(dd!==0) return dd;
+    if(eveningSplit){
+      var ga=isNightEntry(a)?0:1, gb=isNightEntry(b)?0:1;
+      if(ga!==gb) return ga-gb;
+    }
     return toInt(a['進場時間輸入'])-toInt(b['進場時間輸入']);
   });
 }
@@ -609,6 +627,9 @@ function maskName(s){
 function cardHtml(rec, view, isHot, idx){
   var today=d0(new Date());
   var cls='card '+(isHot?'c-hw':view==='tonight'?'c-tn':view==='morning'?'c-mo':'c-hi');
+  // 晚上8點後，今晚頁籤把20:00前進場的舊資料用灰階弱化，20:00~24:00(含跨夜)進場維持原色凸顯
+  var eveningDim = !isHot && isEveningSplitActive(view) && !isNightEntry(rec);
+  if(eveningDim) cls+=' card-day-dim';
 
   var unit=rec['申請單位']||'', vendor=rec['廠商專櫃名稱']||'';
   var loc=rec['施工地點']||'--', work=rec['施工項目']||'--';
@@ -627,6 +648,7 @@ function cardHtml(rec, view, isHot, idx){
   // badges（移除日期badge，日期改至左上）
   var bdgs='';
   if(isOvernight) bdgs+='<span class="bdg b-ov"><i class="ti ti-moon"></i> 通宵退場</span>';
+  if(eveningDim) bdgs+='<span class="bdg b-day"><i class="ti ti-sun"></i> 日間已進場</span>';
   if(unit) bdgs+='<span class="bdg b-un">'+esc(unit)+'</span>';
   if(isHot) bdgs+='<span class="bdg b-fw"><i class="ti ti-flame"></i> 動火</span>';
 
