@@ -18092,15 +18092,18 @@ function ok(obj) {
                     });
                     let m = nStaff.find(s => s.name === name);
                     const role = ROLE_XL[String(row.roleStr || '').trim()] || (m ? m.role : 'staff');
+                    // 該筆資料是從 shKey 那份線上班表讀到的，所在班表分頁才是「班別」唯一依據，
+                    // 每次同步都以此校正 shift，避免舊快取殘留的錯誤班別一直不會自動修正
+                    const shiftHere = shKey === 'morning' ? '早班' : '晚班';
                     if (!m) {
                         const id = ++_nid;
-                        m = { id: id, name: name, role: role, shift: shKey === 'morning' ? '早班' : '晚班' };
+                        m = { id: id, name: name, role: role, shift: shiftHere };
                         nStaff.push(m);
                         nSc[m.id] = {};
                     }
                     else {
                         const i2 = nStaff.findIndex(s => s.id === m.id);
-                        nStaff[i2] = { ...nStaff[i2], role: role };
+                        nStaff[i2] = { ...nStaff[i2], role: role, shift: shiftHere };
                     }
                     nSc[m.id] = { ...nSc[m.id], ...shifts };
                     cnt++;
@@ -18233,7 +18236,7 @@ function ok(obj) {
                 }
                 else {
                     const i2 = nStaff.findIndex(s => s.id === m.id);
-                    nStaff[i2] = { ...nStaff[i2], role: role };
+                    nStaff[i2] = { ...nStaff[i2], role: role, shift: '晚班' };
                 }
                 nSc[m.id] = { ...nSc[m.id], ...shifts };
                 cnt++;
@@ -18667,7 +18670,7 @@ function ok(obj) {
                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
                     React.createElement("span", { style: { fontSize: 15, fontWeight: 900, color: C.text } }, "\u54E1\u5DE5\u7BA1\u7406"),
                     React.createElement("button", { style: { ...gBtn, padding: "8px 14px", fontSize: 13 }, onClick: () => { setStFrm({ name: "", role: "staff", shift: "晚班" }); setStMod("add"); } }, "\uFF0B \u65B0\u589E\u54E1\u5DE5")),
-                ["早班", "晚班"].map(sg => (React.createElement("div", { key: sg, style: { marginBottom: 18 } },
+                ["早班", "晚班"].filter(sg => curShift === 'all' || sg === (curShift === 'morning' ? '早班' : '晚班')).map(sg => (React.createElement("div", { key: sg, style: { marginBottom: 18 } },
                     React.createElement("div", { style: { fontSize: 11, color: C.gold, letterSpacing: 2, marginBottom: 8, padding: "6px 12px", background: "rgba(212,168,0,0.07)", borderRadius: 7, border: "1px solid rgba(212,168,0,0.2)", fontWeight: 700 } },
                         sg,
                         " \u00B7 ",
