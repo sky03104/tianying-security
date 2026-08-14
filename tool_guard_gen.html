@@ -136,7 +136,8 @@ const POST_DEFS = [
   // H2 收哨時間 2026-08-08 由咖哩確認為 2230（原本寫 2330 是錯的）。請款附表也是以 11:00-22:30＝11.5 小時計。
   { key: '漢來飯店',     label: '漢來\n飯店',       row: 4,  col: 2,  shift: 'early', forcedCodes: { 'H': '1100-2200', 'H2': '1100-2230' } },
   { key: 'P3車道',       label: 'P3\n車道',         row: 6,  col: 2,  shift: 'early' },
-  { key: '南側門',       label: '南側門',           row: 7,  col: 2,  shift: 'early', conditional: 'southGate', forcedCode: '南' },
+  // 南側門固定 11:00-23:00，跟崗位走（不是照人的早班08:00~20:00算），2026-08-14咖哩確認實際哨時。
+  { key: '南側門',       label: '南側門',           row: 7,  col: 2,  shift: 'early', conditional: 'southGate', forcedCode: '南', time: '1100-2300' },
   { key: 'B1F警衛室',    label: 'B1F\n警衛室',      row: 3,  col: 5,  shift: 'early' },
   { key: '機動人員1',    label: '機動\n人員1',      row: 4,  col: 5,  shift: 'early' },
   { key: '物流車道',     label: '物流\n車道',       row: 6,  col: 5,  shift: 'early' },
@@ -146,7 +147,8 @@ const POST_DEFS = [
   { key: '晚班P3車道',   label: 'P3車道\n(廣場哨)', row: 7,  col: 9,  shift: 'late' },
   { key: '晚班漢來飯店', label: '漢來\n飯店',       row: 3,  col: 12, shift: 'late', linked: '漢來飯店' }, // 早/晚班漢來飯店是同一人跨時段駐守，不獨立抽人，見 buildGuardMatrix
   { key: '晚班機動人員', label: '機動\n人員',       row: 6,  col: 12, shift: 'late' },
-  { key: '海底撈',       label: '海底撈',           row: 7,  col: 12, shift: 'late', forcedCode: '海' },
+  // 海底撈固定 22:00-10:00，跟崗位走（不是照人的晚班20:00~08:00算），2026-08-14咖哩確認實際哨時。
+  { key: '海底撈',       label: '海底撈',           row: 7,  col: 12, shift: 'late', forcedCode: '海', time: '2200-1000' },
   { key: '巡檢1',        label: '巡檢1',            row: 10, col: 2,  shift: 'early' },
   { key: '巡檢2',        label: '巡檢2',            row: 11, col: 2,  shift: 'early' },
   { key: '巡檢3',        label: '巡檢3',            row: 12, col: 2,  shift: 'early' },
@@ -363,7 +365,7 @@ function buildGuardMatrix(opts) {
     if (def.conditional === 'southGate' && !southGate) return;
     if (def.conditional) rows[def.row][def.col - 1] = def.label; // 勾選當天才補上條件式標籤（例如南側門）
     const picked = (def.shift === 'early' ? earlyResult.postMatch : lateResult.postMatch)[def.key];
-    if (picked) rows[def.row][def.col] = picked.name + '\n' + timeForPerson(picked, def.shift);
+    if (picked) rows[def.row][def.col] = picked.name + '\n' + (def.time || timeForPerson(picked, def.shift));
   });
   // 找不到人的崗位分兩種講法：today完全沒有任何在職人員適任(哨點設定沒人勾這個崗位，
   // 或勾的人今天都沒上班) vs 有人適任但都被其他崗位卡走了(人力調度衝突，最大匹配演算法
@@ -424,7 +426,7 @@ function buildGuardMatrix(opts) {
     if (matches[0].name === leaderName) {
       forcedWarnings.push(matches[0].name + ' 月班表代號是「' + def.forcedCode + '」，但同天又被選為帶隊幹部，兩邊都已填入同一人，請確認是否有人力衝突');
     }
-    rows[def.row][def.col] = matches[0].name + '\n' + DEFAULT_TIME[def.shift];
+    rows[def.row][def.col] = matches[0].name + '\n' + (def.time || DEFAULT_TIME[def.shift]);
   });
 
   // ── 巡檢增派（早班 L/LN） ──
@@ -572,7 +574,9 @@ function buildNameCellPlan(rows) {
   });
   // 固定崗位：標籤沒寫出來的（例如當天沒勾南側門）代表這個哨位不存在，不給下拉
   POST_DEFS.forEach(def => {
-    if (String(rows[def.row][def.col - 1] || '') !== '') add(def.row, def.col, def.shift, !def.forcedCodes);
+    // 跟崗位走的判斷：forcedCodes(漢來)或有自己固定time(南側門/海底撈)都不是「跟人走」，
+    // 換誰上時段都一樣，下拉才不會照本人月班表代號重算出錯的時段。
+    if (String(rows[def.row][def.col - 1] || '') !== '') add(def.row, def.col, def.shift, !def.forcedCodes && !def.time);
   });
   add(2, 4, 'early', true);  // 早班帶隊幹部
   add(2, 11, 'late', true);  // 晚班帶隊幹部
