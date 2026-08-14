@@ -2375,7 +2375,7 @@ function App() {
                     setActiveToolId(null);
                     setTimeout(() => setActiveToolId(tid), 250);
                 } else if (e.data.externalUrl) {
-                    window.open(e.data.externalUrl, '_blank');
+                    window.location.href = e.data.externalUrl;
                 }
             }
         };
@@ -3357,7 +3357,7 @@ function App() {
                     setActiveToolId(tool.toolId);
                 }
                 else if (tool.externalUrl) {
-                    window.open(tool.externalUrl + (tool.externalUrl.indexOf('?') > -1 ? '&' : '?') + 'empId=' + encodeURIComponent((currentUser && currentUser.empId) || ''), '_blank');
+                    window.location.href = tool.externalUrl + (tool.externalUrl.indexOf('?') > -1 ? '&' : '?') + 'empId=' + encodeURIComponent((currentUser && currentUser.empId) || '');
                 }
                 else {
                     showToast(`📂 開啟：${tool.name}`);
@@ -3399,7 +3399,7 @@ function App() {
                                 setActiveToolId(tool.toolId);
                             }
                             else if (tool.externalUrl) {
-                                window.open(tool.externalUrl + (tool.externalUrl.indexOf('?') > -1 ? '&' : '?') + 'empId=' + encodeURIComponent((currentUser && currentUser.empId) || ''), '_blank');
+                                window.location.href = tool.externalUrl + (tool.externalUrl.indexOf('?') > -1 ? '&' : '?') + 'empId=' + encodeURIComponent((currentUser && currentUser.empId) || '');
                             }
                             else {
                                 showToast(`📂 開啟：${tool.name}`);

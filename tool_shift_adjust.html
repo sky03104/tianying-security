@@ -120,7 +120,7 @@ input[type=date],input[type=month]{color-scheme:dark}
 <div class="hdr">
   <div class="hdr-ttl"><i class="ti ti-clock-exclamation"></i>缺班時數/調補班紀錄</div>
   <div class="hdr-r">
-    <button class="ibtn" onclick="window.opener?window.close():window.location.href='https://sky03104.github.io/tianying-security/'" title="返回主系統"><i class="ti ti-home"></i></button>
+    <button class="ibtn" onclick="backToMain_()" title="返回主系統"><i class="ti ti-home"></i></button>
     <button class="ibtn" id="btn-refresh" onclick="loadRecords()" title="重新整理"><i class="ti ti-refresh"></i></button>
   </div>
 </div>
@@ -206,6 +206,11 @@ function getSessionUser(){
 }
 function getAuthToken(){
   try { return localStorage.getItem('hsh_auth_token') || ''; } catch(e){ return ''; }
+}
+/* 返回主控台：同分頁跳轉，保留工號狀態（不能再靠 window.opener 判斷，主控台現在同分頁開工具） */
+function backToMain_(){
+  var u = getSessionUser();
+  window.location.href = 'index.html' + (u && u.empId ? ('?empId=' + encodeURIComponent(u.empId)) : '');
 }
 function showNoPerm(msg){
   var sp = document.getElementById('splash');
