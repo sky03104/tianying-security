@@ -5,12 +5,18 @@
  *   也取代上一版 v3.0/v3.1。請把舊檔內容「全部刪除」，只保留本檔，
  *   避免同專案出現兩個 doPost／doGet 衝突。
  *
- * v3.2 相對 v3.1 新增（2026-07-26，資安修補）：
+ * v3.2 相對 v3.1 新增（2026-07-26，資安修補；2026-08-14 驗證改本機化）：
  *   getReports/getFeedback/updateStatus/deleteRow 原本完全無驗證，只要
  *   知道這支 GAS URL，任何人都能撈出全部事故報告與表揚檢舉（含工號姓名、
  *   事故經過、照片連結），甚至竄改狀態或永久刪除。現在四個 action 都要求
  *   帶主 App 登入通行證(token)，並比對角色需 executive/admin（deleteRow
  *   需 admin），跟前端 AdminApp 的權限判斷一致。
+ *   ⚠ 2026-08-14：驗證方式從「呼叫主App的verifySession」改成 verifyAuthToken_()
+ *   本機驗證簽章＋直接讀本試算表「帳號管理」分頁（本檔SS_ID跟主App SHEET_ID是同一份
+ *   試算表）。原本每次讀清單都要多發一次GAS對GAS的外部連線，偶爾很慢、外部連線授權
+ *   沒跑forceAuth()時還會整個連不上；改本機驗證後不再依賴外部連線。**部署後必須手動
+ *   把主App的指令碼屬性 SESSION_SECRET 值，原封不動複製一份到本專案的指令碼屬性**
+ *   （鍵名同樣叫 SESSION_SECRET），否則簽章對不起來、驗證會全部失敗。
  *
  * v3.1 相對 v3.0 新增（供主管專用畫面使用）：
  *   1. 兩個分頁末端新增「狀態」欄位，送出時預設「未讀」；舊表自動補表頭。
@@ -52,24 +58,70 @@ var ADMIN_ROLES_  = ['executive', 'admin'];
 var DELETE_ROLES_ = ['admin'];
 
 /**
- * 驗證通行證，通過回傳 { empId, name, role, ... }，不通過回傳 null。
- * 通行證由「天鷹保全APP」GAS 登入時發放，本檔沒有簽章金鑰，
- * 直接呼叫對方的 verifySession action 幫忙確認（跟緊急聯絡清單同做法）。
+ * 驗證通行證（2026-08-14 改為本機驗證，不再呼叫外部 GAS）。
+ * 通行證由「天鷹保全APP」GAS 登入時發放，格式：base64(工號|到期時間) + '.' + HMAC-SHA256簽章，
+ * 簽章邏輯跟主 App 完全一致，密鑰(SESSION_SECRET)需與主 App 的指令碼屬性完全相同（部署後手動同步一次，
+ * 見檔尾 forceAuth() 說明）。角色/狀態不必跨腳本查——事故與表揚跟主 App 本來就共用同一份試算表
+ * (本檔 SS_ID === 主App SHEET_ID)，「帳號管理」分頁直接讀得到。
+ * 通過回傳 { empId, name, role }，不通過回傳 null。
  */
 function verifyAuthToken_(token) {
-  if (!token) return null;
   try {
-    var res = UrlFetchApp.fetch(NOTIFY_GAS_URL, {
-      method: 'post',
-      payload: { action: 'verifySession', data: JSON.stringify({ token: token }) },
-      muteHttpExceptions: true
-    });
-    var d = JSON.parse(res.getContentText());
-    if (d.status !== 'ok' || !d.user || !d.user.empId) return null;
-    return d.user;
+    if (!token) return null;
+    var parts = String(token).split('.');
+    if (parts.length !== 2) return null;
+
+    var payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+    if (signPayload_(payload) !== parts[1]) return null; // 簽章對不上：偽造，或密鑰尚未同步
+
+    var seg = payload.split('|');
+    if (seg.length !== 2) return null;
+    var empId    = seg[0];
+    var expireMs = Number(seg[1]);
+    if (!empId || !expireMs) return null;
+    if (new Date().getTime() > expireMs) return null; // 通行證過期
+
+    var rec = findUserRole_(empId);
+    if (!rec) return null;
+    if (rec.status === 'inactive') return null;
+    return { empId: empId, name: rec.name, role: rec.role };
   } catch (err) {
     return null;
   }
+}
+
+/** 位元組陣列轉16進位字串，需跟主App的 bytesToHex_ 逐位元組一致，簽章才對得起來 */
+function bytesToHex_(bytes) {
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var v = (bytes[i] < 0 ? bytes[i] + 256 : bytes[i]).toString(16);
+    out += (v.length === 1 ? '0' + v : v);
+  }
+  return out;
+}
+
+function signPayload_(payload) {
+  return bytesToHex_(Utilities.computeHmacSha256Signature(payload, getSessionSecret_()));
+}
+
+/** 讀本腳本的指令碼屬性 SESSION_SECRET，需跟主App手動同步（見 forceAuth() 說明），沒設定就直接失敗 */
+function getSessionSecret_() {
+  var s = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
+  if (!s) throw new Error('尚未設定 SESSION_SECRET（指令碼屬性），需與主App的值完全相同');
+  return s;
+}
+
+/** 用工號查「帳號管理」分頁的角色/姓名/狀態——跟主App同一份試算表(SS_ID)，不用跨腳本查 */
+function findUserRole_(empId) {
+  var sh = SpreadsheetApp.openById(SS_ID).getSheetByName('帳號管理');
+  if (!sh) return null;
+  var data = sh.getDataRange().getValues();
+  var target = String(empId).trim();
+  for (var r = 1; r < data.length; r++) {
+    if (String(data[r][0]).trim() !== target) continue;
+    return { name: String(data[r][1]), role: String(data[r][3]), status: String(data[r][5] || 'active') };
+  }
+  return null;
 }
 
 // 各分頁表頭（末欄一律為「狀態」）
@@ -403,10 +455,15 @@ function doGet(e) {
 // ====== 首次部署用：手動執行一次以觸發授權 ======
 // ⚠ 照片上傳需「完整 Drive 權限」(auth/drive)。若只授到 drive.file，寫入既有資料夾會失敗。
 //   請先在「專案設定 → 顯示 appsscript.json」加上 oauthScopes（見部署說明），再執行本函式並同意授權。
-// ⚠ v3.2 新增：getReports/getFeedback/updateStatus/deleteRow 現在會用 UrlFetchApp
-//   呼叫主 App 驗證通行證，這是「連上外部服務」的權限，跟 Sheet/Drive 是不同範圍，
-//   沒授權過的話這幾個 action 會直接連線失敗（回傳的不是 JSON，前端解析炸掉）。
-//   本函式一併觸發，跑一次、同意權限視窗即可，不用重新部署。
+// ⚠ 2026-08-14 起 getReports/getFeedback/updateStatus/deleteRow 的通行證驗證已改本機化
+//   （verifyAuthToken_ 不再用 UrlFetchApp），所以這幾個 action 已不依賴「連上外部服務」授權。
+//   但 notifyReportToLine_/notifyFeedbackToLine_（新資料送出轉發LINE推播）仍會呼叫外部GAS，
+//   所以「連上外部服務」的授權還是要跑一次，本函式一併觸發。
+//   ⚠⚠ 更重要：本機驗證需要 SESSION_SECRET 跟主App一致，部署後務必手動同步一次：
+//   1. 開主App「天鷹保全APP_後端_GAS」專案 → 專案設定 → 指令碼屬性 → 複製 SESSION_SECRET 的值
+//   2. 開本專案 → 專案設定 → 指令碼屬性 → 新增同名 SESSION_SECRET，貼上同一個值
+//   沒做這步的話 verifyAuthToken_ 一律驗證失敗（getSessionSecret_ 直接丟例外），
+//   getReports/getFeedback 對任何人（含管理員）都會回「登入已失效或權限不足」。
 function forceAuth() {
   // 觸發 Sheet 讀寫
   SpreadsheetApp.openById(SS_ID);
@@ -414,11 +471,20 @@ function forceAuth() {
   var folder = DriveApp.getFolderById(PHOTO_FOLDER_ID);
   var f = folder.createFile('授權測試_' + Date.now() + '.txt', 'auth test', MimeType.PLAIN_TEXT);
   f.setTrashed(true);
-  // 觸發「連上外部服務」權限（UrlFetchApp）：帶一個假 token 打主 App，預期回傳「登入已失效」也算成功，
-  // 重點是這行程式碼真的有執行到、跳出授權視窗讓你同意。
-  var authTestResult = verifyAuthToken_('auth-test-dummy-token');
-  console.log('UrlFetchApp 測試呼叫完成（回傳 ' + (authTestResult ? '有效使用者' : 'null，正常，假token本來就驗不過') + '）');
-  console.log('授權測試成功！Sheet 讀寫 + Drive 建檔 + 外部連線權限皆已授權');
+  // 觸發「連上外部服務」權限（UrlFetchApp，供LINE推播轉發用）：純GET打主App、不帶action，
+  // 對方會回「運作正常」測試訊息，不會觸發任何實際通知（⚠ 千萬別用notifyNewReport等action測試，
+  // 那會真的推播一則假事故報告給所有主管的LINE）。重點是這行真的有執行到、跳出授權視窗讓你同意。
+  try {
+    UrlFetchApp.fetch(NOTIFY_GAS_URL, { muteHttpExceptions: true });
+  } catch (err) { console.log('外部連線測試例外（若是授權視窗被取消才需注意）：' + err); }
+  // 順便驗一次本機通行證驗證有沒有正確設定 SESSION_SECRET
+  try {
+    getSessionSecret_();
+    console.log('SESSION_SECRET 已設定，本機通行證驗證可正常運作');
+  } catch (err) {
+    console.log('⚠ ' + err.message + '　→ getReports/getFeedback 目前會全部驗證失敗，請照上方註解同步密鑰');
+  }
+  console.log('授權測試完成！Sheet 讀寫 + Drive 建檔 + 外部連線權限皆已觸發');
 }
 
 // ====== 測試用 ======
