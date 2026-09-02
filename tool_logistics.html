@@ -693,11 +693,11 @@ async function exportMonthScreenshot(){
     tableHtml;
   const style = document.createElement('style');
   style.textContent = 'table.mtable{width:100%;border-collapse:collapse;font-size:13px;}'
-    + 'table.mtable th,table.mtable td{border:1px solid #ddd;padding:5px 4px;text-align:center;color:#1a1a1a;}'
-    + 'table.mtable th{background:#FB923C;color:#fff;}'
+    + 'table.mtable th,table.mtable td{border:1px solid #ddd;padding:5px 4px;text-align:center;color:#1a1a1a!important;}'
+    + 'table.mtable th{background:#FB923C;color:#fff!important;}'
     + 'table.mtable tr.totalrow{font-weight:900;background:#fff3e6;}'
-    + 'table.mtable tr.totalrow td{color:#1a1a1a;}'
-    + 'table.mtable td.sumcell{font-weight:700;color:#c2650a;}';
+    + 'table.mtable tr.totalrow td{color:#1a1a1a!important;}'
+    + 'table.mtable td.sumcell{font-weight:700;color:#c2650a!important;}';
   capture.appendChild(style);
   document.body.appendChild(capture);
 
