@@ -66,6 +66,8 @@ input[type=date],input[type=month]{color-scheme:dark}
 .rcard .rhrs{font-size:1.05rem;font-weight:800;flex-shrink:0}
 .rhrs.pos{color:var(--grn)}
 .rhrs.neg{color:var(--red)}
+.rbtns{display:flex;gap:.4rem;flex-shrink:0}
+.redit{width:30px;height:30px;border-radius:8px;background:rgba(129,140,248,.1);border:1px solid rgba(129,140,248,.25);color:var(--ind);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .rdel{width:30px;height:30px;border-radius:8px;background:rgba(229,62,62,.1);border:1px solid rgba(229,62,62,.25);color:var(--red);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 
 .stctr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;padding:3rem 1rem;color:var(--t2);text-align:center}
@@ -144,7 +146,7 @@ input[type=date],input[type=month]{color-scheme:dark}
 <div class="mo-ovl" id="mo-ovl" onclick="if(event.target===this)closeAddModal()">
   <div class="mo-box">
     <div class="mo-hd">
-      <h3><i class="ti ti-clock-plus"></i>新增缺班/調補班紀錄</h3>
+      <h3 id="mo-title"><i class="ti ti-clock-plus"></i>新增缺班/調補班紀錄</h3>
       <button class="mo-close" onclick="closeAddModal()"><i class="ti ti-x"></i></button>
     </div>
     <div class="mo-row">
@@ -174,7 +176,7 @@ input[type=date],input[type=month]{color-scheme:dark}
       <label>備註（可不填）</label>
       <input id="mo-note" type="text" placeholder="補充說明">
     </div>
-    <button class="mo-submit" id="mo-submit-btn" onclick="submitAdd()"><i class="ti ti-send"></i>送出紀錄</button>
+    <button class="mo-submit" id="mo-submit-btn" onclick="submitAdd()"><i class="ti ti-send"></i><span id="mo-submit-txt">送出紀錄</span></button>
   </div>
 </div>
 
@@ -188,7 +190,7 @@ var ACCOUNT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d
 /* ══════════════════════════════════════════
    STATE
 ══════════════════════════════════════════ */
-var S = { tab:'list', month:'', records:[], employees:{}, loading:true, error:null, hrsSign:-1 };
+var S = { tab:'list', month:'', records:[], employees:{}, loading:true, error:null, hrsSign:-1, editingId:null };
 
 function pad2(n){ return n<10 ? '0'+n : ''+n; }
 function currentMonthStr(){
@@ -346,7 +348,10 @@ function renderList(content, rows){
         (r.note ? '<div class="rnote">'+r.note+'</div>' : '')+
       '</div>'+
       '<div class="rhrs '+(hrs>=0?'pos':'neg')+'">'+(hrs>=0?'+':'')+hrs+'</div>'+
-      '<div class="rdel" onclick="deleteRecord(\''+r.id+'\')"><i class="ti ti-trash"></i></div>'+
+      '<div class="rbtns">'+
+        '<div class="redit" onclick="openEditModal(\''+r.id+'\')"><i class="ti ti-pencil"></i></div>'+
+        '<div class="rdel" onclick="deleteRecord(\''+r.id+'\')"><i class="ti ti-trash"></i></div>'+
+      '</div>'+
     '</div>';
   });
   content.innerHTML = html;
@@ -384,16 +389,35 @@ function setHrsSign(sign){
   document.getElementById('btn-sign-pos').classList.toggle('on-pos', sign===1);
 }
 function openAddModal(){
+  S.editingId = null;
+  document.getElementById('mo-title').innerHTML = '<i class="ti ti-clock-plus"></i>新增缺班/調補班紀錄';
   document.getElementById('mo-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('mo-hrs').value = '';
   document.getElementById('mo-reason').value = '';
   document.getElementById('mo-note').value = '';
   populateEmpSelect();
+  document.getElementById('mo-emp').value = '';
   setHrsSign(-1);
+  document.getElementById('mo-ovl').classList.add('show');
+}
+function openEditModal(id){
+  var r = S.records.filter(function(x){ return String(x.id)===String(id); })[0];
+  if(!r){ toast('✗ 找不到這筆紀錄，請重新整理','err'); return; }
+  S.editingId = r.id;
+  document.getElementById('mo-title').innerHTML = '<i class="ti ti-pencil"></i>編輯缺班/調補班紀錄';
+  document.getElementById('mo-date').value = r.date;
+  populateEmpSelect();
+  document.getElementById('mo-emp').value = r.empId;
+  var hrs = Number(r.hours)||0;
+  document.getElementById('mo-hrs').value = Math.abs(hrs);
+  document.getElementById('mo-reason').value = r.reason || '';
+  document.getElementById('mo-note').value = r.note || '';
+  setHrsSign(hrs >= 0 ? 1 : -1);
   document.getElementById('mo-ovl').classList.add('show');
 }
 function closeAddModal(){
   document.getElementById('mo-ovl').classList.remove('show');
+  S.editingId = null;
 }
 async function submitAdd(){
   var date = document.getElementById('mo-date').value;
@@ -413,27 +437,31 @@ async function submitAdd(){
   }
   var hours = hrsNum * S.hrsSign;
   var empName = (S.employees[empId] && S.employees[empId].name) || empId;
+  var isEdit = !!S.editingId;
 
   var btn = document.getElementById('mo-submit-btn');
+  var txt = document.getElementById('mo-submit-txt');
   btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader" style="animation:spin .6s linear infinite"></i>送出中…';
+  txt.textContent = isEdit ? '更新中…' : '送出中…';
 
   try {
+    var payload = { date:date, empId:empId, name:empName, hours:hours, reason:reason, note:note };
+    if(isEdit) payload.id = S.editingId;
     var body = new URLSearchParams();
-    body.append('action', 'addRecord');
+    body.append('action', isEdit ? 'updateRecord' : 'addRecord');
     body.append('token', getAuthToken());
-    body.append('data', JSON.stringify({ date:date, empId:empId, name:empName, hours:hours, reason:reason, note:note }));
+    body.append('data', JSON.stringify(payload));
     var res = await fetch(SHIFT_GAS_URL, { method:'POST', body:body });
     var d = await res.json();
     if(d.status !== 'ok') throw new Error(d.msg || '未知錯誤');
-    toast('✓ 已新增紀錄','ok');
+    toast(isEdit ? '✓ 已更新紀錄' : '✓ 已新增紀錄','ok');
     closeAddModal();
     loadRecords();
   } catch(err){
-    toast('✗ 新增失敗：'+err.message,'err');
+    toast((isEdit?'✗ 更新失敗：':'✗ 新增失敗：')+err.message,'err');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-send"></i>送出紀錄';
+    txt.textContent = '送出紀錄';
   }
 }
 
