@@ -67,6 +67,7 @@ function doPost(e) {
     try { d = JSON.parse(p.data || '{}'); } catch (err) { d = {}; }
 
     if (action === 'addRecord') return addRecord(d, p.token);
+    if (action === 'updateRecord') return updateRecord(d, p.token);
     if (action === 'deleteRecord') return deleteRecord(d, p.token);
     return jsonRes({ status: 'error', msg: '未知動作: ' + action });
   } catch (err) {
@@ -155,6 +156,42 @@ function addRecord(d, token) {
     sheet.getRange(row, 8).setNumberFormat('@');
     sheet.getRange(row, 10).setNumberFormat('yyyy/M/d HH:mm:ss');
     return jsonRes({ status: 'ok', id: id });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 編輯紀錄：只改內容欄位（日期/工號/姓名/時數/原因/備註），
+// 登記人工號/姓名/登記時間（H/I/J）維持原樣，不因編輯而改寫
+function updateRecord(d, token) {
+  var user = requireCaptainPlus_(token);
+  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅隊長以上可使用），請重新登入' });
+
+  var id = d.id;
+  if (id === undefined || id === null || String(id).trim() === '') {
+    return jsonRes({ status: 'error', msg: '缺少 id' });
+  }
+
+  var date = String(d.date || '').trim();
+  var empId = String(d.empId || '').trim();
+  var name = String(d.name || '').trim();
+  var hours = Number(d.hours);
+  var reason = String(d.reason || '').trim();
+  var note = String(d.note || '').trim();
+
+  if (!date || !empId || !reason || isNaN(hours) || hours === 0) {
+    return jsonRes({ status: 'error', msg: '日期、員工、時數、原因為必填，時數不可為 0' });
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = getSheet_();
+    var row = findRowById_(sheet, id);
+    if (row < 0) return jsonRes({ status: 'error', msg: '找不到該筆紀錄' });
+    sheet.getRange(row, 2, 1, 6).setValues([[date, empId, name, hours, reason, note]]);
+    sheet.getRange(row, 3).setNumberFormat('@');
+    return jsonRes({ status: 'ok' });
   } finally {
     lock.releaseLock();
   }
