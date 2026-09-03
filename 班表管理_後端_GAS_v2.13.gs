@@ -723,6 +723,7 @@ function handleUpdateSchedule(payload) {
     var grid = sh.getRange('A4:AG30').getValues();
     var list = payload.data || [];
     var updated = 0, added = 0, skipped = 0;
+    var allDiffs = []; // v2.17：跟 handleImportSchedule 共用門檻邏輯，不逐人即時推播
     for (var i = 0; i < list.length; i++) {
       var nm = String(list[i].name || '').trim();
       if (!nm) continue;
@@ -783,11 +784,22 @@ function handleUpdateSchedule(payload) {
             }
           }
           if (diffDays.length > 0) {
-            notifyScheduleChangeToLine_(nm, notifyShiftType, diffDays);
+            allDiffs.push({ name: nm, shiftType: notifyShiftType, days: diffDays });
           }
         }
       }
     }
+
+    // v2.17：異動人數達門檻（例如批次職務修正、大量調整）改群組發一則，不逐人各發一則，
+    // 跟 handleImportSchedule 用同一套門檻（見 2026-08-02 換月149人燒光額度那次的教訓）——
+    // 手動存檔這條路徑當時漏補，才會又發生3天內燒掉187則的事。
+    var BULK_DIFF_THRESHOLD = 10;
+    if (allDiffs.length >= BULK_DIFF_THRESHOLD) {
+      notifyScheduleChangeBulkToLine_(notifyShiftType, allDiffs.length);
+    } else if (allDiffs.length > 0) {
+      notifyScheduleChangeBatchToLine_(allDiffs);
+    }
+
     SpreadsheetApp.flush();
 
     // v2.16：這支之前漏掉同步到Supabase＋清快取（只有上傳xlsx那條路徑有做），
