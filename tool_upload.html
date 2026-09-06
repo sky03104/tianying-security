@@ -938,15 +938,30 @@ function schSetShift(s){
 }
 /* 2026-07-15 咖哩要求：內容比對防呆——只憑分頁名稱不夠（哨表檔案若只有單一分頁會被誤判成班表），
    解析出資料後再檢查「內容看起來像不像班表」，不像就跳確認視窗，避免誤傳整月覆蓋。
-   2026-07-29：7/26 抽成外部檔案時漏帶這支函式與呼叫點，健檢查出後補回。 */
+   2026-07-29：7/26 抽成外部檔案時漏帶這支函式與呼叫點，健檢查出後補回。
+   2026-09-06：表頭列有兩種常見存法都算合法——①儲存格本身是純數字1~31；②儲存格是
+   真正的Excel日期格式（用「d」自訂格式顯示成1~31，但raw值是像42278這種日期序列，
+   XLSX.js沒開cellDates時就是讀到這個序列）。只認①會把②誤判成「不像班表」，這裡把
+   兩種都換算成「當月第幾天」來比對，年份對不對不影響——寫入試算表時是後端直接複製
+   來源儲存格格式，不吃這裡算出來的值，所以只要用來判斷「像不像班表」即可。 */
+function schHeaderCellToDay_(v){
+  const n=Number(v);
+  if(isNaN(n))return NaN;
+  if(n>=1&&n<=31)return n; // 格式①：儲存格本身就是1~31的數字
+  if(n>=20000&&n<=80000){ // 格式②：疑似Excel日期序列（約落在1954~2119年之間），換算成當月第幾天
+    const dom=new Date(Date.UTC(1899,11,30)+n*86400000).getUTCDate();
+    if(dom>=1&&dom<=31)return dom;
+  }
+  return NaN;
+}
 function schContentLooksValid(monthNum,headerData,mainData){
   const reasons=[];
   if(!(monthNum>=1&&monthNum<=12))reasons.push('Z1 儲存格讀不到 1~12 的月份數字');
-  // C2:AG3 兩列：第一列(C2:AG2)才是 1~31 日期數字，第二列(C3:AG3)是「三/四/五…」星期文字
+  // C2:AG3 兩列：第一列(C2:AG2)才是日期，第二列(C3:AG3)是「三/四/五…」星期文字
   const dayRow=(headerData&&headerData[0])||[];
   const dayVals=dayRow.filter(function(v){return String(v).trim()!=='';});
-  const dayNums=dayVals.filter(function(v){const n=Number(v);return !isNaN(n)&&n>=1&&n<=31;});
-  if(dayVals.length&&dayNums.length<dayVals.length*0.5)reasons.push('表頭列（C2:AG2）看起來不是 1~31 的日期序列');
+  const dayNums=dayVals.filter(function(v){return !isNaN(schHeaderCellToDay_(v));});
+  if(dayVals.length&&dayNums.length<dayVals.length*0.5)reasons.push('表頭列（C2:AG2）看起來不是日期序列');
   const names=(mainData||[]).map(function(r){return String((r&&r[1])||'').trim();}).filter(function(n){return n&&n.length>=2&&!/^\d+$/.test(n);});
   if(names.length<3)reasons.push('姓名欄（B欄）偵測到的有效姓名少於 3 筆');
   return {valid:reasons.length===0,reasons:reasons};
