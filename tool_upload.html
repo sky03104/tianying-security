@@ -954,6 +954,26 @@ function schHeaderCellToDay_(v){
   }
   return NaN;
 }
+// 2026-09-06：預覽表格原本只顯示raw值（純數字1~31或Excel日期序列，兩者都是難讀的
+// 大數字），咖哩反應看不懂。這裡只用來「顯示」，不影響schContentLooksValid的比對邏輯
+// 也不影響實際上傳（後端寫入是直接複製來源儲存格格式，不吃這裡的顯示值）。
+const WEEKDAY_CN_=['日','一','二','三','四','五','六'];
+function schFormatHeaderRow_(vals,isWeekdayRow){
+  return vals.map(function(v){
+    if(String(v).trim()==='')return v;
+    const n=Number(v);
+    if(isNaN(n))return v; // 已經是文字（例如「三」「週三」），原樣顯示
+    if(isWeekdayRow){
+      if(n>=20000&&n<=80000){ // Excel日期序列，換算成星期
+        const d=new Date(Date.UTC(1899,11,30)+n*86400000);
+        return WEEKDAY_CN_[d.getUTCDay()];
+      }
+      return v; // 數字但不像日期序列（例如本來就是1~7的星期代碼），原樣顯示避免誤判
+    }
+    const day=schHeaderCellToDay_(v);
+    return isNaN(day)?v:day;
+  });
+}
 function schContentLooksValid(monthNum,headerData,mainData){
   const reasons=[];
   if(!(monthNum>=1&&monthNum<=12))reasons.push('Z1 儲存格讀不到 1~12 的月份數字');
@@ -1045,7 +1065,9 @@ function schHandleFile(file){
     const monthFormatted=(monthNum>=1&&monthNum<=12)?(new Date().getFullYear())+'/'+String(monthNum).padStart(2,'0'):'（無法讀取）';
     document.getElementById('sch-month-text').textContent=monthFormatted;schLog('ok','Z1 月份：'+monthVal+' → '+monthFormatted);
     const mainData=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',range:'A4:AG30'});schMainRows=mainData;schMonthNum=(monthNum>=1&&monthNum<=12)?monthNum:null;buildSchPreview('sch-preview-main',mainData,10);schLog('ok','A4:AG30 讀取完成，共 '+mainData.length+' 列');
-    const headerData=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',range:'C2:AG3'});buildSchPreview('sch-preview-header-range',headerData,3);schLog('ok','C2:AG3 讀取完成');
+    const headerData=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',range:'C2:AG3'});
+    const headerPreview=headerData.map(function(row,idx){return schFormatHeaderRow_(row,idx===1);});
+    buildSchPreview('sch-preview-header-range',headerPreview,3);schLog('ok','C2:AG3 讀取完成');
     const contentCheck=schContentLooksValid(monthNum,headerData,mainData);
     if(!contentCheck.valid){
       schLog('err','⚠️ 內容比對異常：'+contentCheck.reasons.join('；'));
