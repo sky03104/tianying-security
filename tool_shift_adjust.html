@@ -199,10 +199,11 @@ function currentMonthStr(){
 }
 
 /* ══════════════════════════════════════════
-   權限：隊長以上（captain/executive/admin）才能使用
+   權限：組長以上（leader/vicecaptain/captain/executive/admin）才能使用
    前端只是先擋畫面，真正防線在後端每個 action 都會再驗一次
+   2026-09-09：咖哩開放給組長/副隊長使用，原本只有隊長以上
 ══════════════════════════════════════════ */
-var CAPTAIN_PLUS_ROLES = ['captain','executive','admin'];
+var CAPTAIN_PLUS_ROLES = ['leader','vicecaptain','captain','executive','admin'];
 function getSessionUser(){
   try { return JSON.parse(localStorage.getItem('hsh_session_user') || 'null'); } catch(e){ return null; }
 }
@@ -230,7 +231,7 @@ function checkPermission(){
   var u = getSessionUser();
   if(!u || !u.empId){ showNoPerm('請從天鷹保全 App 登入後開啟本工具'); return false; }
   if(!getAuthToken()){ showNoPerm('登入已失效，請重新從天鷹保全 App 登入'); return false; }
-  if(CAPTAIN_PLUS_ROLES.indexOf(u.role) === -1){ showNoPerm('此工具僅限隊長以上使用，如有需要請洽主管'); return false; }
+  if(CAPTAIN_PLUS_ROLES.indexOf(u.role) === -1){ showNoPerm('此工具僅限組長以上使用，如有需要請洽主管'); return false; }
   return true;
 }
 
