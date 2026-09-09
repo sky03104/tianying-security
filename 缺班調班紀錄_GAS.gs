@@ -5,10 +5,10 @@
 // 欄位：A ID | B 日期 | C 工號 | D 姓名 | E 時數(可正可負) | F 原因 | G 備註
 //       | H 登記人工號 | I 登記人姓名 | J 登記時間
 // 主鍵：純數字流水號（既有最大ID+1；支援刪除列，故不可用列號產生，否則會重號）
-// 權限：隊長以上（captain/executive/admin），前端 index.html DEFAULT_PERMS +
-//       tool_shift_adjust.html 前端把關 + 本檔每個 action 再驗一次 token+角色
-//       （2026-07-26：緊急聯絡清單/事故與表揚兩支 GAS 都補過同樣的教訓，
-//       這支從一開始就照同標準做，不要等出事才補）
+// 權限：組長以上（leader/vicecaptain/captain/executive/admin），前端 index.html
+//       DEFAULT_PERMS + tool_shift_adjust.html 前端把關 + 本檔每個 action 再驗一次
+//       token+角色（2026-07-26：緊急聯絡清單/事故與表揚兩支 GAS 都補過同樣的教訓，
+//       這支從一開始就照同標準做，不要等出事才補；2026-09-09：咖哩開放組長/副隊長）
 //
 // ── 部署 ──────────────────────────────────────────────────────
 // 1. Google Drive 新建一份空白試算表，複製它的 ID
@@ -27,8 +27,8 @@ var TZ = 'Asia/Taipei';
 // 主 App（天鷹保全APP_後端_GAS.gs）部署網址，用來驗證登入通行證
 var MAIN_APP_GAS_URL_ = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d8kLcCHbVFiKAK9wyoLwqNkt59PS4vPCY9QfG0_wiDJf2coO3zMcg/exec';
 
-// 允許使用本工具的角色：隊長以上
-var CAPTAIN_PLUS_ROLES_ = ['captain', 'executive', 'admin'];
+// 允許使用本工具的角色：組長以上（2026-09-09：咖哩開放給組長/副隊長，原本只有隊長以上）
+var CAPTAIN_PLUS_ROLES_ = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
 
 /**
  * 驗證通行證，通過回傳 { empId, name, role, ... }，不通過回傳 null。
@@ -51,7 +51,7 @@ function verifyAuthToken_(token) {
   }
 }
 
-// 驗證通行證＋角色需隊長以上，通過回傳使用者物件，不通過回傳 null（呼叫端自行包錯誤訊息）
+// 驗證通行證＋角色需組長以上，通過回傳使用者物件，不通過回傳 null（呼叫端自行包錯誤訊息）
 function requireCaptainPlus_(token) {
   var user = verifyAuthToken_(token);
   if (!user) return null;
@@ -129,7 +129,7 @@ function findRowById_(sheet, id) {
 // 新增紀錄
 function addRecord(d, token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅隊長以上可使用），請重新登入' });
+  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
 
   var date = String(d.date || '').trim();
   var empId = String(d.empId || '').trim();
@@ -165,7 +165,7 @@ function addRecord(d, token) {
 // 登記人工號/姓名/登記時間（H/I/J）維持原樣，不因編輯而改寫
 function updateRecord(d, token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅隊長以上可使用），請重新登入' });
+  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
 
   var id = d.id;
   if (id === undefined || id === null || String(id).trim() === '') {
@@ -200,7 +200,7 @@ function updateRecord(d, token) {
 // 刪除紀錄
 function deleteRecord(d, token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅隊長以上可使用），請重新登入' });
+  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
 
   var id = d.id;
   if (id === undefined || id === null || String(id).trim() === '') {
@@ -223,7 +223,7 @@ function deleteRecord(d, token) {
 // 讀取全部紀錄（前端自行依月份篩選、彙總）
 function getRecords(token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅隊長以上可使用），請重新登入' });
+  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
 
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
