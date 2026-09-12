@@ -3512,6 +3512,8 @@ function buildTomorrowPostFlex_(name, dateLabel, posts, titlePrefix) {
 }
 
 // 將 early/late 清單依「哨點」分組，回傳 Flex 用的內容區塊陣列
+// 2026-09-15：早/晚班改左右並排（見buildFullPostFlex_），單欄變窄，姓名/時段
+// 改上下堆疊（原本是baseline左右排，窄欄位會擠在一起看不清楚）。
 function buildPostSectionRows_(items) {
   // 依哨點(loc)歸群：{ loc: [ {name,time}, ... ] }
   var byLoc = {};
@@ -3527,40 +3529,43 @@ function buildPostSectionRows_(items) {
     var people = byLoc[loc];
     if (o > 0) rows.push({ type: 'separator', color: '#1F2937', margin: 'md' });
     // 哨點名稱
-    rows.push({ type: 'text', text: '📍 ' + loc, color: '#FFD700', size: 'sm', weight: 'bold', wrap: true, margin: (o > 0 ? 'md' : 'none') });
-    // 該哨點每個人
+    rows.push({ type: 'text', text: '📍 ' + loc, color: '#FFD700', size: 'xs', weight: 'bold', wrap: true, margin: (o > 0 ? 'md' : 'none') });
+    // 該哨點每個人：姓名/時段上下堆疊，窄欄位比左右baseline排版好讀
     for (var p = 0; p < people.length; p++) {
       rows.push({
-        type: 'box', layout: 'baseline', spacing: 'sm', paddingStart: 'md',
+        type: 'box', layout: 'vertical', spacing: 'xs', paddingStart: 'md', margin: 'xs',
         contents: [
-          { type: 'text', text: people[p].name, color: '#F5F5F5', size: 'sm', flex: 4, weight: 'bold' },
-          { type: 'text', text: people[p].time || '依排班', color: '#8A95A8', size: 'sm', flex: 5, align: 'end' }
+          { type: 'text', text: people[p].name, color: '#F5F5F5', size: 'xs', weight: 'bold', wrap: true },
+          { type: 'text', text: people[p].time || '依排班', color: '#8A95A8', size: 'xxs', wrap: true }
         ]
       });
     }
   }
-  if (rows.length === 0) rows.push({ type: 'text', text: '（無資料）', color: '#6B7280', size: 'sm' });
+  if (rows.length === 0) rows.push({ type: 'text', text: '（無資料）', color: '#6B7280', size: 'xs' });
   return rows;
 }
 
-// 組整張明日哨表 Flex：早班區 + 晚班區
+// 組整張明日哨表 Flex：早班區 + 晚班區左右並排
+// 2026-09-15：原本早班區整段疊在晚班區上面，卡片拉得很長，改跟排哨工具的
+// 「逐格檢視」一樣分左右兩欄並排，縮短整張卡片高度。
 function buildFullPostFlex_(dateLabel, early, late) {
-  var body = [];
+  var earlyCol = [
+    { type: 'box', layout: 'horizontal', backgroundColor: '#818CF826', cornerRadius: '6px', paddingAll: '6px',
+      contents: [{ type: 'text', text: '🌅 早班（' + early.length + '）', color: '#818CF8', weight: 'bold', size: 'xs', wrap: true }] }
+  ].concat(buildPostSectionRows_(early));
+  var lateCol = [
+    { type: 'box', layout: 'horizontal', backgroundColor: '#D4A80026', cornerRadius: '6px', paddingAll: '6px',
+      contents: [{ type: 'text', text: '🌙 晚班（' + late.length + '）', color: '#FFD700', weight: 'bold', size: 'xs', wrap: true }] }
+  ].concat(buildPostSectionRows_(late));
 
-  // 早班區標題
-  body.push({ type: 'box', layout: 'horizontal', backgroundColor: '#818CF826', cornerRadius: '6px', paddingAll: '8px',
-    contents: [{ type: 'text', text: '🌅 早班區（' + early.length + ' 人）', color: '#818CF8', weight: 'bold', size: 'sm' }] });
-  var earlyRows = buildPostSectionRows_(early);
-  for (var a = 0; a < earlyRows.length; a++) body.push(earlyRows[a]);
-
-  // 分隔
-  body.push({ type: 'separator', color: '#374151', margin: 'xl' });
-
-  // 晚班區標題
-  body.push({ type: 'box', layout: 'horizontal', backgroundColor: '#D4A80026', cornerRadius: '6px', paddingAll: '8px', margin: 'xl',
-    contents: [{ type: 'text', text: '🌙 晚班區（' + late.length + ' 人）', color: '#FFD700', weight: 'bold', size: 'sm' }] });
-  var lateRows = buildPostSectionRows_(late);
-  for (var b = 0; b < lateRows.length; b++) body.push(lateRows[b]);
+  var body = [{
+    type: 'box', layout: 'horizontal', spacing: 'md',
+    contents: [
+      { type: 'box', layout: 'vertical', flex: 1, spacing: 'sm', contents: earlyCol },
+      { type: 'separator', color: '#374151' },
+      { type: 'box', layout: 'vertical', flex: 1, spacing: 'sm', contents: lateCol }
+    ]
+  }];
 
   return {
     type: 'bubble', size: 'giga',
