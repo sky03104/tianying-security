@@ -81,6 +81,14 @@ input:focus,select:focus{border-color:var(--gold);}
 .prev-item-label{color:#4B5563;white-space:pre-line;}
 .prev-item-val{white-space:pre-line;text-align:right;font-weight:600;color:#000;}
 .prev-item-val.special-val{color:#DC2626;}
+/* 2026-09-15：逐格檢視早/晚班分左右兩欄並排，單欄變窄，改直式排列（標籤在上、姓名在下）比較讀得下 */
+.prev-list-cols{display:flex;gap:8px;align-items:flex-start;}
+.prev-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+.prev-col-title{font-size:13px;font-weight:700;color:var(--gold2);text-align:center;padding:4px 0;}
+.prev-item-col{display:flex;flex-direction:column;gap:2px;background:#fff;border:1px solid #000;border-radius:8px;padding:8px 9px;}
+.prev-item-col .prev-item-label{font-size:11px;color:#4B5563;}
+.prev-item-col .prev-item-val{font-size:12.5px;text-align:left;color:#000;font-weight:600;}
+.prev-item-col .prev-item-val.special-val{color:#DC2626;}
 .emp-list{display:flex;flex-direction:column;gap:6px;}
 .emp-card{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
 .emp-name{font-weight:700;font-size:14px;margin-bottom:8px;color:var(--gold2);}
@@ -709,20 +717,21 @@ function isSpecialGuardCell(rows, ri, ci) {
   return false;
 }
 
-// 18×14 原始表格在手機上要橫滑900px寬才看得完，字又小，改提供逐格清單檢視
+// 18×14 原始表格在手機上要橫滑900px寬才看得完，字又小，改提供逐格清單檢視。
+// 每筆都帶 shift 欄位（2026-09-15咖哩要求早/晚班分左右兩欄並排，縮短單欄寬度）。
 function flattenPreview(rows) {
   const items = [];
-  items.push({ label: '早班帶隊幹部', value: rows[2][4] });
-  items.push({ label: '晚班帶隊幹部', value: rows[2][11] });
-  POST_DEFS.forEach(def => { items.push({ label: def.key, value: rows[def.row][def.col], special: def.key === '南側門' }); });
+  items.push({ label: '早班帶隊幹部', value: rows[2][4], shift: 'early' });
+  items.push({ label: '晚班帶隊幹部', value: rows[2][11], shift: 'late' });
+  POST_DEFS.forEach(def => { items.push({ label: def.key, value: rows[def.row][def.col], special: def.key === '南側門', shift: def.shift }); });
   // 增派區（col4/5）跟見習遞補（col4/5 或 col11/12）共用同一段列範圍，用標籤文字掃描，
   // 涵蓋巡檢增派/停巡增派/泊車增派①②/見習人員（早/晚）/自訂哨點，不用寫死行號。
   for (let r = 10; r <= 16; r++) {
     const earlyLbl = rows[r][4];
-    if (earlyLbl === '見習') items.push({ label: '早班見習', value: rows[r][5] });
-    else if (earlyLbl && earlyLbl !== '←') items.push({ label: earlyLbl, value: rows[r][5], special: true });
+    if (earlyLbl === '見習') items.push({ label: '早班見習', value: rows[r][5], shift: 'early' });
+    else if (earlyLbl && earlyLbl !== '←') items.push({ label: earlyLbl, value: rows[r][5], special: true, shift: 'early' });
     const lateLbl = rows[r][11];
-    if (lateLbl === '見習') items.push({ label: '晚班見習', value: rows[r][12] });
+    if (lateLbl === '見習') items.push({ label: '晚班見習', value: rows[r][12], shift: 'late' });
   }
   return items;
 }
@@ -1187,10 +1196,13 @@ function GenerateTab({ postConfig }) {
               )))
             )
           )
-        : h('div', { className: 'prev-list' },
-            flattenPreview(result.rows).map((it, i) => h('div', { className: 'prev-item', key: i },
-              h('span', { className: 'prev-item-label' }, it.label),
-              h('span', { className: 'prev-item-val' + (it.value && it.special ? ' special-val' : '') }, it.value || '未排')
+        : h('div', { className: 'prev-list-cols' },
+            ['early', 'late'].map(sh => h('div', { className: 'prev-col', key: sh },
+              h('div', { className: 'prev-col-title' }, sh === 'early' ? '早班' : '晚班'),
+              flattenPreview(result.rows).filter(it => it.shift === sh).map((it, i) => h('div', { className: 'prev-item-col', key: i },
+                h('span', { className: 'prev-item-label' }, it.label),
+                h('span', { className: 'prev-item-val' + (it.value && it.special ? ' special-val' : '') }, it.value || '未排')
+              ))
             ))
           ),
       h('div', { className: 'row', style: { marginTop: '14px' } },
