@@ -65,7 +65,17 @@ input:focus,select:focus{border-color:var(--gold);}
 .prev-table td.swap-cell{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
 .prev-table td.swap-dragging{opacity:.9;background:rgba(212,168,0,.28);box-shadow:0 8px 18px rgba(0,0,0,.4);transform:scale(1.08) translateY(-3px);cursor:grabbing;position:relative;z-index:5;}
 .prev-table td.swap-target{outline:2px dashed var(--gold2,#F0C040);outline-offset:-2px;background:rgba(212,168,0,.12);}
+.prev-table td.empty-slot{cursor:pointer;background:rgba(129,140,248,.06);}
+.prev-table td.empty-slot:active{background:rgba(129,140,248,.16);}
 .swap-hint{font-size:12px;color:var(--text-muted);margin:8px 0 2px;display:flex;align-items:center;gap:6px;}
+.picker-ovl{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;}
+.picker-box{width:100%;max-width:480px;max-height:70vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:14px;}
+.picker-title{font-size:15px;font-weight:700;color:var(--gold2);margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.picker-sub{font-size:12px;color:var(--text-muted);margin-bottom:10px;}
+.picker-list{display:flex;flex-direction:column;gap:6px;}
+.picker-item{padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.02);color:var(--text);font-size:14px;font-weight:600;text-align:left;cursor:pointer;font-family:inherit;}
+.picker-item:active{background:rgba(129,140,248,.18);border-color:var(--indigo);}
+.picker-cancel{width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-muted);font-size:14px;font-family:inherit;cursor:pointer;}
 .prev-list{display:flex;flex-direction:column;gap:6px;}
 .prev-item{display:flex;justify-content:space-between;gap:10px;background:#fff;border:1px solid #000;border-radius:10px;padding:12px 14px;font-size:14px;}
 .prev-item-label{color:#4B5563;white-space:pre-line;}
@@ -857,18 +867,50 @@ function GenerateTab({ postConfig }) {
   const [uploading, setUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState('table'); // 'list'（逐格檢視）｜'table'（完整18×14表格，2026-07-20咖哩要求改為預設）
   const [dragState, setDragState] = useState(null); // { from: {ri,ci}, overKey: 'ri,ci'|null }（按住拖曳互換用）
+  const [picker, setPicker] = useState(null); // { ri, ci, shift }（點空白格挑未排入人員用）
 
   function showToast(msg, type) {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2600);
   }
 
-  // ── 表格預覽：按住姓名格拖曳到另一格互換（2026-07-20咖哩要求的手動微調功能）──
+  // ── 表格預覽：按住姓名格拖曳到另一格互換／搬移空格，或點空格挑未排入人員填入
+  //   （2026-07-20咖哩要求互換功能；2026-09-11咖哩要求加搬移到空格＋點空格挑人）──
   // 只有「姓名\n時段」格式的格子才能拖，標題/標籤格排除，用是否以時段結尾判斷。
   // 用Pointer Events（不是HTML5原生drag-and-drop）是因為原生DnD在手機觸控基本不動作，
   // 天鷹是手機優先的專案，Pointer Events滑鼠/觸控都通用，不用額外加套件。
   function isAssignedCell(cell) {
     return typeof cell === 'string' && /\n\d{4}-\d{4}$/.test(cell);
+  }
+  // 哪些格子「該放人名」（不論目前空著還是已排人），沿用xlsx下拉選單那份規劃(buildNameCellPlan)，
+  // 單一資料源，不用另外維護一份座標清單。key='r,c' -> {shift, perPerson, time}
+  const namePlan = useMemo(() => {
+    const map = {};
+    if (result) buildNameCellPlan(result.rows).forEach(p => { map[p.r + ',' + p.c] = p; });
+    return map;
+  }, [result]);
+  function isEmptySlot(ri, ci) {
+    return !!namePlan[ri + ',' + ci] && result.rows[ri][ci] === '';
+  }
+  // 目前整張表已經被排進去的姓名集合，用來算「還沒排入哨點的人」
+  function assignedNameSet(rows) {
+    const set = new Set();
+    rows.forEach(row => row.forEach(cell => { if (isAssignedCell(cell)) set.add(cell.split('\n')[0]); }));
+    return set;
+  }
+  // 依格子規劃算出「填某人進這格」該配的時段：跟人走的照本人月班表代號算，跟崗位走的用哨位固定時段
+  function timeForSlot(plan, name) {
+    if (!plan.perPerson) return plan.time;
+    const roster = (result.rosters && result.rosters[plan.shift]) || [];
+    const person = roster.find(p => p.name === name);
+    return timeForPerson(person, plan.shift);
+  }
+  function slotLabel(ri, ci) {
+    // 帶隊幹部兩格是特例：標籤跟值不是「col-1同一格」的固定關係（見buildBaseRows），
+    // 其餘哨位都遵守POST_DEFS「label在col-1」的規律，直接讀值即可。
+    if (ri === 2 && ci === 4) return '早班帶隊幹部';
+    if (ri === 2 && ci === 11) return '晚班帶隊幹部';
+    return String(result.rows[ri][ci - 1] || '').replace(/\n/g, '').trim() || '該哨位';
   }
   function cellKeyFromPoint(x, y) {
     const el = document.elementFromPoint(x, y);
@@ -886,7 +928,11 @@ function GenerateTab({ postConfig }) {
   function handleSwapPointerMove(e) {
     if (!dragState) return;
     const key = cellKeyFromPoint(e.clientX, e.clientY);
-    const valid = key && isAssignedCell(result.rows[Number(key.split(',')[0])][Number(key.split(',')[1])]);
+    let valid = false;
+    if (key) {
+      const [tri, tci] = key.split(',').map(Number);
+      valid = isAssignedCell(result.rows[tri][tci]) || isEmptySlot(tri, tci);
+    }
     setDragState(prev => prev && prev.overKey !== (valid ? key : null) ? { ...prev, overKey: valid ? key : null } : prev);
   }
   function handleSwapPointerUp(e) {
@@ -895,18 +941,55 @@ function GenerateTab({ postConfig }) {
     if (key) {
       const [tri, tci] = key.split(',').map(Number);
       const { ri: fri, ci: fci } = dragState.from;
-      if ((tri !== fri || tci !== fci) && isAssignedCell(result.rows[tri][tci])) {
+      if (tri !== fri || tci !== fci) {
         const fromName = result.rows[fri][fci].split('\n')[0];
-        const toName = result.rows[tri][tci].split('\n')[0];
-        const newRows = result.rows.map(r => r.slice());
-        const tmp = newRows[fri][fci];
-        newRows[fri][fci] = newRows[tri][tci];
-        newRows[tri][tci] = tmp;
-        setResult(Object.assign({}, result, { rows: newRows }));
-        showToast('已互換：' + fromName + ' ⇄ ' + toName, 'ok');
+        if (isAssignedCell(result.rows[tri][tci])) {
+          // 互換：兩格都已排人
+          const toName = result.rows[tri][tci].split('\n')[0];
+          const newRows = result.rows.map(r => r.slice());
+          const tmp = newRows[fri][fci];
+          newRows[fri][fci] = newRows[tri][tci];
+          newRows[tri][tci] = tmp;
+          setResult(Object.assign({}, result, { rows: newRows }));
+          showToast('已互換：' + fromName + ' ⇄ ' + toName, 'ok');
+        } else if (isEmptySlot(tri, tci)) {
+          // 搬移：目標是空白哨位，來源清空，時段依目標哨位規則重算（不是照抄來源時段）
+          const plan = namePlan[tri + ',' + tci];
+          const newTime = timeForSlot(plan, fromName);
+          const newRows = result.rows.map(r => r.slice());
+          newRows[tri][tci] = fromName + '\n' + newTime;
+          newRows[fri][fci] = '';
+          setResult(Object.assign({}, result, { rows: newRows }));
+          showToast('已搬移：' + fromName + ' → ' + slotLabel(tri, tci), 'ok');
+        }
       }
     }
     setDragState(null);
+  }
+
+  // ── 點空白哨位：挑一個「還沒排入本次哨表」的當班人員填進去 ──
+  function openPicker(ri, ci) {
+    const plan = namePlan[ri + ',' + ci];
+    if (!plan) return;
+    setPicker({ ri, ci, shift: plan.shift });
+  }
+  function closePicker() { setPicker(null); }
+  function pickerOptions() {
+    if (!picker || !result) return [];
+    const roster = (result.rosters && result.rosters[picker.shift]) || [];
+    const assigned = assignedNameSet(result.rows);
+    return roster.filter(p => !assigned.has(p.name)).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  }
+  function fillPicker(name) {
+    if (!picker) return;
+    const { ri, ci } = picker;
+    const plan = namePlan[ri + ',' + ci];
+    const newTime = timeForSlot(plan, name);
+    const newRows = result.rows.map(r => r.slice());
+    newRows[ri][ci] = name + '\n' + newTime;
+    setResult(Object.assign({}, result, { rows: newRows }));
+    showToast('已填入：' + name + ' → ' + slotLabel(ri, ci), 'ok');
+    setPicker(null);
   }
 
   async function handleGenerate() {
@@ -972,6 +1055,18 @@ function GenerateTab({ postConfig }) {
 
   return h('div', null,
     toast && h(Toast, toast),
+    picker && h('div', { className: 'picker-ovl', onClick: closePicker },
+      h('div', { className: 'picker-box', onClick: e => e.stopPropagation() },
+        h('div', { className: 'picker-title' }, h('i', { className: 'ti ti-user-plus' }), '選擇填入「' + slotLabel(picker.ri, picker.ci) + '」'),
+        h('div', { className: 'picker-sub' }, picker.shift === 'early' ? '早班在職名單中尚未排入哨點的人' : '晚班在職名單中尚未排入哨點的人'),
+        h('div', { className: 'picker-list' },
+          pickerOptions().length
+            ? pickerOptions().map(p => h('button', { key: p.name, className: 'picker-item', onClick: () => fillPicker(p.name) }, p.name))
+            : h('div', { className: 'empty-note' }, '這個班別的人都已經排進哨表了')
+        ),
+        h('button', { className: 'picker-cancel', onClick: closePicker }, '取消')
+      )
+    ),
     h('div', { className: 'card' },
       h('div', { className: 'card-title' }, h('i', { className: 'ti ti-calendar' }), '日期與增派設定'),
       h('div', { className: 'row' },
@@ -1053,7 +1148,7 @@ function GenerateTab({ postConfig }) {
       ),
       previewMode === 'table'
         ? h('div', null,
-            h('div', { className: 'swap-hint' }, h('i', { className: 'ti ti-arrows-move' }), '按住姓名格拖到另一格可互換兩人'),
+            h('div', { className: 'swap-hint' }, h('i', { className: 'ti ti-arrows-move' }), '按住姓名格拖到另一格可互換兩人，拖到空白哨位可搬移；點空白哨位可挑人填入'),
             h('table', {
               className: 'prev-table',
               onPointerMove: handleSwapPointerMove,
@@ -1073,18 +1168,21 @@ function GenerateTab({ postConfig }) {
                   if (ri === 0) { style.borderTop = 'none'; style.borderLeft = 'none'; style.borderRight = 'none'; }
                   const key = ri + ',' + ci;
                   const draggable = isAssignedCell(cell);
+                  const emptySlot = !cell && isEmptySlot(ri, ci);
                   const isDragging = dragState && dragState.from.ri === ri && dragState.from.ci === ci;
                   const isTarget = dragState && dragState.overKey === key;
                   let cls = cell ? 'has-val' : '';
                   if (cell && isSpecialGuardCell(result.rows, ri, ci)) cls += ' special-val';
                   if (draggable) cls += ' swap-cell';
+                  if (emptySlot) cls += ' empty-slot';
                   if (isDragging) cls += ' swap-dragging';
                   if (isTarget) cls += ' swap-target';
                   return h('td', {
                     key: ci, className: cls, style, 'data-key': key,
                     rowSpan: span ? span.rowSpan : 1, colSpan: span ? span.colSpan : 1,
-                    onPointerDown: draggable ? (e => handleSwapPointerDown(ri, ci, e)) : undefined
-                  }, cell);
+                    onPointerDown: draggable ? (e => handleSwapPointerDown(ri, ci, e)) : undefined,
+                    onClick: emptySlot ? (() => openPicker(ri, ci)) : undefined
+                  }, cell || (emptySlot ? h('i', { className: 'ti ti-user-plus', style: { color: 'var(--indigo)', opacity: .55 } }) : cell));
                 })
               )))
             )
