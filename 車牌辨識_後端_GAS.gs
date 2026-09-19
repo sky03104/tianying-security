@@ -308,8 +308,12 @@ function doPost(e) {
       var sheet = ss.getSheetByName(payload.typeLabel);
       if (!sheet) return jsonOut({ success: false, error: '找不到「' + payload.typeLabel + '」分頁，請確認試算表分頁名稱是否與類型名稱一致' });
       var plate = String(payload.plate || '').trim().toUpperCase();
+      var parkLocation = String(payload.parkLocation || '').trim();
       var now2 = new Date();
       var timestamp = Utilities.formatDate(now2, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+      // 2026-09-19新增「停放位置」E欄：手動輸入，選填。既有分頁只有A~D欄表頭，
+      // 這裡確保E1有標題，appendRow照樣能寫到E欄（不需要表頭就能寫值，這只是方便肉眼看）。
+      if (!sheet.getRange(1, 5).getValue()) sheet.getRange(1, 5).setValue('停放位置');
       // 上鎖：append+抓行號要當成一個原子操作，避免多支手機同時登記時，
       // 兩個請求的 getLastRow() 讀到彼此交錯後的行號，回傳給前端的 row 對不上實際寫入的那一列。
       // 2026-07-30 新增的白名單比對／長期停放偵測也包在同一個鎖裡，維持單一原子操作。
@@ -341,7 +345,8 @@ function doPost(e) {
           timestamp,
           payload.typeLabel,
           plate,
-          "'" + operator  // ' 前綴：工號純數字，防試算表吃掉開頭 0
+          "'" + operator,  // ' 前綴：工號純數字，防試算表吃掉開頭 0
+          parkLocation
         ]);
         newRow = sheet.getLastRow();
 
@@ -364,7 +369,7 @@ function doPost(e) {
       // 用typeof防呆：SQL遷移的腳本檔還沒貼進這個專案時，跳過同步，不影響原本Sheets登記功能。
       var supabaseId = null;
       if (typeof supabaseRequest_ === 'function') {
-        supabaseId = _syncVehicleRegToSupabase_(payload.typeLabel, plate, operator, now2);
+        supabaseId = _syncVehicleRegToSupabase_(payload.typeLabel, plate, operator, now2, parkLocation);
       }
       // row/supabaseId 回傳給前端：辨識錯誤時前端可用這兩個值呼叫 updatePlate 就地修正，不用手動開試算表改。
       return jsonOut({ success: true, row: newRow, supabaseId: supabaseId, specialVehicle: specialVehicle });
@@ -515,7 +520,7 @@ function searchVehicleLogs_(payload) {
     if (!sheet) continue;
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) continue;
-    var data = sheet.getRange(2, 1, lastRow - 1, 4).getValues(); // 時間/類型/車牌/登記人
+    var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues(); // 時間/類型/車牌/登記人/停放位置
     for (var i = 0; i < data.length; i++) {
       var ts = data[i][0];
       var tsStr = (ts instanceof Date) ? Utilities.formatDate(ts, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss') : String(ts || '');
@@ -532,7 +537,8 @@ function searchVehicleLogs_(payload) {
         time: tsStr,
         type: String(data[i][1] || targetTypes[t]),
         plate: String(data[i][2] || ''),
-        operator: String(data[i][3] || '')
+        operator: String(data[i][3] || ''),
+        parkLocation: String(data[i][4] || '')
       });
     }
   }
@@ -562,11 +568,14 @@ function jsonOut(data) {
 
 // 2026-08-28 SQL遷移：登記時同步寫一份到Supabase（雙寫，Sheets不停用）。
 // 失敗只記log、回傳null，不讓Supabase的問題影響到Sheets那邊已經成功的登記。
-function _syncVehicleRegToSupabase_(typeLabel, plate, operator, timestamp) {
+function _syncVehicleRegToSupabase_(typeLabel, plate, operator, timestamp, parkLocation) {
   try {
     var iso = Utilities.formatDate(timestamp, 'Asia/Taipei', "yyyy-MM-dd'T'HH:mm:ssXXX");
+    // 2026-09-19新增park_location欄：Supabase那張表要先手動在SQL Editor
+    // 執行 alter table vehicle_overnight_logs add column if not exists park_location text;
+    // 否則這裡insert會失敗（欄位不存在），失敗只記log不影響Sheets那份已經成功的登記。
     var result = supabaseRequest_('post', '/rest/v1/vehicle_overnight_logs',
-      [{ type_label: typeLabel, plate: plate, operator: operator, created_at: iso }],
+      [{ type_label: typeLabel, plate: plate, operator: operator, created_at: iso, park_location: parkLocation || null }],
       { Prefer: 'return=representation' });
     return (result && result[0] && result[0].id) || null;
   } catch (err) {

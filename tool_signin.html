@@ -213,6 +213,11 @@ function logWorkflow(tool,actionType,status){
     <div style="text-align:right"><div style="font-size:13px;color:#8A95A8" id="statLast">—</div><div class="stat-lbl">最後車牌</div></div>
   </div>
 
+  <!-- 停放位置：手動輸入，拍照辨識同時就能打字，不用等辨識完成 -->
+  <div style="margin:0 0 12px">
+    <input type="text" class="wl-input" id="parkLocInp" placeholder="📍 停放位置（選填，例如：B1-23）可先打字不用等辨識" autocomplete="off" style="width:100%;box-sizing:border-box"/>
+  </div>
+
   <!-- 大拍照按鈕 -->
   <button class="big-cam" id="bigCam" onclick="triggerCam()">
     <span class="ic"><i class="ti ti-camera"></i></span>
@@ -240,7 +245,7 @@ function logWorkflow(tool,actionType,status){
         <input type="text" class="cfm-plate" id="cfmPlate" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onPlateEdit()"/>
       </div>
     </div>
-    <div class="cfm-count" id="cfmCount">3 秒後自動登記，點車牌可修改</div>
+    <div class="cfm-count" id="cfmCount">10 秒後自動登記，點車牌可修改</div>
     <div class="cfm-btns">
       <button class="cfm-cancel" onclick="cancelCfm()">取消</button>
       <button class="cfm-ok" onclick="confirmNow()">
@@ -334,7 +339,7 @@ var GAS_URL='https://script.google.com/macros/s/AKfycbwZ5f7h_Lv_MOCxPrqPpBPKA917
 // 上面 GAS_URL 只剩 getLineBindings（LINE 綁定反查工號）在用
 var PLATE_GAS_URL='https://script.google.com/macros/s/AKfycby8wWysK9AeiXzVlfB2MSyyxgrBLp7T6W0i-cKl-7RFHi2TL2P0gTw2btCpwJo_m6Mq/exec';
 var LOGO_SRC='data:image/png;base64,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';
-var AUTO_SUBMIT_SEC = 3;   // 自動送出秒數
+var AUTO_SUBMIT_SEC = 10;  // 自動送出秒數（2026-09-19：3秒改10秒，讓手動輸入停放位置來得及打完）
 var TYPE_INFO={
   moto:{label:'館內機車',icon:'ti-motorbike',ms:'https://forms.cloud.microsoft/r/QGHn5SQ0en?origin=lprLink'},
   car:{label:'館內汽車',icon:'ti-car',ms:'https://forms.cloud.microsoft/r/Mcf0VUYBX7?origin=lprLink'},
@@ -551,8 +556,9 @@ function renderSearchResults(rows,truncated){
   document.getElementById('sqShareBtn').style.display=rows.length?'block':'none';
   if(!rows.length){list.innerHTML='<div class="wl-empty">查無紀錄</div>';return;}
   list.innerHTML=rows.map(function(r,i){
+    var locSub=r.parkLocation?('<br><span style="font-size:10px;color:#818CF8;font-weight:400;letter-spacing:0"><i class="ti ti-map-pin"></i> '+escHtml(r.parkLocation)+'</span>'):'';
     return '<div class="wl-item"><span class="sq-item-time">'+escHtml(r.time.slice(5))+'</span>'+
-      '<span class="sq-item-plate">'+escHtml(r.plate)+'</span>'+
+      '<span class="sq-item-plate">'+escHtml(r.plate)+locSub+'</span>'+
       '<span class="wl-item-type">'+escHtml(r.type)+'</span>'+
       '<span class="sq-item-op">'+escHtml(r.operator)+'</span>'+
       '<button class="wl-item-del" onclick="deleteSearchResultRow('+i+')" title="刪除這筆"><i class="ti ti-trash"></i></button></div>';
@@ -582,7 +588,7 @@ function deleteSearchResultRow(i){
 function renderVehicleRowsToBlob(rows,titleSuffix){
   var rowsHtml=rows.map(function(r){
     return '<tr><td>'+escHtml(r.time)+'</td><td>'+escHtml(r.type)+'</td>'+
-      '<td style="font-weight:800;letter-spacing:1px;">'+escHtml(r.plate)+'</td><td>'+escHtml(r.operator)+'</td></tr>';
+      '<td style="font-weight:800;letter-spacing:1px;">'+escHtml(r.plate)+'</td><td>'+escHtml(r.operator)+'</td><td>'+escHtml(r.parkLocation||'')+'</td></tr>';
   }).join('');
 
   var capture=document.createElement('div');
@@ -591,7 +597,7 @@ function renderVehicleRowsToBlob(rows,titleSuffix){
     '<div style="text-align:center;font-size:20px;font-weight:900;margin-bottom:4px;">天鷹保全・過夜車輛查詢紀錄'+(titleSuffix?'・'+escHtml(titleSuffix):'')+'</div>'+
     '<div style="text-align:center;font-size:13px;color:#555;margin-bottom:4px;">'+escHtml(sqLastQueryLabel)+'</div>'+
     '<div style="text-align:center;font-size:13px;color:#555;margin-bottom:14px;">共 '+rows.length+' 筆</div>'+
-    '<table class="sqtable"><tr><th>時間</th><th>類型</th><th>車牌</th><th>登記人</th></tr>'+rowsHtml+'</table>';
+    '<table class="sqtable"><tr><th>時間</th><th>類型</th><th>車牌</th><th>登記人</th><th>停放位置</th></tr>'+rowsHtml+'</table>';
   var style=document.createElement('style');
   style.textContent='table.sqtable{width:100%;border-collapse:collapse;font-size:12px;}'
     +'table.sqtable th,table.sqtable td{border:1px solid #ddd;padding:5px 4px;text-align:center;color:#1a1a1a;}'
@@ -823,6 +829,12 @@ function sendManual(){
 
 // ═══════ 送出（背景進行，不擋下一張拍攝）═══════
 function doSubmit(plate){
+  // 停放位置：手動輸入停車格號碼，拍照辨識同時就可以打字，送出時讀值。
+  // 每台車的車格不同，送出後立即清空，避免下一台沒改到誤沿用上一格號碼。
+  var parkLocInp=document.getElementById('parkLocInp');
+  var parkLocation=parkLocInp.value.trim();
+  parkLocInp.value='';
+
   // 樂觀 UI：先進列表，後台送出
   sessCount++;
   document.getElementById('statCount').textContent=sessCount;
@@ -833,11 +845,12 @@ function doSubmit(plate){
   var div=document.createElement('div');
   div.className='recent-item';div.id=itemId;
   div.dataset.type=typeLabel;
-  div.innerHTML='<span class="recent-plate" id="'+itemId+'-txt">'+plate+'</span><span class="recent-time">'+new Date().toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'})+'</span><span class="recent-ok" id="'+itemId+'-st"><span class="spin" style="width:12px;height:12px;border-top-color:#4ADE80"></span></span>';
+  var locHtml=parkLocation?('<span class="recent-loc" style="color:#818CF8;font-size:12px;margin-left:6px"><i class="ti ti-map-pin"></i> '+escHtml(parkLocation)+'</span>'):'';
+  div.innerHTML='<span class="recent-plate" id="'+itemId+'-txt">'+plate+'</span>'+locHtml+'<span class="recent-time">'+new Date().toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'})+'</span><span class="recent-ok" id="'+itemId+'-st"><span class="spin" style="width:12px;height:12px;border-top-color:#4ADE80"></span></span>';
   list.insertBefore(div,list.firstChild);
 
   // 背景送出（日期時間 = 送出當下，GAS端自動填）
-  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'vehicleReg',type:curType,typeLabel:typeLabel,plate:plate,operator:empName||empId||'未登入'})})
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'vehicleReg',type:curType,typeLabel:typeLabel,plate:plate,operator:empName||empId||'未登入',parkLocation:parkLocation})})
     .then(function(r){return r.json();})
     .then(function(j){
       var st=document.getElementById(itemId+'-st');
