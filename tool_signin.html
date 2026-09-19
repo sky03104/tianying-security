@@ -829,9 +829,11 @@ function sendManual(){
 
 // ═══════ 送出（背景進行，不擋下一張拍攝）═══════
 function doSubmit(plate){
-  // 停放位置：手動輸入欄位，拍照辨識同時就可以打字，送出時才讀值。
-  // 不清空——同一個地點常常連續登記好幾台車，保留給下一筆沿用，要換地點再手動改。
-  var parkLocation=document.getElementById('parkLocInp').value.trim();
+  // 停放位置：手動輸入停車格號碼，拍照辨識同時就可以打字，送出時讀值。
+  // 每台車的車格不同，送出後立即清空，避免下一台沒改到誤沿用上一格號碼。
+  var parkLocInp=document.getElementById('parkLocInp');
+  var parkLocation=parkLocInp.value.trim();
+  parkLocInp.value='';
 
   // 樂觀 UI：先進列表，後台送出
   sessCount++;
