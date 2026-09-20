@@ -120,8 +120,6 @@ function logWorkflow(tool,actionType,status){
     .divider{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:#4B5563;font-size:11px}
     .divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
     .btn-ms{width:100%;background:rgba(0,120,212,.08);border:1px solid rgba(0,120,212,.25);color:#60a5fa;border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
-    .nav-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(10,12,16,.96);border-top:1px solid rgba(255,255,255,.07);z-index:200}
-    .nav-btn{width:100%;padding:13px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#8A95A8;display:flex;align-items:center;justify-content:center;gap:8px}
     .toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(30,34,42,.96);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600;z-index:9000;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:toastIn .25s ease}
     @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-8px)}}
     .page-footer{font-size:10px;color:#4B5563;letter-spacing:1px;text-align:center;padding:8px 0 16px}
@@ -173,7 +171,7 @@ function logWorkflow(tool,actionType,status){
   <img id="hdrLogo" class="hdr-logo" src="" alt=""/>
   <div><div class="hdr-cn"><span style="color:#FFD700">天鷹</span>保全</div><div class="hdr-en">OVERNIGHT VEHICLE REGISTRATION</div></div>
   <button id="searchBtn" class="back-btn" style="margin-left:auto;width:auto;padding:0 12px;font-size:13px;font-weight:700;white-space:nowrap" onclick="openSearch()" title="查詢歷史紀錄">🔍查詢歷史紀錄</button>
-  <button id="settingsBtn" class="back-btn" style="display:none" onclick="openSettings()" title="特殊車輛設定"><i class="ti ti-settings"></i></button>
+  <button id="settingsBtn" class="back-btn" style="display:none" onclick="showS(5)" title="設定"><i class="ti ti-settings"></i></button>
 </header>
 
 <!-- S0: 類型選擇 -->
@@ -221,6 +219,13 @@ function logWorkflow(tool,actionType,status){
     <input type="text" class="wl-input" id="parkLocInp" placeholder="📍 停放位置（選填，例如：B1-23）可先打字不用等辨識" autocomplete="off" style="width:100%;box-sizing:border-box"/>
   </div>
 
+  <!-- 車況：下拉選單，選項在設定裡管理 -->
+  <div style="margin:0 0 12px">
+    <select class="wl-select" id="conditionInp" style="width:100%;box-sizing:border-box">
+      <option value="">🔧 車況（選填）</option>
+    </select>
+  </div>
+
   <!-- 大拍照按鈕 -->
   <button class="big-cam" id="bigCam" onclick="triggerCam()">
     <span class="ic"><i class="ti ti-camera"></i></span>
@@ -228,6 +233,7 @@ function logWorkflow(tool,actionType,status){
     <span class="sb">拍照後 AI 自動辨識並登記</span>
   </button>
   <button class="manual-link" onclick="showManualEntry()"><i class="ti ti-keyboard"></i> 手動輸入車牌</button>
+  <button class="manual-link" onclick="openLongTermReview()"><i class="ti ti-repeat"></i> 長期滯留車輛複檢</button>
 
   <!-- 處理中 -->
   <div class="proc-card" id="procCard">
@@ -275,7 +281,7 @@ function logWorkflow(tool,actionType,status){
 <!-- S2: 特殊車輛設定（僅管理員/隊長可見，2026-07-30 新增） -->
 <div id="s2" class="screen">
   <div class="scr-ttl">
-    <button class="back-btn" onclick="showS(0)"><i class="ti ti-arrow-left"></i></button>
+    <button class="back-btn" onclick="showS(5)"><i class="ti ti-arrow-left"></i></button>
     <span class="scr-ttl-txt">特殊車輛設定</span>
   </div>
   <div class="wl-hint">設定公司車／月租車車牌。登記車輛時只要車牌符合這裡的設定，除了原本的分頁，也會多記一筆到「特殊車輛」分頁，並記錄停在哪個地點。</div>
@@ -330,8 +336,55 @@ function logWorkflow(tool,actionType,status){
   <button class="wl-save-btn" id="sqShareBtn" onclick="exportSearchScreenshot()" style="display:none;background:linear-gradient(135deg,#6366F1,#818CF8);margin-top:4px"><i class="ti ti-share"></i> 匯出查詢結果截圖</button>
 </div>
 
+<!-- S4: 長期滯留車輛複檢（2026-09-20新增，只列目前所在的類型） -->
+<div id="s4" class="screen">
+  <div class="scr-ttl">
+    <button class="back-btn" onclick="showS(1)"><i class="ti ti-arrow-left"></i></button>
+    <span class="scr-ttl-txt">長期滯留車輛複檢</span>
+    <span id="ltTypeBadge" class="type-badge moto" style="margin-left:auto"></span>
+  </div>
+  <div class="wl-hint">系統自動比對每台車最近一次被登記到的日期，判斷是否還在現場。到現場複檢時可搭配這份名單。</div>
+  <div class="wl-list" id="ltList"><div class="wl-empty">載入中…</div></div>
+</div>
+
+<!-- S5: 設定選單（2026-09-20新增，齒輪按鈕的中介選單，僅canManage可見） -->
+<div id="s5" class="screen">
+  <div class="scr-ttl">
+    <button class="back-btn" onclick="showS(0)"><i class="ti ti-arrow-left"></i></button>
+    <span class="scr-ttl-txt">設定</span>
+  </div>
+  <div class="reg-card car" onclick="openSettings()">
+    <div class="ci"><i class="ti ti-car"></i></div>
+    <div class="cb"><div class="cn">特殊車輛設定</div><div class="cd">公司車／月租車車牌管理</div></div>
+    <div class="ca"><i class="ti ti-chevron-right"></i></div>
+  </div>
+  <div class="reg-card park" onclick="openConditionSettings()">
+    <div class="ci"><i class="ti ti-tool"></i></div>
+    <div class="cb"><div class="cn">車況按鈕設定</div><div class="cd">管理登記時的車況下拉選項</div></div>
+    <div class="ca"><i class="ti ti-chevron-right"></i></div>
+  </div>
+</div>
+
+<!-- S6: 車況按鈕設定（2026-09-20新增，僅canManage可見） -->
+<div id="s6" class="screen">
+  <div class="scr-ttl">
+    <button class="back-btn" onclick="showS(5)"><i class="ti ti-arrow-left"></i></button>
+    <span class="scr-ttl-txt">車況按鈕設定</span>
+  </div>
+  <div class="wl-hint">管理登記畫面「車況」下拉選單的選項，新增/編輯/刪除後要按「儲存設定」才會生效。</div>
+
+  <div class="wl-form">
+    <input type="text" class="wl-input" id="condInp" placeholder="車況內容，例如：輪胎破裂" autocomplete="off"/>
+    <button class="wl-add-btn" id="condAddBtn" onclick="addConditionRow()"><i class="ti ti-plus"></i> <span id="condAddBtnTxt">新增一筆</span></button>
+    <button class="wl-cancel-edit-btn" id="condCancelEditBtn" onclick="cancelEditCondition()" style="display:none">取消編輯</button>
+  </div>
+
+  <div class="wl-list" id="condList"><div class="wl-empty">載入中…</div></div>
+
+  <button class="wl-save-btn" onclick="saveConditionOptions()"><i class="ti ti-device-floppy"></i> 儲存設定</button>
+</div>
+
 <input type="file" id="camInp" accept="image/*" capture="environment" style="display:none"/>
-<nav class="nav-bar"><button class="nav-btn" onclick="goBack()"><i class="ti ti-arrow-left"></i> 返回工具頁</button></nav>
 <div id="toast" class="toast" style="display:none"></div>
 <footer class="page-footer">© TIANYING SECURITY · INTERNAL SYSTEM</footer>
 
@@ -406,6 +459,7 @@ var jobQueue=[], curJob=null, jobSeq=0;
 ['spLogo','hdrLogo'].forEach(function(id){var el=document.getElementById(id);if(el)el.src=LOGO_SRC;});
 window.addEventListener('load',function(){setTimeout(function(){var sp=document.getElementById('splash');if(sp){sp.classList.add('hide');setTimeout(function(){sp.style.display='none';},650);}},900);});
 if(canManage){var _sb=document.getElementById('settingsBtn');if(_sb)_sb.style.display='flex';}
+loadConditionOptions(); // 2026-09-20新增：登記畫面車況下拉的選項，開工具就先載入
 
 function showS(n){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});document.getElementById('s'+n).classList.add('active');}
 
@@ -505,6 +559,117 @@ function saveWhitelist(){
       showToast(j.success?'✅ 已儲存':('⚠️ 儲存失敗：'+(j.error||'')));
     })
     .catch(function(){showToast('⚠️ 網路錯誤，儲存失敗');});
+}
+
+// ═══════ 車況下拉選單（2026-09-20新增）═══════
+// 登記畫面用的選項清單，管理CRUD比照上面白名單設定的寫法（本地陣列先改、按儲存才整份送出）。
+var condData=[]; // ['佈滿灰塵、長蜘蛛網', ...]
+var condEditIdx=-1;
+
+function loadConditionOptions(){
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'getConditionOptions'})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      condData=(j.success&&Array.isArray(j.list))?j.list:[];
+      fillConditionSelect();
+    })
+    .catch(function(){});
+}
+function fillConditionSelect(){
+  var sel=document.getElementById('conditionInp');
+  var cur=sel.value;
+  sel.innerHTML='<option value="">🔧 車況（選填）</option>'+
+    condData.map(function(c){return '<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>';}).join('');
+  sel.value=condData.indexOf(cur)!==-1?cur:'';
+}
+function openConditionSettings(){
+  if(!canManage)return;
+  showS(6);
+  cancelEditCondition();
+  document.getElementById('condList').innerHTML='<div class="wl-empty">載入中…</div>';
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'getConditionOptions'})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      condData=(j.success&&Array.isArray(j.list))?j.list:[];
+      renderConditionList();
+    })
+    .catch(function(){document.getElementById('condList').innerHTML='<div class="wl-empty">載入失敗，請重新整理</div>';});
+}
+function renderConditionList(){
+  var list=document.getElementById('condList');
+  if(!condData.length){list.innerHTML='<div class="wl-empty">尚未設定任何車況選項</div>';return;}
+  list.innerHTML=condData.map(function(c,i){
+    return '<div class="wl-item"><div class="wl-item-main"><div class="wl-item-plate">'+escHtml(c)+'</div></div>'+
+      '<button class="wl-item-edit" onclick="editConditionRow('+i+')"><i class="ti ti-pencil"></i></button>'+
+      '<button class="wl-item-del" onclick="removeConditionRow('+i+')"><i class="ti ti-trash"></i></button></div>';
+  }).join('');
+}
+function addConditionRow(){
+  var val=document.getElementById('condInp').value.trim();
+  if(!val){showToast('⚠️ 請輸入車況內容');return;}
+  var dup=condData.some(function(c,i){return c===val && i!==condEditIdx;});
+  if(dup){showToast('⚠️ 這個車況選項已經在清單裡了');return;}
+  if(condEditIdx>=0)condData[condEditIdx]=val;
+  else condData.push(val);
+  cancelEditCondition();
+  renderConditionList();
+}
+function editConditionRow(i){
+  var val=condData[i];
+  if(val===undefined)return;
+  condEditIdx=i;
+  document.getElementById('condInp').value=val;
+  document.getElementById('condAddBtnTxt').textContent='更新這一筆';
+  document.getElementById('condCancelEditBtn').style.display='block';
+}
+function cancelEditCondition(){
+  condEditIdx=-1;
+  document.getElementById('condInp').value='';
+  document.getElementById('condAddBtnTxt').textContent='新增一筆';
+  document.getElementById('condCancelEditBtn').style.display='none';
+}
+function removeConditionRow(i){
+  if(i===condEditIdx)cancelEditCondition();
+  else if(condEditIdx>i)condEditIdx--;
+  condData.splice(i,1);
+  renderConditionList();
+}
+function saveConditionOptions(){
+  showToast('儲存中…');
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'saveConditionOptions',empId:empId,list:condData})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      showToast(j.success?'✅ 已儲存':('⚠️ 儲存失敗：'+(j.error||'')));
+      if(j.success)fillConditionSelect();
+    })
+    .catch(function(){showToast('⚠️ 網路錯誤，儲存失敗');});
+}
+
+// ═══════ 長期滯留車輛複檢（2026-09-20新增，只查目前所在的類型） ═══════
+function openLongTermReview(){
+  showS(4);
+  var info=TYPE_INFO[curType];
+  var b=document.getElementById('ltTypeBadge');
+  b.className='type-badge '+curType;
+  b.innerHTML='<i class="ti '+info.icon+'"></i> '+info.label;
+  document.getElementById('ltList').innerHTML='<div class="wl-empty">載入中…</div>';
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'getLongTermList',typeLabel:info.label})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if(!j.success){document.getElementById('ltList').innerHTML='<div class="wl-empty">'+escHtml(j.error||'查詢失敗')+'</div>';return;}
+      renderLongTermList(j.rows||[]);
+    })
+    .catch(function(){document.getElementById('ltList').innerHTML='<div class="wl-empty">網路錯誤，請重新整理</div>';});
+}
+function renderLongTermList(rows){
+  var list=document.getElementById('ltList');
+  if(!rows.length){list.innerHTML='<div class="wl-empty">目前沒有長期滯留中的車輛</div>';return;}
+  list.innerHTML=rows.map(function(r){
+    var color=r.stillHere===true?'#4ADE80':(r.stillHere===false?'#F87171':'#FB923C');
+    return '<div class="wl-item"><div class="wl-item-main"><div class="wl-item-plate">'+escHtml(r.plate)+'</div>'+
+      '<div class="wl-item-note">'+(r.parkLocation?('📍 '+escHtml(r.parkLocation)+'　'):'')+'已停放 '+escHtml(r.days)+' 天</div></div>'+
+      '<span class="wl-item-type" style="color:'+color+';background:'+color+'1F">'+escHtml(r.status)+'</span></div>';
+  }).join('');
 }
 
 // ═══════ 查詢歷史紀錄（2026-08-28 新增） ═══════
@@ -881,6 +1046,11 @@ function doSubmit(plate){
   var parkLocation=parkLocInp.value.trim();
   parkLocInp.value='';
 
+  // 車況：跟停放位置一樣送出後清空，每台車各自獨立，不沿用上一台
+  var conditionInp=document.getElementById('conditionInp');
+  var condition=conditionInp.value;
+  conditionInp.value='';
+
   // 樂觀 UI：先進列表，後台送出
   sessCount++;
   document.getElementById('statCount').textContent=sessCount;
@@ -896,7 +1066,7 @@ function doSubmit(plate){
   list.insertBefore(div,list.firstChild);
 
   // 背景送出（日期時間 = 送出當下，GAS端自動填）
-  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'vehicleReg',type:curType,typeLabel:typeLabel,plate:plate,operator:empName||empId||'未登入',parkLocation:parkLocation})})
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'vehicleReg',type:curType,typeLabel:typeLabel,plate:plate,operator:empName||empId||'未登入',parkLocation:parkLocation,condition:condition})})
     .then(function(r){return r.json();})
     .then(function(j){
       var st=document.getElementById(itemId+'-st');
@@ -993,10 +1163,6 @@ function saveRecentEdit(itemId,oldPlate,oldLoc){
 
 var _tt;
 function showToast(msg){var el=document.getElementById('toast');el.textContent=msg;el.style.display='block';clearTimeout(_tt);_tt=setTimeout(function(){el.style.display='none';},2200);}
-function goBack(){
-  if(window.self!==window.top){try{var b=window.top.document.getElementById('hsh-tool-back-btn');if(b){b.click();return;}}catch(e){}}
-  if(window.history.length>1)window.history.back();
-}
 </script>
 </body>
 </html>

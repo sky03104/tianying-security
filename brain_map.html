@@ -287,7 +287,7 @@ const NODES = [
   { id: 8, title: '班表查詢', topic: 'tools', pos: [1.495, 0.52, -2.5895], note: 'ScheduleApp；SHIFT_TYPES 班別代號（早/晚班）（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）' },
   { id: 9, title: '緊急聯絡清單', topic: 'tools', pos: [2.5895, -0.52, 1.495], note: 'tpl-emergency；normalizePhone 補回開頭 0（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）' },
   { id: 10, title: '資料上傳工具', topic: 'tools', pos: [-3.864, 0.0, 1.035], note: 'tpl-upload（base64 內嵌）；施工單/班表/哨表，SheetJS 解析 Excel；獨立版見 cec-up(id32)（2026-07-15 咖哩手繪佈局微調：弗蘭奇工房往左移＋外圈整體拉開1.3倍間距；2026-07-15 再調：頂視圖角度轉到165°避開id5/id137同扇形擠壓）' },
-  { id: 11, title: '簽到/車輛/工作', topic: 'tools', pos: [-2.5895, -0.52, 1.495], note: 'tool_signin / tool_car / tool_work；施工單查詢新增正職/兼職個人白名單(workAllowedIds)，組長以上不受影響，tool_work.html 自帶檢查防貼網址繞過（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）。2026-08-27 tool_work.html搜尋/歷史查詢改走GAS(id47)伺服器端篩選Supabase(id68)取代整表gviz下載，前端parseGvizTable等既有解析邏輯完全不變（TODO-38，PR #258）' },
+  { id: 11, title: '簽到/車輛/工作', topic: 'tools', pos: [-2.5895, -0.52, 1.495], note: 'tool_signin / tool_car / tool_work；施工單查詢新增正職/兼職個人白名單(workAllowedIds)，組長以上不受影響，tool_work.html 自帶檢查防貼網址繞過（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）。2026-08-27 tool_work.html搜尋/歷史查詢改走GAS(id47)伺服器端篩選Supabase(id68)取代整表gviz下載，前端parseGvizTable等既有解析邏輯完全不變（TODO-38，PR #258）。2026-09-20 tool_signin.html：拍照連拍改佇列（辨識中拍下一張不再互相蓋掉）、新增停放位置/車況輸入、新增「長期滯留車輛複檢」畫面、齒輪設定改成選單（特殊車輛設定/車況按鈕設定），移除跟外層工具框重複的返回按鈕' },
   { id: 12, title: '請假申請', topic: 'tools', pos: [-2.5895, -0.52, -1.495], note: 'liff_leave + 雲端請假清單（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）' },
 
   // ── 東海／後端 GAS ──
@@ -332,7 +332,7 @@ const NODES = [
   { id: 35, title: 'SessionStart Hook', topic: 'infra', pos: [0.4025, -2.1468, 1.1435], note: '.claude/settings.json：OBSIDIAN_VAULT_PATH + load_vault_context.py；只在 cwd 進入 vault 目錄才注入 _CLAUDE.md，不影響其他 session' },
 
   // ── 東海／後端 GAS ──
-  { id: 36, title: '車牌辨識 GAS', topic: 'backend', pos: [1.4062, 1.7406, 0.9428], note: '車牌辨識_後端_GAS.gs（獨立腳本，非容器繫結，全部用openById開表）；recognizePlate Gemini Vision 辨識＋台灣車牌格式正規化、vehicleReg 寫車輛登記試算表 1K46ZEq…（含2分鐘去重＋empId驗證）；Key 存指令碼屬性；每日 08:00 自動寄晚班登記摘要 email（SUMMARY_EMAILS）。2026-07-30 新增：白名單設定/特殊車輛/長期停放紀錄 3個分頁＋getPlateWhitelist/savePlateWhitelist action，vehicleReg命中白名單額外寫特殊車輛，同地點連續2天以上即時偵測寫長期停放紀錄。2026-08-28 SQL遷移：新增searchVehicleLogs（tool_signin.html右上角查詢按鈕）；vehicleReg/updatePlate雙寫Supabase(id85)+Sheets，searchVehicleLogs/sendDailySummary優先讀Supabase失敗自動退回讀Sheets——跟施工單/打烊開店/物流不同，這支工具的Sheets是永久保留的備援，不是過渡期設計，因為寄信是稽核用途不能寄不出去' },
+  { id: 36, title: '車牌辨識 GAS', topic: 'backend', pos: [1.4062, 1.7406, 0.9428], note: '車牌辨識_後端_GAS.gs（獨立腳本，非容器繫結，全部用openById開表）；recognizePlate Gemini Vision 辨識＋台灣車牌格式正規化、vehicleReg 寫車輛登記試算表 1K46ZEq…（含2分鐘去重＋empId驗證）；Key 存指令碼屬性；每日 08:00 自動寄晚班登記摘要 email（SUMMARY_EMAILS）。2026-07-30 新增：白名單設定/特殊車輛/長期停放紀錄 3個分頁＋getPlateWhitelist/savePlateWhitelist action，vehicleReg命中白名單額外寫特殊車輛，同地點連續2天以上即時偵測寫長期停放紀錄。2026-08-28 SQL遷移：新增searchVehicleLogs（tool_signin.html右上角查詢按鈕）；vehicleReg/updatePlate雙寫Supabase(id85)+Sheets，searchVehicleLogs/sendDailySummary優先讀Supabase失敗自動退回讀Sheets——跟施工單/打烊開店/物流不同，這支工具的Sheets是永久保留的備援，不是過渡期設計，因為寄信是稽核用途不能寄不出去。2026-09-20新增：vehicleReg/updatePlate新增停放位置(E欄)+車況(F欄，選項存獨立分頁車況選項設定，getConditionOptions/saveConditionOptions action)；新增getLongTermList action供tool_signin.html「長期滯留車輛複檢」畫面用，比對Supabase/Sheets最新一筆登記日期判斷車輛還在或已離開，不只看長期停放紀錄自己的進行中/已結束狀態（那個狀態車子永久消失不再出現時會誤報還在）' },
 
   // ── 前端工具（直立雙圈環繞核心） ──
   { id: 37, title: '物流車輛統計', topic: 'tools', pos: [2.5895, -0.52, -1.495], note: 'tool_logistics.html 獨立檔（iframe src）；三分類(1.9噸/3.5噸/8噸以上)登記＋快捷一鍵送出＋單日查詢＋整月統計；可修改/刪除；全員開放(id18)，快捷管理限 admin（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）' },
