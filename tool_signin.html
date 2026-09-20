@@ -394,8 +394,11 @@ if (LIFF_ID && !empId && typeof liff !== 'undefined') {
 var curType='moto';
 var sessCount=0;
 var cfmTimer=null, cfmDeadline=0;
-var curThumbUrl='';
 var cfmSubmitting=false; // 防連點/防重入：倒數自動送出跟手動按「立即登記」可能在同一輪事件觸發兩次
+// 連拍佇列：每張照片各自一個job（見enqueuePhoto/runOCR），辨識全部背景平行進行，
+// 不會因為還沒辨識完就拍下一張而互相蓋掉——這是2026-09-20修的正牌bug，
+// 舊版用共用的全域變數(curThumbUrl等)存單一張的辨識結果，第二張蓋掉第一張。
+var jobQueue=[], curJob=null, jobSeq=0;
 
 ['spLogo','hdrLogo'].forEach(function(id){var el=document.getElementById(id);if(el)el.src=LOGO_SRC;});
 window.addEventListener('load',function(){setTimeout(function(){var sp=document.getElementById('splash');if(sp){sp.classList.add('hide');setTimeout(function(){sp.style.display='none';},650);}},900);});
@@ -681,6 +684,7 @@ function openCam(type){
   document.getElementById('statCount').textContent='0';
   document.getElementById('statLast').textContent='—';
   document.getElementById('recentList').innerHTML='';
+  jobQueue=[];curJob=null; // 切換類型/重新進入畫面，排隊中還沒處理完的辨識工作全部作廢
   hideAllCards();
   showS(1);
 }
@@ -693,7 +697,7 @@ function hideAllCards(){
 }
 
 function triggerCam(){document.getElementById('camInp').value='';document.getElementById('camInp').click();}
-document.getElementById('camInp').addEventListener('change',function(e){var f=e.target.files[0];if(f)startOCR(f);});
+document.getElementById('camInp').addEventListener('change',function(e){var f=e.target.files[0];if(f)enqueuePhoto(f);});
 
 // ═══════ 圖片壓縮 ═══════
 // 長邊縮到1000px+品質78%。2026-07-11 曾為加快辨識速度改成800px/70%，
@@ -716,47 +720,83 @@ function compressImg(file){
 }
 
 // ═══════ AI 辨識（Gemini via GAS）═══════
-async function startOCR(file){
-  // 連拍下一張時，若上一筆還在等待確認/倒數，直接視同「立即登記」先送出，
-  // 不要被 hideAllCards() 靜默清掉——那筆資料會無聲遺失且毫無提示。
-  if(document.getElementById('cfmCard').classList.contains('show')){
-    confirmNow();
-  }
-  hideAllCards();
-  var proc=document.getElementById('procCard');
-  proc.classList.add('show');
-  setBar(10);setLbl('壓縮圖片中…');
+// 拍照後直接推進佇列、背景送去辨識，不等前一張處理完——前一張還在辨識中/等確認
+// 時再拍下一張，兩張的辨識會平行跑，畫面照拍照順序一張一張顯示，不會互相蓋掉。
+function enqueuePhoto(file){
+  var job={id:'j'+(++jobSeq),file:file,type:curType,status:'ocr',thumbUrl:null,plate:'',debug:'',shownStatus:null};
+  jobQueue.push(job);
+  runOCR(job);
+  renderQueue();
+}
 
+async function runOCR(job){
   try{
-    var c=await compressImg(file);
-    curThumbUrl=c.previewUrl;
-    document.getElementById('procThumb').src=c.previewUrl;
-    setBar(35);setLbl('AI 辨識中…');
+    var c=await compressImg(job.file);
+    job.thumbUrl=c.previewUrl;
+    if(curJob===job){document.getElementById('procThumb').src=c.previewUrl;setBar(35);setLbl('AI 辨識中…');}
 
-    var res=await fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'recognizePlate',imageBase64:c.dataUrl.split(',')[1],mimeType:'image/jpeg',type:curType})});
-    setBar(90);
+    var res=await fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'recognizePlate',imageBase64:c.dataUrl.split(',')[1],mimeType:'image/jpeg',type:job.type})});
     var json=await res.json();
-    setBar(100);
-    proc.classList.remove('show');
-
     var plate=(json.plate||'').trim().toUpperCase();
     if(json.success && plate && plate!=='無法辨識' && plate.length>=3){
-      showCfm(plate);
+      job.status='confirm';job.plate=plate;
     }else{
-      showErr(json.success ? ('AI 回應：'+(json.plate||'(空)')+(json.raw?' ｜原始：'+String(json.raw).slice(0,200):'')) : ('HTTP '+res.status+' · '+(json.error||'未知錯誤')));
+      job.status='error';
+      job.debug=json.success ? ('AI 回應：'+(json.plate||'(空)')+(json.raw?' ｜原始：'+String(json.raw).slice(0,200):'')) : ('HTTP '+res.status+' · '+(json.error||'未知錯誤'));
     }
   }catch(e){
-    proc.classList.remove('show');
-    showErr('連線失敗（fetch 例外）：'+(e&&e.message?e.message:e));
+    job.status='error';
+    job.debug='連線失敗（fetch 例外）：'+(e&&e.message?e.message:e);
   }
+  renderQueue();
 }
 function setBar(v){document.getElementById('procBar').style.width=v+'%';}
 function setLbl(t){document.getElementById('procLbl').textContent=t;}
 
-// ═══════ 確認卡：3秒自動送出 ═══════
-function showCfm(plate){
+// 依拍照順序（FIFO）挑目前該顯示的那個job；同一個job的狀態沒變就不重繪，
+// 避免佇列裡別的照片背景辨識完成時，誤觸發重繪蓋掉正在顯示中那張的倒數計時。
+function renderQueue(){
+  if(!curJob){
+    if(!jobQueue.length)return;
+    curJob=jobQueue[0];
+  }
+  if(curJob.status===curJob.shownStatus)return;
+  curJob.shownStatus=curJob.status;
+
+  if(curJob.status==='ocr'){
+    document.getElementById('cfmCard').classList.remove('show');
+    document.getElementById('errCard').classList.remove('show');
+    document.getElementById('procCard').classList.add('show');
+    if(curJob.thumbUrl){document.getElementById('procThumb').src=curJob.thumbUrl;setBar(35);setLbl('AI 辨識中…');}
+    else{setBar(10);setLbl('壓縮圖片中…');}
+  }else if(curJob.status==='confirm'){
+    document.getElementById('procCard').classList.remove('show');
+    document.getElementById('errCard').classList.remove('show');
+    showCfm(curJob.plate,curJob.thumbUrl);
+  }else if(curJob.status==='error'){
+    document.getElementById('procCard').classList.remove('show');
+    document.getElementById('cfmCard').classList.remove('show');
+    showErr(curJob.debug);
+  }
+}
+
+// 目前顯示中這張處理完了（送出/取消），從佇列移除，換下一張上場
+// （下一張若早就辨識完，renderQueue會直接顯示結果，不用重新等）
+function finishCurJob(){
+  clearCfmTimer();
+  document.getElementById('procCard').classList.remove('show');
+  document.getElementById('cfmCard').classList.remove('show');
+  document.getElementById('errCard').classList.remove('show');
+  var idx=jobQueue.indexOf(curJob);
+  if(idx>=0)jobQueue.splice(idx,1);
+  curJob=null;
+  renderQueue();
+}
+
+// ═══════ 確認卡：自動送出 ═══════
+function showCfm(plate,thumbUrl){
   cfmSubmitting=false; // 新的一張照片，重置重入鎖
-  document.getElementById('cfmThumb').src=curThumbUrl;
+  document.getElementById('cfmThumb').src=thumbUrl||'';
   document.getElementById('cfmPlate').value=plate;
   document.getElementById('cfmCard').classList.add('show');
   startCfmTimer();
@@ -786,17 +826,16 @@ function onPlateEdit(){
   document.getElementById('cfmCount').textContent='已暫停自動登記，請按「立即登記」';
 }
 function cancelCfm(){
-  hideAllCards();
+  finishCurJob();
   showToast('已取消本筆');
 }
 function confirmNow(){
   if(cfmSubmitting)return; // 已經送出過這張，倒數計時器跟手動按鈕不會重複送出
   cfmSubmitting=true;
-  clearCfmTimer();
   var plate=document.getElementById('cfmPlate').value.trim().toUpperCase();
   if(!plate){showToast('⚠️ 車牌為空');cfmSubmitting=false;return;}
-  document.getElementById('cfmCard').classList.remove('show');
   doSubmit(plate);
+  finishCurJob(); // 送出這張、換佇列裡下一張上場（若已辨識完會直接顯示，不用重等）
 }
 
 // ═══════ 失敗手動 ═══════
@@ -810,6 +849,8 @@ function showErr(debug){
   showToast('❌ 辨識失敗，請手動輸入');
 }
 // ═══════ 主動手動輸入（拍照按鈕下方的連結，不用等辨識失敗）═══════
+// 這是獨立於連拍佇列的手動登記（沒拍照、沒對應job），只是暫時借用errCard的畫面，
+// 蓋在佇列目前顯示的那張上面；送出後要把原本被蓋住的那張復原顯示。
 function showManualEntry(){
   hideAllCards();
   var card=document.getElementById('errCard');
@@ -824,7 +865,9 @@ function sendManual(){
   var plate=document.getElementById('errPlate').value.trim().toUpperCase();
   if(!plate){showToast('⚠️ 請輸入車牌');return;}
   document.getElementById('errCard').classList.remove('show');
+  document.getElementById('errCard').classList.remove('manual');
   doSubmit(plate);
+  if(curJob){curJob.shownStatus=null;renderQueue();} // 復原被手動輸入蓋住的那張
 }
 
 // ═══════ 送出（背景進行，不擋下一張拍攝）═══════
