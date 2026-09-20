@@ -746,8 +746,9 @@ function renderSearchResults(rows,truncated){
   if(!rows.length){list.innerHTML='<div class="wl-empty">查無紀錄</div>';return;}
   list.innerHTML=rows.map(function(r,i){
     var locSub=r.parkLocation?('<br><span style="font-size:10px;color:#818CF8;font-weight:400;letter-spacing:0"><i class="ti ti-map-pin"></i> '+escHtml(r.parkLocation)+'</span>'):'';
+    var condSub=r.condition?('<br><span style="font-size:10px;color:#FB923C;font-weight:400;letter-spacing:0"><i class="ti ti-tool"></i> '+escHtml(r.condition)+'</span>'):'';
     return '<div class="wl-item"><span class="sq-item-time">'+escHtml(r.time.slice(5))+'</span>'+
-      '<span class="sq-item-plate">'+escHtml(r.plate)+locSub+'</span>'+
+      '<span class="sq-item-plate">'+escHtml(r.plate)+locSub+condSub+'</span>'+
       '<span class="wl-item-type">'+escHtml(r.type)+'</span>'+
       '<span class="sq-item-op">'+escHtml(r.operator)+'</span>'+
       '<button class="wl-item-del" onclick="deleteSearchResultRow('+i+')" title="刪除這筆"><i class="ti ti-trash"></i></button></div>';
@@ -777,7 +778,7 @@ function deleteSearchResultRow(i){
 function renderVehicleRowsToBlob(rows,titleSuffix){
   var rowsHtml=rows.map(function(r){
     return '<tr><td>'+escHtml(r.time)+'</td><td>'+escHtml(r.type)+'</td>'+
-      '<td style="font-weight:800;letter-spacing:1px;">'+escHtml(r.plate)+'</td><td>'+escHtml(r.operator)+'</td><td>'+escHtml(r.parkLocation||'')+'</td></tr>';
+      '<td style="font-weight:800;letter-spacing:1px;">'+escHtml(r.plate)+'</td><td>'+escHtml(r.operator)+'</td><td>'+escHtml(r.parkLocation||'')+'</td><td>'+escHtml(r.condition||'')+'</td></tr>';
   }).join('');
 
   var capture=document.createElement('div');
@@ -786,7 +787,7 @@ function renderVehicleRowsToBlob(rows,titleSuffix){
     '<div style="text-align:center;font-size:20px;font-weight:900;margin-bottom:4px;">天鷹保全・過夜車輛查詢紀錄'+(titleSuffix?'・'+escHtml(titleSuffix):'')+'</div>'+
     '<div style="text-align:center;font-size:13px;color:#555;margin-bottom:4px;">'+escHtml(sqLastQueryLabel)+'</div>'+
     '<div style="text-align:center;font-size:13px;color:#555;margin-bottom:14px;">共 '+rows.length+' 筆</div>'+
-    '<table class="sqtable"><tr><th>時間</th><th>類型</th><th>車牌</th><th>登記人</th><th>停放位置</th></tr>'+rowsHtml+'</table>';
+    '<table class="sqtable"><tr><th>時間</th><th>類型</th><th>車牌</th><th>登記人</th><th>停放位置</th><th>車況</th></tr>'+rowsHtml+'</table>';
   var style=document.createElement('style');
   style.textContent='table.sqtable{width:100%;border-collapse:collapse;font-size:12px;}'
     +'table.sqtable th,table.sqtable td{border:1px solid #ddd;padding:5px 4px;text-align:center;color:#1a1a1a;}'
@@ -1087,7 +1088,8 @@ function doSubmit(plate){
   div.className='recent-item';div.id=itemId;
   div.dataset.type=typeLabel;
   var locHtml='<span class="recent-loc-wrap"><i class="ti ti-map-pin"></i><span class="recent-loc" id="'+itemId+'-loc">'+(parkLocation?escHtml(parkLocation):'－')+'</span></span>';
-  div.innerHTML='<span class="recent-plate" id="'+itemId+'-txt">'+plate+'</span>'+locHtml+'<span class="recent-time">'+new Date().toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'})+'</span><span class="recent-ok" id="'+itemId+'-st"><span class="spin" style="width:12px;height:12px;border-top-color:#4ADE80"></span></span>';
+  var condHtml=condition?'<span class="recent-loc-wrap" style="color:#FB923C"><i class="ti ti-tool"></i><span>'+escHtml(condition)+'</span></span>':'';
+  div.innerHTML='<span class="recent-plate" id="'+itemId+'-txt">'+plate+'</span>'+locHtml+condHtml+'<span class="recent-time">'+new Date().toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'})+'</span><span class="recent-ok" id="'+itemId+'-st"><span class="spin" style="width:12px;height:12px;border-top-color:#4ADE80"></span></span>';
   list.insertBefore(div,list.firstChild);
 
   // 背景送出（日期時間 = 送出當下，GAS端自動填）

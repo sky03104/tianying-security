@@ -86,7 +86,8 @@ function searchVehicleLogs_SQL(payload) {
       type: r.type_label,
       plate: r.plate,
       operator: r.operator,
-      parkLocation: r.park_location || '' // 2026-09-19新增：Supabase欄位未建立時r.park_location為undefined，統一補空字串
+      parkLocation: r.park_location || '', // 2026-09-19新增：Supabase欄位未建立時r.park_location為undefined，統一補空字串
+      condition: r.car_condition || '' // 2026-09-20新增：同上，欄位未建立時補空字串
     };
   });
   return { success: true, rows: rows, truncated: truncated };
@@ -133,7 +134,7 @@ function 比對searchVehicleLogs(mode, dateOrKeyword, typeLabel) {
   var oldResult = searchVehicleLogs_(payload);
   var newResult = searchVehicleLogs_SQL(payload);
 
-  function keyOf(r) { return [r.time, r.type, r.plate, r.operator, r.parkLocation || ''].join('§'); }
+  function keyOf(r) { return [r.time, r.type, r.plate, r.operator, r.parkLocation || '', r.condition || ''].join('§'); }
   function toSet(arr) { var s = {}; (arr || []).forEach(function (r) { s[keyOf(r)] = true; }); return s; }
   var oldSet = toSet(oldResult.rows), newSet = toSet(newResult.rows);
   var onlyOld = Object.keys(oldSet).filter(function (k) { return !newSet[k]; });

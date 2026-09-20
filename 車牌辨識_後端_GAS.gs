@@ -722,7 +722,7 @@ function searchVehicleLogs_(payload) {
     if (!sheet) continue;
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) continue;
-    var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues(); // 時間/類型/車牌/登記人/停放位置
+    var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues(); // 時間/類型/車牌/登記人/停放位置/車況
     for (var i = 0; i < data.length; i++) {
       var ts = data[i][0];
       var tsStr = (ts instanceof Date) ? Utilities.formatDate(ts, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss') : String(ts || '');
@@ -740,7 +740,8 @@ function searchVehicleLogs_(payload) {
         type: String(data[i][1] || targetTypes[t]),
         plate: String(data[i][2] || ''),
         operator: String(data[i][3] || ''),
-        parkLocation: String(data[i][4] || '')
+        parkLocation: String(data[i][4] || ''),
+        condition: String(data[i][5] || '')
       });
     }
   }
