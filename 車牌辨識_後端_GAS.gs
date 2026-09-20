@@ -444,10 +444,12 @@ function doPost(e) {
       if (!row2 || row2 < 2) return jsonOut({ success: false, error: '列號無效' });
       var newPlate = String(payload.plate || '').trim().toUpperCase();
       if (!newPlate) return jsonOut({ success: false, error: '車牌不可為空' });
-      sheet2.getRange(row2, 3).setValue(newPlate); // C欄＝車牌（欄位順序見 vehicleReg：時間/類型/車牌/登記人）
+      var newParkLocation = String(payload.parkLocation || '').trim();
+      sheet2.getRange(row2, 3).setValue(newPlate); // C欄＝車牌（欄位順序見 vehicleReg：時間/類型/車牌/登記人/停放位置）
+      sheet2.getRange(row2, 5).setValue(newParkLocation); // E欄＝停放位置，2026-09-20新增：辨識完的就地編輯一併支援改車格
       // 2026-08-28 SQL遷移：Supabase那份也一併更新（雙寫維持一致），失敗不影響Sheets已成功的修正。
       if (typeof supabaseRequest_ === 'function' && payload.supabaseId) {
-        _syncUpdatePlateToSupabase_(payload.supabaseId, newPlate);
+        _syncUpdatePlateToSupabase_(payload.supabaseId, newPlate, newParkLocation);
       }
       return jsonOut({ success: true });
     }
@@ -585,12 +587,13 @@ function _syncVehicleRegToSupabase_(typeLabel, plate, operator, timestamp, parkL
 }
 
 // 2026-08-28 SQL遷移：修正車牌時，Supabase那份（若有id）也一併更新，維持兩邊一致。
+// 2026-09-20：就地編輯也支援改停放位置，一併帶進同一個patch。
 // 失敗只記log，不影響Sheets那邊已經成功的修正（Sheets才是這支功能目前的主要回應依據）。
-function _syncUpdatePlateToSupabase_(supabaseId, newPlate) {
+function _syncUpdatePlateToSupabase_(supabaseId, newPlate, newParkLocation) {
   if (!supabaseId) return;
   try {
     supabaseRequest_('patch', '/rest/v1/vehicle_overnight_logs?id=eq.' + encodeURIComponent(supabaseId),
-      { plate: newPlate });
+      { plate: newPlate, park_location: newParkLocation || null });
   } catch (err) {
     console.error('過夜車輛修正車牌同步Supabase失敗：' + err.toString());
   }
