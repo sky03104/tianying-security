@@ -219,10 +219,12 @@ function logWorkflow(tool,actionType,status){
     <input type="text" class="wl-input" id="parkLocInp" placeholder="📍 停放位置（選填，例如：B1-23）可先打字不用等辨識" autocomplete="off" style="width:100%;box-sizing:border-box"/>
   </div>
 
-  <!-- 車況：可直接打字，也可點選既有建議（跟打烊工具監工姓名同概念），選項清單在設定裡管理 -->
+  <!-- 車況：可直接打字，也可點選既有建議（跟打烊工具監工姓名同概念），選項清單在設定裡管理。
+       自建下拉（不用原生<datalist>）：datalist在手機瀏覽器蓋在鍵盤上方、顯示筆數被裁切，體驗很差。 -->
   <div style="margin:0 0 12px">
-    <input type="text" class="wl-input" id="conditionInp" list="conditionOptionsList" placeholder="🔧 車況（選填，可直接打字或點選建議）" autocomplete="off" style="width:100%;box-sizing:border-box"/>
-    <datalist id="conditionOptionsList"></datalist>
+    <input type="text" class="wl-input" id="conditionInp" placeholder="🔧 車況（選填，點擊可輸入或從下方選擇）" autocomplete="off"
+      oninput="renderConditionSuggestions()" onfocus="renderConditionSuggestions()" style="width:100%;box-sizing:border-box"/>
+    <div class="wl-list" id="conditionSuggestList" style="display:none;margin-top:6px"></div>
   </div>
 
   <!-- 大拍照按鈕 -->
@@ -570,16 +572,33 @@ function loadConditionOptions(){
     .then(function(r){return r.json();})
     .then(function(j){
       condData=(j.success&&Array.isArray(j.list))?j.list:[];
-      fillConditionDatalist();
     })
     .catch(function(){});
 }
-// 車況輸入框是<input list>+<datalist>（可打字也可點建議），這裡只負責把condData灌進datalist，
-// 不影響input目前的文字（跟舊版<select>需要保留選中值不同，datalist本來就不會動input的值）。
-function fillConditionDatalist(){
-  document.getElementById('conditionOptionsList').innerHTML=
-    condData.map(function(c){return '<option value="'+escHtml(c)+'"></option>';}).join('');
+// 車況輸入框是自建下拉（文字輸入+下方建議清單，跟tool_closing.html監工姓名同款寫法）。
+// 原生<input list>+<datalist>在手機瀏覽器蓋在鍵盤上方、顯示筆數被裁切，體驗很差，改自建。
+// 空字串時顯示全部選項（剛點進輸入框還沒打字），有打字才用indexOf篩選包含的。
+function renderConditionSuggestions(){
+  var box=document.getElementById('conditionSuggestList');
+  var q=document.getElementById('conditionInp').value.trim();
+  var list=q?condData.filter(function(c){return c.indexOf(q)!==-1;}):condData;
+  if(!list.length){box.style.display='none';box.innerHTML='';return;}
+  box.innerHTML=list.map(function(c){
+    return '<div class="wl-item cond-dd-item" data-value="'+escHtml(c)+'" style="cursor:pointer">'+escHtml(c)+'</div>';
+  }).join('');
+  box.style.display='block';
 }
+document.getElementById('conditionSuggestList').addEventListener('click',function(e){
+  var item=e.target.closest('.cond-dd-item');
+  if(!item)return;
+  document.getElementById('conditionInp').value=item.getAttribute('data-value');
+  document.getElementById('conditionSuggestList').style.display='none';
+});
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#conditionInp') && !e.target.closest('#conditionSuggestList')){
+    document.getElementById('conditionSuggestList').style.display='none';
+  }
+});
 function openConditionSettings(){
   if(!canManage)return;
   showS(6);
@@ -638,7 +657,6 @@ function saveConditionOptions(){
     .then(function(r){return r.json();})
     .then(function(j){
       showToast(j.success?'✅ 已儲存':('⚠️ 儲存失敗：'+(j.error||'')));
-      if(j.success)fillConditionDatalist();
     })
     .catch(function(){showToast('⚠️ 網路錯誤，儲存失敗');});
 }
@@ -1050,9 +1068,9 @@ function doSubmit(plate){
   var conditionInp=document.getElementById('conditionInp');
   var condition=conditionInp.value.trim();
   conditionInp.value='';
+  document.getElementById('conditionSuggestList').style.display='none';
   if(condition && condData.indexOf(condition)===-1){
     condData.push(condition);
-    fillConditionDatalist();
     fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'addConditionOption',empId:empId,value:condition})}).catch(function(){});
   }
 
