@@ -72,12 +72,16 @@ function dateOnlyStr_(d) {
 
 // 2026-07-30 新增：連續兩天以上在同一地點登記到同一車牌 → 記進「長期停放紀錄」，含起訖日與天數。
 // 三個地點（typeLabel）分開各自算，即時偵測（每次 vehicleReg 成功登記後呼叫）。
-function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp) {
+// 2026-09-20新增第8欄「停放位置」：長期滯留通常就是要去現場處理，車格號碼比車牌+地點更有用，
+// 每次呼叫都覆蓋成最新一次登記的車格（車可能中途換位置），舊分頁沒有這欄就自動補表頭。
+function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, parkLocation) {
   var todayStr = dateOnlyStr_(timestamp);
   var yesterdayStr = dateOnlyStr_(new Date(timestamp.getTime() - 86400000));
 
   var ltSheet = getOrCreateSheet_(ss, LONGTERM_SHEET_NAME,
-    ['車牌', '地點', '起始日期', '最後更新日期', '已停放天數', '狀態', '建立時間']);
+    ['車牌', '地點', '起始日期', '最後更新日期', '已停放天數', '狀態', '建立時間', '停放位置']);
+  if (!ltSheet.getRange(1, 8).getValue()) ltSheet.getRange(1, 8).setValue('停放位置');
+
   var lastRow = ltSheet.getLastRow();
   var openRowIdx = -1; // 1-based 試算表列號
   var openRowData = null;
@@ -95,6 +99,7 @@ function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp) 
   }
 
   if (openRowIdx > 0) {
+    ltSheet.getRange(openRowIdx, 8).setValue(parkLocation || ''); // 每次呼叫都刷新成最新車格，不管今天算不算新的一天
     var lastUpdateStr = dateOnlyStr_(toDate_(openRowData[3]));
     if (lastUpdateStr === todayStr) return; // 今天已經更新過（同一天重複登記），不重複累加
     if (lastUpdateStr === yesterdayStr) {
@@ -119,7 +124,7 @@ function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp) 
     if (d && dateOnlyStr_(d) === yesterdayStr) { foundYesterday = true; break; }
   }
   if (foundYesterday) {
-    ltSheet.appendRow([plate, typeLabel, yesterdayStr, timestamp, 2, '進行中', timestamp]);
+    ltSheet.appendRow([plate, typeLabel, yesterdayStr, timestamp, 2, '進行中', timestamp, parkLocation || '']);
   }
 }
 
@@ -360,7 +365,7 @@ function doPost(e) {
         }
 
         // 2026-07-30 新增②：連續兩天以上在同一地點登記到同一車牌 → 記進「長期停放紀錄」
-        checkAndUpdateLongTermParking_(ss, sheet, payload.typeLabel, plate, now2);
+        checkAndUpdateLongTermParking_(ss, sheet, payload.typeLabel, plate, now2, parkLocation);
       } finally {
         lock.releaseLock();
       }
