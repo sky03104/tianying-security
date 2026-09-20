@@ -25,6 +25,8 @@ var API_KEY_FALLBACK = ''; // ← 不想用指令碼屬性時，把 key 貼進�
 var WHITELIST_SHEET_NAME = '白名單設定';
 var SPECIAL_SHEET_NAME   = '特殊車輛';
 var LONGTERM_SHEET_NAME  = '長期停放紀錄';
+var CONDITION_SHEET_NAME = '車況選項設定'; // 2026-09-20新增：登記畫面車況下拉選單的選項清單
+var CONDITION_DEFAULTS_  = ['佈滿灰塵、長蜘蛛網', '輪胎破裂', '車殼破裂']; // 分頁第一次建立時的預設值
 
 // 取分頁，不存在就自動建立＋補表頭樣式（比照 哨表產生_GAS.gs 的 getGuardPostConfig 模式）
 function getOrCreateSheet_(ss, name, headers) {
@@ -126,6 +128,113 @@ function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, 
   if (foundYesterday) {
     ltSheet.appendRow([plate, typeLabel, yesterdayStr, timestamp, 2, '進行中', timestamp, parkLocation || '']);
   }
+}
+
+// 2026-09-20新增：查一台車在指定類型裡「最近一次真的被登記到」是哪天，供長期滯留複檢判斷用。
+// 不能只看「長期停放紀錄」自己的進行中/已結束狀態——那個欄位只有在同一台車「再次出現」時
+// 才會更新，若車子直接永久離開、再也沒被拍到，會一直卡在進行中誤報「還在」。這裡改成直接
+// 查主資料的最新一筆，才能反映現實。優先查Supabase（TODO-42已雙寫），失敗才退回掃Sheets。
+function getLatestSightingDate_(typeLabel, plate) {
+  if (typeof supabaseRequest_ === 'function') {
+    try {
+      var rows = supabaseRequest_('get', '/rest/v1/vehicle_overnight_logs?type_label=eq.' +
+        encodeURIComponent(typeLabel) + '&plate=eq.' + encodeURIComponent(plate) +
+        '&order=created_at.desc&limit=1');
+      if (rows && rows[0]) return Utilities.formatDate(new Date(rows[0].created_at), 'Asia/Taipei', 'yyyy-MM-dd');
+    } catch (err) {
+      console.error('查最新出現日期失敗（Supabase），退回掃Sheets：' + err.toString());
+    }
+  }
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(typeLabel);
+  if (!sheet) return null;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues(); // A時間 B類型 C車牌
+  var latestDate = null;
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][2] || '').trim().toUpperCase() !== plate) continue;
+    var d = toDate_(data[i][0]);
+    if (!d) continue;
+    var ds = dateOnlyStr_(d);
+    if (!latestDate || ds > latestDate) latestDate = ds;
+  }
+  return latestDate;
+}
+
+// 2026-09-20新增：長期滯留車輛複檢名單——只列指定類型裡「進行中」的長期停放紀錄
+// （已結束的代表系統已經確認過離開了，不用複檢），逐筆比對最新出現日期算出「還在/已離開」。
+function getLongTermList_(typeLabel) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var ltSheet = ss.getSheetByName(LONGTERM_SHEET_NAME);
+  var rows = [];
+  if (ltSheet) {
+    var lastRow = ltSheet.getLastRow();
+    if (lastRow >= 2) {
+      var data = ltSheet.getRange(2, 1, lastRow - 1, 8).getValues();
+      for (var i = 0; i < data.length; i++) {
+        if (String(data[i][1] || '') !== typeLabel) continue;
+        if (String(data[i][5] || '') !== '進行中') continue;
+        rows.push({
+          plate: String(data[i][0] || ''),
+          parkLocation: String(data[i][7] || ''),
+          days: Number(data[i][4] || 0)
+        });
+      }
+    }
+  }
+  var todayStr = dateOnlyStr_(new Date());
+  rows.forEach(function (r) {
+    var latest = getLatestSightingDate_(typeLabel, r.plate);
+    if (!latest) {
+      r.status = '找不到登記紀錄';
+      r.stillHere = null;
+    } else {
+      r.stillHere = (latest === todayStr);
+      r.status = r.stillHere ? '車輛還在' : ('車輛已於 ' + latest.replace(/-/g, '/') + ' 離開');
+    }
+  });
+  rows.sort(function (a, b) { return b.days - a.days; });
+  return rows;
+}
+
+// 2026-09-20新增：車況下拉選單選項（CRUD模式比照getPlateWhitelist_/savePlateWhitelist）。
+// 分頁第一次建立時直接塞入預設值，達成「先加入幾個常用選項」的需求。
+function getConditionOptions_(ss) {
+  var sh = ss.getSheetByName(CONDITION_SHEET_NAME);
+  var isNew = !sh;
+  sh = getOrCreateSheet_(ss, CONDITION_SHEET_NAME, ['選項內容', '修改人', '修改時間']);
+  if (isNew) {
+    var nowSeed = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+    sh.getRange(2, 1, CONDITION_DEFAULTS_.length, 3).setValues(
+      CONDITION_DEFAULTS_.map(function (c) { return [c, '系統預設', nowSeed]; })
+    );
+  }
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+  var data = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+  var list = [];
+  for (var i = 0; i < data.length; i++) {
+    var v = String(data[i][0] || '').trim();
+    if (v) list.push(v);
+  }
+  return list;
+}
+
+function saveConditionOptions_(ss, empId, list) {
+  var sh = getOrCreateSheet_(ss, CONDITION_SHEET_NAME, ['選項內容', '修改人', '修改時間']);
+  var lastRow = sh.getLastRow();
+  if (lastRow >= 2) sh.getRange(2, 1, lastRow - 1, 3).clearContent();
+  var now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+  var seen = {};
+  var rows = [];
+  for (var i = 0; i < list.length; i++) {
+    var v = String(list[i] || '').trim();
+    if (!v || seen[v]) continue;
+    seen[v] = true;
+    rows.push([v, "'" + empId, now]);
+  }
+  if (rows.length) sh.getRange(2, 1, rows.length, 3).setValues(rows);
 }
 
 // 取金鑰清單：GEMINI_API_KEYS（多把逗號分隔）> GEMINI_API_KEY（單把舊名）> 備用常數
@@ -314,11 +423,14 @@ function doPost(e) {
       if (!sheet) return jsonOut({ success: false, error: '找不到「' + payload.typeLabel + '」分頁，請確認試算表分頁名稱是否與類型名稱一致' });
       var plate = String(payload.plate || '').trim().toUpperCase();
       var parkLocation = String(payload.parkLocation || '').trim();
+      var condition = String(payload.condition || '').trim();
       var now2 = new Date();
       var timestamp = Utilities.formatDate(now2, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
       // 2026-09-19新增「停放位置」E欄：手動輸入，選填。既有分頁只有A~D欄表頭，
       // 這裡確保E1有標題，appendRow照樣能寫到E欄（不需要表頭就能寫值，這只是方便肉眼看）。
       if (!sheet.getRange(1, 5).getValue()) sheet.getRange(1, 5).setValue('停放位置');
+      // 2026-09-20新增「車況」F欄：手動選填，同樣只補表頭不強制。
+      if (!sheet.getRange(1, 6).getValue()) sheet.getRange(1, 6).setValue('車況');
       // 上鎖：append+抓行號要當成一個原子操作，避免多支手機同時登記時，
       // 兩個請求的 getLastRow() 讀到彼此交錯後的行號，回傳給前端的 row 對不上實際寫入的那一列。
       // 2026-07-30 新增的白名單比對／長期停放偵測也包在同一個鎖裡，維持單一原子操作。
@@ -351,7 +463,8 @@ function doPost(e) {
           payload.typeLabel,
           plate,
           "'" + operator,  // ' 前綴：工號純數字，防試算表吃掉開頭 0
-          parkLocation
+          parkLocation,
+          condition
         ]);
         newRow = sheet.getLastRow();
 
@@ -374,7 +487,7 @@ function doPost(e) {
       // 用typeof防呆：SQL遷移的腳本檔還沒貼進這個專案時，跳過同步，不影響原本Sheets登記功能。
       var supabaseId = null;
       if (typeof supabaseRequest_ === 'function') {
-        supabaseId = _syncVehicleRegToSupabase_(payload.typeLabel, plate, operator, now2, parkLocation);
+        supabaseId = _syncVehicleRegToSupabase_(payload.typeLabel, plate, operator, now2, parkLocation, condition);
       }
       // row/supabaseId 回傳給前端：辨識錯誤時前端可用這兩個值呼叫 updatePlate 就地修正，不用手動開試算表改。
       return jsonOut({ success: true, row: newRow, supabaseId: supabaseId, specialVehicle: specialVehicle });
@@ -424,6 +537,41 @@ function doPost(e) {
         lockW.releaseLock();
       }
       return jsonOut({ success: true });
+    }
+
+    // --- 功能 G: 車況下拉選單選項讀取／儲存（2026-09-20新增，CRUD模式比照白名單設定）---
+    if (payload.action === 'getConditionOptions') {
+      var ssC = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var lockC = LockService.getScriptLock();
+      lockC.waitLock(10000);
+      var listC;
+      try {
+        listC = getConditionOptions_(ssC);
+      } finally {
+        lockC.releaseLock();
+      }
+      return jsonOut({ success: true, list: listC });
+    }
+    if (payload.action === 'saveConditionOptions') {
+      var empIdC = String(payload.empId || '').trim();
+      if (!empIdC) return jsonOut({ success: false, error: '工號遺失，請重新整理頁面確認登入狀態' });
+      var listSaveC = Array.isArray(payload.list) ? payload.list : [];
+      var ssC2 = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var lockC2 = LockService.getScriptLock();
+      lockC2.waitLock(10000);
+      try {
+        saveConditionOptions_(ssC2, empIdC, listSaveC);
+      } finally {
+        lockC2.releaseLock();
+      }
+      return jsonOut({ success: true });
+    }
+
+    // --- 功能 H: 長期滯留車輛複檢（2026-09-20新增，只列指定類型，比對最新出現日期判斷還在/已離開）---
+    if (payload.action === 'getLongTermList') {
+      var typeLabelLT = String(payload.typeLabel || '').trim();
+      if (!typeLabelLT) return jsonOut({ success: false, error: '缺少類型參數' });
+      return jsonOut({ success: true, rows: getLongTermList_(typeLabelLT) });
     }
 
     // --- 功能 E: 查詢歷史登記紀錄（依日期或依車牌關鍵字）---
@@ -575,14 +723,14 @@ function jsonOut(data) {
 
 // 2026-08-28 SQL遷移：登記時同步寫一份到Supabase（雙寫，Sheets不停用）。
 // 失敗只記log、回傳null，不讓Supabase的問題影響到Sheets那邊已經成功的登記。
-function _syncVehicleRegToSupabase_(typeLabel, plate, operator, timestamp, parkLocation) {
+function _syncVehicleRegToSupabase_(typeLabel, plate, operator, timestamp, parkLocation, condition) {
   try {
     var iso = Utilities.formatDate(timestamp, 'Asia/Taipei', "yyyy-MM-dd'T'HH:mm:ssXXX");
-    // 2026-09-19新增park_location欄：Supabase那張表要先手動在SQL Editor
-    // 執行 alter table vehicle_overnight_logs add column if not exists park_location text;
+    // 2026-09-19新增park_location欄、2026-09-20新增car_condition欄：Supabase那張表要先手動在
+    // SQL Editor執行 alter table vehicle_overnight_logs add column if not exists xxx text;
     // 否則這裡insert會失敗（欄位不存在），失敗只記log不影響Sheets那份已經成功的登記。
     var result = supabaseRequest_('post', '/rest/v1/vehicle_overnight_logs',
-      [{ type_label: typeLabel, plate: plate, operator: operator, created_at: iso, park_location: parkLocation || null }],
+      [{ type_label: typeLabel, plate: plate, operator: operator, created_at: iso, park_location: parkLocation || null, car_condition: condition || null }],
       { Prefer: 'return=representation' });
     return (result && result[0] && result[0].id) || null;
   } catch (err) {
