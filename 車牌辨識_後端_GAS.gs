@@ -256,6 +256,18 @@ function saveConditionOptions_(ss, empId, list) {
   if (rows.length) sh.getRange(2, 1, rows.length, 3).setValues(rows);
 }
 
+// 2026-09-20新增：車況輸入框改成可直接打字（跟tool_closing.html監工姓名同概念），
+// 打的內容如果不在既有選項清單裡，登記送出時背景呼叫這支自動收進清單，不用特地去設定畫面加。
+// 用鎖＋比對是否已存在才appendRow，避免兩支手機同時打同一個新車況變成兩筆重複選項。
+function addConditionOption_(ss, empId, value) {
+  var list = getConditionOptions_(ss); // 沿用同一支：分頁不存在時會自動建立+塞預設值
+  var exists = list.some(function (v) { return v.toLowerCase() === value.toLowerCase(); });
+  if (exists) return;
+  var sh = ss.getSheetByName(CONDITION_SHEET_NAME);
+  var now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+  sh.appendRow([value, "'" + empId, now]);
+}
+
 // 取金鑰清單：GEMINI_API_KEYS（多把逗號分隔）> GEMINI_API_KEY（單把舊名）> 備用常數
 // 注意：免費額度是算「Google Cloud 專案」不是算金鑰，多把 key 要來自不同專案才有加乘效果
 function getApiKeys_() {
@@ -582,6 +594,22 @@ function doPost(e) {
         saveConditionOptions_(ssC2, empIdC, listSaveC);
       } finally {
         lockC2.releaseLock();
+      }
+      return jsonOut({ success: true });
+    }
+    // 2026-09-20新增：車況輸入框改可打字，登記時打了選項清單裡沒有的內容就自動收進去
+    if (payload.action === 'addConditionOption') {
+      var empIdC3 = String(payload.empId || '').trim();
+      if (!empIdC3) return jsonOut({ success: false, error: '工號遺失，請重新整理頁面確認登入狀態' });
+      var valueC3 = String(payload.value || '').trim();
+      if (!valueC3) return jsonOut({ success: false, error: '車況內容不可為空' });
+      var ssC3 = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var lockC3 = LockService.getScriptLock();
+      lockC3.waitLock(10000);
+      try {
+        addConditionOption_(ssC3, empIdC3, valueC3);
+      } finally {
+        lockC3.releaseLock();
       }
       return jsonOut({ success: true });
     }
