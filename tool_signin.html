@@ -113,6 +113,9 @@ function logWorkflow(tool,actionType,status){
     .recent-edit{background:none;border:none;color:#818CF8;font-size:16px;cursor:pointer;padding:8px;flex-shrink:0;-webkit-tap-highlight-color:transparent}
     .recent-edit:active{opacity:.6}
     .recent-edit-inp{flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid rgba(255,215,0,.35);border-radius:6px;padding:5px 8px;font-size:16px;font-weight:800;letter-spacing:2px;color:#FFD700;font-family:inherit;outline:none;text-transform:uppercase;-webkit-appearance:none}
+    .recent-loc-wrap{display:flex;align-items:center;gap:3px;font-size:12px;color:#818CF8;flex-shrink:0;max-width:88px}
+    .recent-loc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .recent-edit-loc{flex:none;width:72px;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:#818CF8;border-color:rgba(129,140,248,.35)}
     /* divider/ms */
     .divider{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:#4B5563;font-size:11px}
     .divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
@@ -888,7 +891,7 @@ function doSubmit(plate){
   var div=document.createElement('div');
   div.className='recent-item';div.id=itemId;
   div.dataset.type=typeLabel;
-  var locHtml=parkLocation?('<span class="recent-loc" style="color:#818CF8;font-size:12px;margin-left:6px"><i class="ti ti-map-pin"></i> '+escHtml(parkLocation)+'</span>'):'';
+  var locHtml='<span class="recent-loc-wrap"><i class="ti ti-map-pin"></i><span class="recent-loc" id="'+itemId+'-loc">'+(parkLocation?escHtml(parkLocation):'－')+'</span></span>';
   div.innerHTML='<span class="recent-plate" id="'+itemId+'-txt">'+plate+'</span>'+locHtml+'<span class="recent-time">'+new Date().toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'})+'</span><span class="recent-ok" id="'+itemId+'-st"><span class="spin" style="width:12px;height:12px;border-top-color:#4ADE80"></span></span>';
   list.insertBefore(div,list.firstChild);
 
@@ -923,7 +926,7 @@ function addEditBtn(itemId){
   var div=document.getElementById(itemId);
   if(!div||div.querySelector('.recent-edit'))return;
   var btn=document.createElement('button');
-  btn.className='recent-edit';btn.title='修改車牌';
+  btn.className='recent-edit';btn.title='修改車牌／停放位置';
   btn.innerHTML='<i class="ti ti-pencil"></i>';
   btn.onclick=function(){editRecent(itemId);};
   div.insertBefore(btn,document.getElementById(itemId+'-st'));
@@ -937,33 +940,50 @@ function editRecent(itemId){
   inp.type='text';inp.className='recent-edit-inp';inp.id=itemId+'-txt';inp.value=oldPlate;
   inp.autocomplete='off';inp.autocorrect='off';inp.spellcheck=false;
   inp.oninput=function(){inp.value=inp.value.toUpperCase();};
-  inp.onkeydown=function(e){if(e.key==='Enter')saveRecentEdit(itemId,oldPlate);};
   txt.replaceWith(inp);
+
+  // 停放位置一起改：文字顯示是「－」代表原本沒填，還原成真正的空字串
+  var locSpan=document.getElementById(itemId+'-loc');
+  var oldLoc=locSpan.textContent==='－'?'':locSpan.textContent;
+  var locInp=document.createElement('input');
+  locInp.type='text';locInp.className='recent-edit-inp recent-edit-loc';locInp.id=itemId+'-loc';locInp.value=oldLoc;
+  locInp.placeholder='停放位置';locInp.autocomplete='off';
+  locSpan.replaceWith(locInp);
+
+  inp.onkeydown=function(e){if(e.key==='Enter')saveRecentEdit(itemId,oldPlate,oldLoc);};
+  locInp.onkeydown=function(e){if(e.key==='Enter')saveRecentEdit(itemId,oldPlate,oldLoc);};
   inp.focus();inp.select();
   var editBtn=div.querySelector('.recent-edit');
   editBtn.innerHTML='<i class="ti ti-check"></i>';
-  editBtn.onclick=function(){saveRecentEdit(itemId,oldPlate);};
+  editBtn.onclick=function(){saveRecentEdit(itemId,oldPlate,oldLoc);};
 }
-function saveRecentEdit(itemId,oldPlate){
+function saveRecentEdit(itemId,oldPlate,oldLoc){
   var div=document.getElementById(itemId);
   var inp=document.getElementById(itemId+'-txt');
   var newPlate=inp.value.trim().toUpperCase();
   if(!newPlate){showToast('⚠️ 車牌不可為空');return;}
+  var locInp=document.getElementById(itemId+'-loc');
+  var newLoc=locInp.value.trim();
+
   var span=document.createElement('span');
   span.className='recent-plate';span.id=itemId+'-txt';span.textContent=newPlate;
   inp.replaceWith(span);
+  var locSpan=document.createElement('span');
+  locSpan.className='recent-loc';locSpan.id=itemId+'-loc';locSpan.textContent=newLoc||'－';
+  locInp.replaceWith(locSpan);
+
   var editBtn=div.querySelector('.recent-edit');
   editBtn.innerHTML='<i class="ti ti-pencil"></i>';
   editBtn.onclick=function(){editRecent(itemId);};
-  if(newPlate===oldPlate)return; // 沒改內容就不用打回後端
+  if(newPlate===oldPlate && newLoc===oldLoc)return; // 都沒改就不用打回後端
 
   var st=document.getElementById(itemId+'-st');
   if(st) st.innerHTML='<span class="spin" style="width:12px;height:12px;border-top-color:#818CF8"></span>';
-  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'updatePlate',typeLabel:div.dataset.type,row:div.dataset.row,supabaseId:div.dataset.supabaseId,plate:newPlate})})
+  fetch(PLATE_GAS_URL,{method:'POST',body:JSON.stringify({action:'updatePlate',typeLabel:div.dataset.type,row:div.dataset.row,supabaseId:div.dataset.supabaseId,plate:newPlate,parkLocation:newLoc})})
     .then(function(r){return r.json();})
     .then(function(j){
       if(st) st.innerHTML=j.success?'<i class="ti ti-check"></i>':'<i class="ti ti-alert-triangle" style="color:#FB923C"></i>';
-      showToast(j.success?('✅ 已更新為 '+newPlate):('⚠️ 更新失敗：'+(j.error||'未知錯誤')));
+      showToast(j.success?'✅ 已更新':('⚠️ 更新失敗：'+(j.error||'未知錯誤')));
     })
     .catch(function(){
       if(st) st.innerHTML='<i class="ti ti-wifi-off" style="color:#F87171"></i>';
