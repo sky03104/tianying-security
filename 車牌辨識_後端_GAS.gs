@@ -460,8 +460,10 @@ function doPost(e) {
       // 2026-09-19新增「停放位置」E欄：手動輸入，選填。既有分頁只有A~D欄表頭，
       // 這裡確保E1有標題，appendRow照樣能寫到E欄（不需要表頭就能寫值，這只是方便肉眼看）。
       if (!sheet.getRange(1, 5).getValue()) sheet.getRange(1, 5).setValue('停放位置');
-      // 2026-09-20新增「車況」F欄：手動選填，同樣只補表頭不強制。
-      if (!sheet.getRange(1, 6).getValue()) sheet.getRange(1, 6).setValue('車況');
+      // 2026-09-20新增「車況」欄，原本放F欄，但咖哩發現「館內汽車」「新莊停車場」F欄
+      // 早就有別的用途（疑似鏡射公式），已手動標示「此欄勿動」，改放G欄避免撞到既有資料。
+      // F欄完全不讀不寫，appendRow時特意留一個空字串佔位，不去動它。
+      if (!sheet.getRange(1, 7).getValue()) sheet.getRange(1, 7).setValue('車況');
       // 上鎖：append+抓行號要當成一個原子操作，避免多支手機同時登記時，
       // 兩個請求的 getLastRow() 讀到彼此交錯後的行號，回傳給前端的 row 對不上實際寫入的那一列。
       // 2026-07-30 新增的白名單比對／長期停放偵測也包在同一個鎖裡，維持單一原子操作。
@@ -495,6 +497,7 @@ function doPost(e) {
           plate,
           "'" + operator,  // ' 前綴：工號純數字，防試算表吃掉開頭 0
           parkLocation,
+          '', // F欄刻意留空——此欄勿動，不是我們的資料
           condition
         ]);
         newRow = sheet.getLastRow();
@@ -722,7 +725,7 @@ function searchVehicleLogs_(payload) {
     if (!sheet) continue;
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) continue;
-    var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues(); // 時間/類型/車牌/登記人/停放位置/車況
+    var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues(); // 時間/類型/車牌/登記人/停放位置/(F此欄勿動不使用)/車況
     for (var i = 0; i < data.length; i++) {
       var ts = data[i][0];
       var tsStr = (ts instanceof Date) ? Utilities.formatDate(ts, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss') : String(ts || '');
@@ -741,7 +744,7 @@ function searchVehicleLogs_(payload) {
         plate: String(data[i][2] || ''),
         operator: String(data[i][3] || ''),
         parkLocation: String(data[i][4] || ''),
-        condition: String(data[i][5] || '')
+        condition: String(data[i][6] || '') // index5(F欄)是此欄勿動的既有資料，跳過不讀
       });
     }
   }
