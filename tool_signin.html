@@ -684,8 +684,9 @@ function renderLongTermList(rows){
   if(!rows.length){list.innerHTML='<div class="wl-empty">目前沒有長期滯留中的車輛</div>';return;}
   list.innerHTML=rows.map(function(r){
     var color=r.stillHere===true?'#4ADE80':(r.stillHere===false?'#F87171':'#FB923C');
+    var condHtml=r.condition?('<div class="wl-item-note" style="color:#FB923C">🔧 '+escHtml(r.condition)+'</div>'):'';
     return '<div class="wl-item"><div class="wl-item-main"><div class="wl-item-plate">'+escHtml(r.plate)+'</div>'+
-      '<div class="wl-item-note">'+(r.parkLocation?('📍 '+escHtml(r.parkLocation)+'　'):'')+'已停放 '+escHtml(r.days)+' 天</div></div>'+
+      '<div class="wl-item-note">'+(r.parkLocation?('📍 '+escHtml(r.parkLocation)+'　'):'')+'已停放 '+escHtml(r.days)+' 天</div>'+condHtml+'</div>'+
       '<span class="wl-item-type" style="color:'+color+';background:'+color+'1F">'+escHtml(r.status)+'</span></div>';
   }).join('');
 }
