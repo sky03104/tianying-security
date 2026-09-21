@@ -76,13 +76,16 @@ function dateOnlyStr_(d) {
 // 三個地點（typeLabel）分開各自算，即時偵測（每次 vehicleReg 成功登記後呼叫）。
 // 2026-09-20新增第8欄「停放位置」：長期滯留通常就是要去現場處理，車格號碼比車牌+地點更有用，
 // 每次呼叫都覆蓋成最新一次登記的車格（車可能中途換位置），舊分頁沒有這欄就自動補表頭。
-function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, parkLocation) {
+// 2026-09-21新增第10欄「車況」：跳過第9欄(I)——那欄現場已經有別的資料在用，不能寫進去，
+// 直接接在後面開新欄，比照F欄「此欄勿動」的教訓，這次先確認清楚再動手。
+function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, parkLocation, condition) {
   var todayStr = dateOnlyStr_(timestamp);
   var yesterdayStr = dateOnlyStr_(new Date(timestamp.getTime() - 86400000));
 
   var ltSheet = getOrCreateSheet_(ss, LONGTERM_SHEET_NAME,
     ['車牌', '地點', '起始日期', '最後更新日期', '已停放天數', '狀態', '建立時間', '停放位置']);
   if (!ltSheet.getRange(1, 8).getValue()) ltSheet.getRange(1, 8).setValue('停放位置');
+  if (!ltSheet.getRange(1, 10).getValue()) ltSheet.getRange(1, 10).setValue('車況');
 
   var lastRow = ltSheet.getLastRow();
   var openRowIdx = -1; // 1-based 試算表列號
@@ -102,6 +105,7 @@ function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, 
 
   if (openRowIdx > 0) {
     ltSheet.getRange(openRowIdx, 8).setValue(parkLocation || ''); // 每次呼叫都刷新成最新車格，不管今天算不算新的一天
+    ltSheet.getRange(openRowIdx, 10).setValue(condition || ''); // 車況同步刷新，跳過第9欄(I)不動它
     var lastUpdateStr = dateOnlyStr_(toDate_(openRowData[3]));
     if (lastUpdateStr === todayStr) return; // 今天已經更新過（同一天重複登記），不重複累加
     if (lastUpdateStr === yesterdayStr) {
@@ -126,7 +130,9 @@ function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, 
     if (d && dateOnlyStr_(d) === yesterdayStr) { foundYesterday = true; break; }
   }
   if (foundYesterday) {
-    ltSheet.appendRow([plate, typeLabel, yesterdayStr, timestamp, 2, '進行中', timestamp, parkLocation || '']);
+    // 陣列第9個位置(I欄)刻意留空字串——那欄現場已經有別的資料在用，appendRow是全新一列本來就是空的，
+    // 這裡明寫空字串只是避免自己以後看漏、誤以為是要塞值的欄位。
+    ltSheet.appendRow([plate, typeLabel, yesterdayStr, timestamp, 2, '進行中', timestamp, parkLocation || '', '', condition || '']);
   }
 }
 
@@ -192,13 +198,14 @@ function getLongTermList_(typeLabel) {
   if (ltSheet) {
     var lastRow = ltSheet.getLastRow();
     if (lastRow >= 2) {
-      var data = ltSheet.getRange(2, 1, lastRow - 1, 8).getValues();
+      var data = ltSheet.getRange(2, 1, lastRow - 1, 10).getValues(); // 讀到J欄(車況)，跳過的I欄一起讀出來但不使用
       for (var i = 0; i < data.length; i++) {
         if (String(data[i][1] || '') !== typeLabel) continue;
         if (String(data[i][5] || '') !== '進行中') continue;
         rows.push({
           plate: String(data[i][0] || ''),
           parkLocation: String(data[i][7] || ''), // 先用長期停放紀錄自己存的當備援，下面有更新的最新資料會覆蓋
+          condition: String(data[i][9] || ''), // 同上，J欄(index9)當備援
           days: Number(data[i][4] || 0)
         });
       }
@@ -211,12 +218,11 @@ function getLongTermList_(typeLabel) {
     if (!latest) {
       r.status = '找不到登記紀錄';
       r.stillHere = null;
-      r.condition = '';
     } else {
       r.stillHere = (latest.date === todayStr);
       r.status = r.stillHere ? '車輛還在' : ('車輛已於 ' + latest.date.replace(/-/g, '/') + ' 離開');
       if (latest.parkLocation) r.parkLocation = latest.parkLocation; // 用最新一筆覆蓋，比長期停放紀錄自己存的舊值準
-      r.condition = latest.condition;
+      if (latest.condition) r.condition = latest.condition;
     }
   });
   var rank = { 'true': 0, 'false': 1, 'null': 2 };
@@ -522,7 +528,7 @@ function doPost(e) {
         }
 
         // 2026-07-30 新增②：連續兩天以上在同一地點登記到同一車牌 → 記進「長期停放紀錄」
-        checkAndUpdateLongTermParking_(ss, sheet, payload.typeLabel, plate, now2, parkLocation);
+        checkAndUpdateLongTermParking_(ss, sheet, payload.typeLabel, plate, now2, parkLocation, condition);
       } finally {
         lock.releaseLock();
       }
