@@ -130,29 +130,33 @@ function checkAndUpdateLongTermParking_(ss, sheet, typeLabel, plate, timestamp, 
   }
 }
 
-// 2026-09-20新增：查指定類型裡一批車牌「最近一次真的被登記到」是哪天，供長期滯留複檢判斷用。
-// 不能只看「長期停放紀錄」自己的進行中/已結束狀態——那個欄位只有在同一台車「再次出現」時
-// 才會更新，若車子直接永久離開、再也沒被拍到，會一直卡在進行中誤報「還在」。這裡改成直接
-// 查主資料的最新一筆，才能反映現實。優先查Supabase（TODO-42已雙寫），失敗才退回掃Sheets。
+// 2026-09-21新增：查指定類型裡一批車牌「最近一次真的被登記到」的完整資訊（日期/停放位置/車況），
+// 供長期滯留複檢判斷用。不能只看「長期停放紀錄」自己的進行中/已結束狀態——那個欄位只有在
+// 同一台車「再次出現」時才會更新，若車子直接永久離開、再也沒被拍到，會一直卡在進行中誤報
+// 「還在」；「長期停放紀錄」自己存的停放位置(H欄)也可能是很久以前的舊值，不夠即時。改成直接
+// 查主資料的最新一筆，車格/車況跟著這筆一起帶出來才會準。優先查Supabase（TODO-42已雙寫），
+// 失敗才退回掃Sheets。
 // ⚠️這裡設計成一次查一批（不是一支一支查）：名單有幾台車，逐筆查詢就是幾次序列化的
 // 網路請求（或幾次整表掃描），咖哩實測反應「讀取很慢」正是這個N+1問題。改成一次Supabase
 // 查詢用plate=in.(...)撈回這幾台車的全部歷史（車牌數量固定是長期停放名單那幾筆，in.()
 // 對Supabase是索引查詢，不會因主表資料量變大而變慢），Sheets備援也只整表掃描一次。
-function getLatestSightingDatesBatch_(typeLabel, plates) {
-  var map = {};
+function getLatestSightingBatch_(typeLabel, plates) {
+  var map = {}; // plate -> {date, parkLocation, condition}
   if (!plates.length) return map;
   if (typeof supabaseRequest_ === 'function') {
     try {
       var inList = plates.map(function (p) { return encodeURIComponent(p); }).join(',');
       var rows = supabaseRequest_('get', '/rest/v1/vehicle_overnight_logs?type_label=eq.' +
-        encodeURIComponent(typeLabel) + '&plate=in.(' + inList + ')&select=plate,created_at&order=created_at.desc');
+        encodeURIComponent(typeLabel) + '&plate=in.(' + inList + ')&select=plate,created_at,park_location,car_condition&order=created_at.desc');
       rows.forEach(function (r) {
         var ds = Utilities.formatDate(new Date(r.created_at), 'Asia/Taipei', 'yyyy-MM-dd');
-        if (!map[r.plate] || ds > map[r.plate]) map[r.plate] = ds;
+        if (!map[r.plate] || ds > map[r.plate].date) {
+          map[r.plate] = { date: ds, parkLocation: r.park_location || '', condition: r.car_condition || '' };
+        }
       });
       return map;
     } catch (err) {
-      console.error('批次查最新出現日期失敗（Supabase），退回掃Sheets：' + err.toString());
+      console.error('批次查最新登記資訊失敗（Supabase），退回掃Sheets：' + err.toString());
       map = {};
     }
   }
@@ -163,20 +167,23 @@ function getLatestSightingDatesBatch_(typeLabel, plates) {
   if (!sheet) return map;
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return map;
-  var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues(); // A時間 B類型 C車牌
+  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues(); // A時間/B類型/C車牌/D登記人/E停放位置/(F此欄勿動不使用)/G車況
   for (var i = 0; i < data.length; i++) {
     var plate = String(data[i][2] || '').trim().toUpperCase();
     if (!wanted[plate]) continue;
     var d = toDate_(data[i][0]);
     if (!d) continue;
     var ds2 = dateOnlyStr_(d);
-    if (!map[plate] || ds2 > map[plate]) map[plate] = ds2;
+    if (!map[plate] || ds2 > map[plate].date) {
+      map[plate] = { date: ds2, parkLocation: String(data[i][4] || ''), condition: String(data[i][6] || '') };
+    }
   }
   return map;
 }
 
 // 2026-09-20新增：長期滯留車輛複檢名單——只列指定類型裡「進行中」的長期停放紀錄
 // （已結束的代表系統已經確認過離開了，不用複檢），批次比對最新出現日期算出「還在/已離開」。
+// 停放位置／車況一律改用這批查到的最新一筆，不用「長期停放紀錄」自己存的舊值（可能是很久以前的）。
 // 排序：還在的排最前面（現場複檢優先看還沒走的），同組內再照天數大到小排。
 function getLongTermList_(typeLabel) {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -191,22 +198,25 @@ function getLongTermList_(typeLabel) {
         if (String(data[i][5] || '') !== '進行中') continue;
         rows.push({
           plate: String(data[i][0] || ''),
-          parkLocation: String(data[i][7] || ''),
+          parkLocation: String(data[i][7] || ''), // 先用長期停放紀錄自己存的當備援，下面有更新的最新資料會覆蓋
           days: Number(data[i][4] || 0)
         });
       }
     }
   }
   var todayStr = dateOnlyStr_(new Date());
-  var latestMap = getLatestSightingDatesBatch_(typeLabel, rows.map(function (r) { return r.plate; }));
+  var latestMap = getLatestSightingBatch_(typeLabel, rows.map(function (r) { return r.plate; }));
   rows.forEach(function (r) {
     var latest = latestMap[r.plate];
     if (!latest) {
       r.status = '找不到登記紀錄';
       r.stillHere = null;
+      r.condition = '';
     } else {
-      r.stillHere = (latest === todayStr);
-      r.status = r.stillHere ? '車輛還在' : ('車輛已於 ' + latest.replace(/-/g, '/') + ' 離開');
+      r.stillHere = (latest.date === todayStr);
+      r.status = r.stillHere ? '車輛還在' : ('車輛已於 ' + latest.date.replace(/-/g, '/') + ' 離開');
+      if (latest.parkLocation) r.parkLocation = latest.parkLocation; // 用最新一筆覆蓋，比長期停放紀錄自己存的舊值準
+      r.condition = latest.condition;
     }
   });
   var rank = { 'true': 0, 'false': 1, 'null': 2 };
