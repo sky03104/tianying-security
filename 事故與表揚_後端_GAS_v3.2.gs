@@ -81,7 +81,9 @@ function verifyAuthToken_(token) {
     if (!empId || !expireMs) return null;
     if (new Date().getTime() > expireMs) return null; // 通行證過期
 
+    var tFind = Date.now();
     var rec = findUserRole_(empId);
+    Logger.log('[perf]   findUserRole_（openById+讀帳號管理）耗時 ' + (Date.now() - tFind) + 'ms');
     if (!rec) return null;
     if (rec.status === 'inactive') return null;
     return { empId: empId, name: rec.name, role: rec.role };
@@ -190,11 +192,16 @@ function doPost(e) {
 
 // ====== 事故報告（綁工號、不匿名）======
 function handleReport_(d) {
+  var t0 = Date.now();
   var sheet = getSheet_(SHEET_REPORT, HEADERS_REPORT);
+  Logger.log('[perf] getSheet_ 耗時 ' + (Date.now() - t0) + 'ms');
 
   // 照片：base64 陣列 → 公告資料夾
+  var tPhoto = Date.now();
   var urls = saveImages_(d.photos, '事故照片_' + (d.empId || 'na') + '_' + (d.date || ''));
+  Logger.log('[perf] saveImages_ 耗時 ' + (Date.now() - tPhoto) + 'ms（' + urls.length + '張）');
 
+  var tAppend = Date.now();
   sheet.appendRow([
     "'" + now_(),                 // 提交時間（' 前綴防 UTC 偏移）
     "'" + (d.empId || '未登入'),  // 工號（不匿名）
@@ -209,7 +216,12 @@ function handleReport_(d) {
     urls.join('\n'),
     '未讀'                        // 狀態（新增）
   ]);
+  Logger.log('[perf] appendRow 耗時 ' + (Date.now() - tAppend) + 'ms');
+
+  var tNotify = Date.now();
   notifyReportToLine_(d);
+  Logger.log('[perf] notifyReportToLine_ 耗時 ' + (Date.now() - tNotify) + 'ms');
+  Logger.log('[perf] handleReport_ 總耗時 ' + (Date.now() - t0) + 'ms');
   return json_({ status: 'ok', msg: '報告與照片已成功儲存', photos: urls.length });
 }
 
@@ -335,10 +347,13 @@ function getUploadFolder_() {
 function saveImages_(arr, namePrefix) {
   var urls = [];
   if (!arr || !arr.length) return urls;
+  var tFolder = Date.now();
   var folder = getUploadFolder_();
+  Logger.log('[perf]   getUploadFolder_ 耗時 ' + (Date.now() - tFolder) + 'ms');
   for (var i = 0; i < arr.length; i++) {
     var raw = arr[i];
     if (!raw) continue;
+    var tOne = Date.now();
     try {
       var mime = 'image/jpeg';
       if (String(raw).indexOf('data:') === 0) {
@@ -353,13 +368,18 @@ function saveImages_(arr, namePrefix) {
       var b64 = String(raw).indexOf(',') > -1 ? String(raw).split(',')[1] : String(raw);
       var fileName = namePrefix + '_' + (i + 1) + '.' + ext;
       var blob = Utilities.newBlob(Utilities.base64Decode(b64), mime, fileName);
+      var tCreate = Date.now();
       var file = folder.createFile(blob);
+      Logger.log('[perf]   第' + (i + 1) + '張 createFile 耗時 ' + (Date.now() - tCreate) + 'ms');
       // 設為「任何知道連結的人可檢視」；部分帳號政策禁止任意連結共用會丟錯，
       // 包成非致命：即使共用設不起來，檔案已建立，仍回傳連結（不讓整筆變失敗）。
+      var tShare = Date.now();
       try {
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       } catch (shareErr) {}
+      Logger.log('[perf]   第' + (i + 1) + '張 setSharing 耗時 ' + (Date.now() - tShare) + 'ms');
       urls.push(file.getUrl());
+      Logger.log('[perf]   第' + (i + 1) + '張 總耗時 ' + (Date.now() - tOne) + 'ms');
     } catch (err) {
       urls.push('（第' + (i + 1) + '張上傳失敗：' + err.message + '）');
     }
@@ -430,12 +450,17 @@ function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
 
   if (action === 'getReports') {
+    var t0 = Date.now();
     var rUser = verifyAuthToken_(e.parameter.token);
+    Logger.log('[perf] verifyAuthToken_ 耗時 ' + (Date.now() - t0) + 'ms');
     if (!rUser || ADMIN_ROLES_.indexOf(rUser.role) === -1) {
       return json_({ status: 'error', msg: '登入已失效或權限不足，請重新登入天鷹保全 App' });
     }
+    var tList = Date.now();
     var rList = readSheetRows_(SHEET_REPORT, HEADERS_REPORT,
       ['提交時間', '工號', '姓名', '日期', '時間', '地點', '類別', '描述', '處理經過', '相關人員', '照片連結', '狀態']);
+    Logger.log('[perf] readSheetRows_ 耗時 ' + (Date.now() - tList) + 'ms');
+    Logger.log('[perf] getReports 總耗時 ' + (Date.now() - t0) + 'ms');
     return json_({ status: 'ok', list: rList });
   }
 
