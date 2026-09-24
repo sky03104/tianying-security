@@ -87,6 +87,17 @@ function 轉為gviz表_(rows, isHot) {
 }
 
 function getWorkOrders_SQL(sheetName, mode, search, histDate) {
+  // 2026-09-24：sheet='__both__' 一次回兩張表（施工單＋動火），前端初次載入只要叫一次 GAS。
+  // 原本兩張表各叫一次、同時跑兩個 GAS 執行個體，實測資料庫兩邊都幾十毫秒就回來，
+  // 卻常有其中一個卡在 GAS 啟動／回傳超過 15 秒，被前端判定逾時、退回整表下載。
+  // 走既有的 getWorkOrders 路由，只需要更新本檔，不用改主程式。
+  if (sheetName === '__both__') {
+    return {
+      both: true,
+      con: getWorkOrders_SQL('施工單查詢', mode, search, histDate),
+      hot: getWorkOrders_SQL('動火申請查詢', mode, search, histDate)
+    };
+  }
   var isHot = (sheetName === '動火申請查詢');
   var table = isHot ? 'fire_permits' : 'construction_orders';
   var path;
