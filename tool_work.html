@@ -674,9 +674,18 @@ function dedupeRows(rows){
       if(preferOver(r, matched.rep)) matched.rep=r; // 否則保留先到的那筆
     }
   }
+  // 2026-09-24 修正：合併後的卡片要用「合併後的施工區間」，不能沿用代表那筆自己的日期。
+  // 實例：天圓室內裝修 B1F 同一工程重複申請 14 筆（8/21～10/8），其中一筆是 8/21 單日的舊資料，
+  // 剛好被選為代表 → 整張卡被當成「只有 8/21」，從「今天」分頁消失（施工中卻看不到）。
   var out=[];
   Object.keys(buckets).forEach(function(k){
-    buckets[k].forEach(function(slot){ out.push(slot.rep); });
+    buckets[k].forEach(function(slot){
+      var r=slot.rep, own=jobRange(r), m=slot.range;
+      if(m && own && (m.s.getTime()!==own.s.getTime() || m.e.getTime()!==own.e.getTime())){
+        r=Object.assign({}, r, { '施工日期': new Date(m.s.getTime()), '退場日期': new Date(m.e.getTime()) });
+      }
+      out.push(r);
+    });
   });
   return out;
 }
@@ -1236,8 +1245,18 @@ function loadWorkCache(){
   try {
     var c = JSON.parse(localStorage.getItem(WORK_CACHE_KEY) || 'null');
     if(!c || !c.data) return false;
-    S.data.con = Array.isArray(c.data.con) ? c.data.con : [];
-    S.data.hot = Array.isArray(c.data.hot) ? c.data.hot : [];
+    // 2026-09-24：快取存成 JSON 時日期會變成文字，讀回來要轉回 Date，
+    // 否則 jobRange() 認不得、快取秒開的畫面「今天/明天」會是空的，要等背景更新完才出現
+    var revive = function(list){
+      return (Array.isArray(list) ? list : []).map(function(r){
+        ['施工日期','退場日期'].forEach(function(k){
+          if(typeof r[k] === 'string' && r[k]){ var d = new Date(r[k]); if(!isNaN(d.getTime())) r[k] = d; }
+        });
+        return r;
+      });
+    };
+    S.data.con = revive(c.data.con);
+    S.data.hot = revive(c.data.hot);
     S.errors = {con:null, hot:null};
     S.loading = false;
     return true;
