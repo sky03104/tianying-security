@@ -485,6 +485,62 @@ function fetchSheetJsonp(name){
    後端回傳格式刻意組成跟gviz table一樣，直接丟給 parseGvizTable() 解析，
    失敗（連不上/格式不對）自動退回原本直接讀 gviz 的路徑，維持免登入。
 ══════════════════════════════════════════ */
+/* 2026-09-24：初次載入改成「一次 GAS 呼叫拿兩張表」（sheet='__both__'）。
+   正式庫 log 實測：施工單、動火兩個查詢到資料庫都只要幾十毫秒，慢的是 GAS 本身
+   （啟動／排隊／回傳），分兩次叫就是兩倍機會卡住；手機上常見其中一張逾時退回整表下載。
+   相容舊版後端：舊版不認得 __both__，會把它當施工單查、回一般 gviz 表 →
+   那份就當施工單用，動火再單獨叫一次（跟原本一樣）。
+   任何失敗一律退回原本「兩張各自抓（含試算表備援）」的路徑，不會比原本差。 */
+// 逾時：有快取（背景更新）時使用者已經看到資料，寧可多等 GAS 25 秒也不要去下載整張表；
+// 沒快取（畫面還在轉圈）時只等 12 秒，才來得及在頁面 20 秒「載入逾時」保險絲燒斷前改讀試算表
+var GAS_BOTH_TIMEOUT_MS = 25000, GAS_BOTH_TIMEOUT_NOCACHE_MS = 12000;
+function 一次抓兩張表_(silent){
+  var 逾時 = silent ? GAS_BOTH_TIMEOUT_MS : GAS_BOTH_TIMEOUT_NOCACHE_MS;
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var tid = ctrl ? setTimeout(function(){ ctrl.abort(); }, 逾時) : null;
+  var 各自抓 = function(){
+    return Promise.allSettled([
+      fetchSheetFromGAS_含備援(SN.con, 'active'),
+      fetchSheetFromGAS_含備援(SN.hot, 'active')
+    ]);
+  };
+  return fetch(CON_GAS_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain' },
+    body: JSON.stringify({ action:'getWorkOrders', sheet:'__both__', mode:'active' }),
+    signal: ctrl ? ctrl.signal : undefined
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(tid) clearTimeout(tid);
+    var ok = function(v){ return { status:'fulfilled', value:v }; };
+    if(data && data.both && data.con && data.hot && Array.isArray(data.con.cols) && Array.isArray(data.hot.cols)){
+      var con = parseGvizTable(data.con); con._src = 'sql';
+      var hot = parseGvizTable(data.hot); hot._src = 'sql';
+      return [ok(con), ok(hot)];
+    }
+    if(data && Array.isArray(data.cols)){
+      // 舊版後端：回來的是施工單，動火另外抓
+      var con2 = parseGvizTable(data); con2._src = 'sql';
+      return Promise.allSettled([ fetchSheetFromGAS_含備援(SN.hot, 'active') ]).then(function(r){ return [ok(con2), r[0]]; });
+    }
+    throw new Error('回應格式不是預期的結構' + (data && (data.error || data.message) ? '：' + (data.error || data.message) : ''));
+  })
+  .catch(function(err){
+    if(tid) clearTimeout(tid);
+    console.warn('一次抓兩張表失敗，改回兩張各自抓：', err);
+    window._sqlFailReason = (err && err.name === 'AbortError')
+      ? '施工單 GAS 超過 ' + (逾時/1000) + ' 秒沒有回應'
+      : ((err && err.message) || String(err));
+    if(err && err.name === 'AbortError'){
+      // GAS 卡住 25 秒：再叫一次 GAS 多半一樣慢，直接改讀試算表
+      var sheets = function(name){ return fetchSheetJsonp(name).then(function(rows){ rows._src = 'sheets'; return rows; }); };
+      return Promise.allSettled([ sheets(SN.con), sheets(SN.hot) ]);
+    }
+    return 各自抓();
+  });
+}
+
 /* 2026-09-24：①加 15 秒逾時，GAS 卡住時不會無限等下去才退回備援
    ②回傳的陣列帶 _src 標記（'sql'＝走 Supabase；'sheets'＝退回整表下載），
      畫面右上角「更新時間」旁會顯示，現場一眼就看得出是不是一直在走慢的備援路徑 */
@@ -1282,10 +1338,7 @@ async function loadAll(silent){
   // 2026-09-24：施工單、動火申請改成同時抓（原本一張抓完才抓下一張，等待時間直接加倍）
   if(!silent) document.getElementById('sp-msg').textContent='載入施工單與動火申請…';
   var t0 = Date.now();
-  var results = await Promise.allSettled([
-    fetchSheetFromGAS_含備援(SN.con, 'active'),
-    fetchSheetFromGAS_含備援(SN.hot, 'active')
-  ]);
+  var results = await 一次抓兩張表_(silent);
   var srcs = [];
   if(results[0].status === 'fulfilled'){ srcs.push(results[0].value._src); S.data.con = dedupeRows(results[0].value); }
   else if(!silent) S.errors.con = results[0].reason && results[0].reason.message;
