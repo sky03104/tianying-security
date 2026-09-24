@@ -34,8 +34,12 @@
 
 var SHEET_ID = "1oZsn8WlJ_-qQ6k9tIzm6Ymp3Zp-IfBFCf80Ut7Zw_JU";
 
+// 2026-09-24：同一次請求內只開一次試算表（openById 每次數百毫秒～1秒多，
+// 很多 action 會連呼叫好幾次 ss_()）。GAS 每次執行的全域變數都是全新的，不會跨請求沿用舊資料。
+var ssCache_ = null;
 function ss_() {
-  return SpreadsheetApp.openById(SHEET_ID);
+  if (!ssCache_) ssCache_ = SpreadsheetApp.openById(SHEET_ID);
+  return ssCache_;
 }
 
 // ── 班表查詢 Bot 用常數 ──
@@ -732,42 +736,58 @@ function issueToken_(empId) {
  */
 function verifyToken_(token) {
   try {
-    if (!token) return null;
-    var parts = String(token).split('.');
-    if (parts.length !== 2) return null;
-
-    var payload = Utilities.newBlob(
-      Utilities.base64DecodeWebSafe(parts[0])
-    ).getDataAsString();
-
-    // 簽章對不上 → 通行證被竄改過
-    if (signPayload_(payload) !== parts[1]) return null;
-
-    var seg = payload.split('|');
-    if (seg.length !== 2) return null;
-    var empId    = seg[0];
-    var expireMs = Number(seg[1]);
-    if (!empId || !expireMs) return null;
-
-    // 過期
-    if (new Date().getTime() > expireMs) return null;
-
-    // 帳號本身還要是存在且啟用中的（停用後舊通行證要立刻失效）
-    var rec = findUserRecord_(empId);
-    if (!rec) return null;
-    if (rec.status === 'inactive') return null;
-
-    return {
-      empId:  empId,
-      name:   rec.name,
-      role:   rec.role,
-      dept:   rec.dept,
-      status: rec.status,
-      shift:  rec.shift
-    };
+    return verifyTokenCore_(token);
   } catch (err) {
     return null;
   }
+}
+
+/**
+ * verifyToken_ 的本體：通行證本身有問題（偽造／過期／查無此人／停用）回 null，
+ * 讀試算表等「伺服器暫時出錯」則直接丟例外，讓 verifySession 分得出兩者。
+ * 2026-09-24：原本兩種情況都回 null，前端收到「登入已失效」就把人登出——
+ * 讀帳號表偶發逾時也會害使用者被踢回登入頁（咖哩回報「回首頁就被登出」的原因之一）。
+ */
+function verifyTokenCore_(token) {
+  if (!token) return null;
+  var parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+
+  var payload;
+  try {
+    payload = Utilities.newBlob(
+      Utilities.base64DecodeWebSafe(parts[0])
+    ).getDataAsString();
+  } catch (decodeErr) {
+    return null;   // 格式壞掉＝通行證本身無效
+  }
+
+  // 簽章對不上 → 通行證被竄改過
+  if (signPayload_(payload) !== parts[1]) return null;
+
+  var seg = payload.split('|');
+  if (seg.length !== 2) return null;
+  var empId    = seg[0];
+  var expireMs = Number(seg[1]);
+  if (!empId || !expireMs) return null;
+
+  // 過期
+  if (new Date().getTime() > expireMs) return null;
+
+  // 帳號本身還要是存在且啟用中的（停用後舊通行證要立刻失效）
+  // 讀表出錯會直接丟例外（不是回 null），由呼叫端決定怎麼處理
+  var rec = findUserRecord_(empId);
+  if (!rec) return null;
+  if (rec.status === 'inactive') return null;
+
+  return {
+    empId:  empId,
+    name:   rec.name,
+    role:   rec.role,
+    dept:   rec.dept,
+    status: rec.status,
+    shift:  rec.shift
+  };
 }
 
 /**
@@ -853,11 +873,12 @@ function login(e) {
 function verifySession(e) {
   try {
     var d = JSON.parse(e.parameter.data || '{}');
-    var u = verifyToken_(d.token);
-    if (!u) return jsonRes({status:'err', msg:'登入已失效，請重新登入'});
+    var u = verifyTokenCore_(d.token);
+    // code 給前端判斷要不要登出：INVALID＝通行證真的失效（要登出）；SERVER＝伺服器暫時出錯（不要踢人）
+    if (!u) return jsonRes({status:'err', code:'INVALID', msg:'登入已失效，請重新登入'});
     return jsonRes({status:'ok', user:u});
   } catch (err) {
-    return jsonRes({status:'err', msg:err.toString()});
+    return jsonRes({status:'err', code:'SERVER', msg:'伺服器暫時無法確認登入狀態：' + err.toString()});
   }
 }
 

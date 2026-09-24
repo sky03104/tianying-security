@@ -46,6 +46,8 @@ setInterval(function () {
       .then(function (d) {
         if (d.status === 'ok' && d.data && d.data.kicked) {
           localStorage.removeItem('hsh_session_user');
+          /* 通行證與分頁登入旗標一併清掉，否則重新載入後又會被自動登入回來 */
+          try { localStorage.removeItem('hsh_auth_token'); sessionStorage.removeItem('hsh_tab_session'); } catch (e) {}
           alert('你已被管理員登出');
           location.reload();
         }
@@ -71,7 +73,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '35.18';
+const APP_VERSION = '36.19';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -192,6 +194,39 @@ function setAuthToken(token) {
     try {
         if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
         else localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch (e) {}
+}
+/* 「這個分頁已登入」旗標（2026-09-24）：存在 sessionStorage，同一個分頁/APP 視窗內
+   整頁跳去工具再跳回主控台都還在，關掉 APP 或分頁就自動消失。
+   讓沒勾「記住我」的人在同一次使用中切換工具不會被要求重登。 */
+const TAB_SESSION_KEY = 'hsh_tab_session';
+function isTabSession() {
+    try { return sessionStorage.getItem(TAB_SESSION_KEY) === '1'; } catch (e) { return false; }
+}
+function markTabSession(on) {
+    try {
+        if (on) sessionStorage.setItem(TAB_SESSION_KEY, '1');
+        else sessionStorage.removeItem(TAB_SESSION_KEY);
+    } catch (e) {}
+}
+/* 主管待審卡片的清單快取（sessionStorage，關分頁即清）：主控台已經讀過一次，
+   點卡片跳到 tool_report／tool_feedback 審閱畫面時先拿來秒開，再背景更新 */
+const REVIEW_CACHE_KEYS = { report: 'hsh_cache_reports', feedback: 'hsh_cache_feedback' };
+function saveReviewCache(kind, list) {
+    try { sessionStorage.setItem(REVIEW_CACHE_KEYS[kind], JSON.stringify({ t: Date.now(), list: list })); } catch (e) {}
+}
+/* 清除登入態（登出／通行證失效／帳號停用共用）。forgetRemember=true 時連「記住我」一起取消 */
+function clearLoginState(forgetRemember) {
+    setAuthToken('');
+    markTabSession(false);
+    try {
+        localStorage.removeItem('hsh_session_user');
+        localStorage.removeItem('hsh_remember_user');
+        /* 順手清掉緊急聯絡清單的本機快取，避免登入失效後這份工具還留著上次同步的電話資料 */
+        localStorage.removeItem('hsh_ec_contacts');
+        if (forgetRemember) localStorage.removeItem('hsh_remember_flag');
+        sessionStorage.removeItem(REVIEW_CACHE_KEYS.report);
+        sessionStorage.removeItem(REVIEW_CACHE_KEYS.feedback);
     } catch (e) {}
 }
 const DEFAULT_PERMS = {
@@ -2785,62 +2820,110 @@ function App() {
     //   一律存起來，讓無線電管理等獨立分頁工具永遠連得上（不受這個核取方塊
     //   影響）；「記住我」只決定主控台重新整理時要不要免密碼自動登入，靠
     //   獨立的 hsh_remember_flag 判斷，沒勾就一律要求重新輸入密碼。
+    // 2026-09-24 修「切換工具／回首頁就被登出」（咖哩回報，勾了記住我也一樣）：
+    //   事故報告、施工單查詢等工具是「整頁跳走」再跳回 index.html，每次回來主控台都是重新載入。
+    //   ①沒勾記住我：舊版開頭就 return，所以同一個分頁裡只要切一次工具就回到登入頁。
+    //     → 改用 sessionStorage 記「這個分頁已登入」（關掉 APP/分頁才會清掉），
+    //       同分頁內來回切工具不用重登；「記住我」維持原意＝關掉 APP 再開也免登入。
+    //   ②有勾記住我：舊版要「等」後端 verifySession 回來才進主選單，GAS 冷啟動加上
+    //     回首頁同時打 8 支 API，常常超過 splash 的 6 秒保底 → 使用者先看到登入頁，
+    //     以為被登出；後端只要讀帳號表時偶發錯誤，也會被當成「通行證失效」直接清掉登入態。
+    //     → 改成「先用本機登入態立刻進主選單，再背景向後端確認」，只有後端明確回
+    //       通行證失效（code:'INVALID'）才登出；網路/伺服器暫時錯誤一律不踢人。
     useEffect(() => {
         let cancelled = false;
+        /* 進入主選單（登入成功後的共用收尾） */
+        const enterMain = (sessionUser) => {
+            setCurrentUser(sessionUser);
+            localStorage.setItem('hsh_session_user', JSON.stringify(sessionUser));
+            markTabSession(true);
+            try { if (typeof logWorkflow === 'function') logWorkflow('app', 'login', '上線'); } catch (e) {}
+            setLoginForm(prev => ({ ...prev, id: sessionUser.empId }));
+            const favKey = 'hsh_favs_' + sessionUser.empId;
+            const savedFavs = localStorage.getItem(favKey);
+            if (savedFavs) { try { setFavorites(JSON.parse(savedFavs)); } catch(e){} }
+            loadLoginBootstrap();
+            if (['executive', 'admin'].includes(sessionUser.role)) loadReviewCounts();
+            setPage("main");
+        };
+        /* 通行證確定失效（過期／帳號停用）→ 清掉登入態回登入頁 */
+        const dropSession = (msg) => {
+            clearLoginState(false);
+            if (cancelled) return;
+            setCurrentUser(null);
+            setPage('login');
+            if (msg) showToast(msg, 'err');
+        };
+        /* 背景向後端確認通行證。回傳 'ok'（附 user）／'invalid'／'unknown'（連不上或伺服器暫時錯誤） */
+        const checkToken = async (token) => {
+            const once = async () => {
+                try {
+                    const d = await callAuthApi('verifySession', { token: token });
+                    if (d && d.status === 'ok' && d.user) return { state: 'ok', user: d.user };
+                    if (d && d.code === 'INVALID') return { state: 'invalid' };
+                    if (d && d.code === 'SERVER') return { state: 'unknown' };
+                    // 舊版後端（還沒重新部署）分不出「失效」跟「讀表出錯」，一律回「登入已失效」
+                    if (d && /登入已失效/.test(d.msg || '')) return { state: 'legacy' };
+                    return { state: 'unknown' };
+                } catch (e) { return { state: 'unknown' }; }
+            };
+            let r = await once();
+            // 舊版後端：隔 1.5 秒再問一次，兩次都失效才算數（偶發讀表錯誤不會連續兩次）
+            if (r.state === 'legacy') {
+                await new Promise(ok => setTimeout(ok, 1500));
+                r = await once();
+                if (r.state === 'legacy') r = { state: 'invalid' };
+            }
+            return r;
+        };
         (async () => {
             try {
-                if (localStorage.getItem('hsh_remember_flag') !== '1') return;
-                let sessionUser = null;
-
-                // 1) 優先用「記住我」的通行證，向後端換回目前身分
-                //    （順便確認帳號還在、還沒被停用 —— 後端會一起檢查）
+                const remember = localStorage.getItem('hsh_remember_flag') === '1';
+                if (!remember && !isTabSession()) return;
                 const token = getAuthToken();
-                if (token) {
-                    try {
-                        const d = await callAuthApi('verifySession', { token: token });
-                        if (d && d.status === 'ok' && d.user) {
-                            const u = d.user;
-                            sessionUser = { name: u.name, role: u.role, dept: u.dept, empId: u.empId, shift: u.shift };
-                        } else {
-                            // 通行證過期或帳號已停用 → 清掉，讓使用者重新登入
-                            setAuthToken('');
-                            try { localStorage.removeItem('hsh_session_user'); } catch (e) {}
-                            /* 順手清掉緊急聯絡清單的本機快取，避免登入失效後這份工具還留著上次同步的電話資料 */
-                            try { localStorage.removeItem('hsh_ec_contacts'); } catch (e) {}
-                            return;
-                        }
-                    } catch (e) {
-                        // 純粹連不上網路：不要把人踢出去，改走下面既有的登入態
+                let sess = null;
+                try { sess = JSON.parse(localStorage.getItem('hsh_session_user') || 'null'); } catch (e) {}
+                if (!(sess && sess.empId && sess.role)) sess = null;
+
+                /* 帳號已被停用（本機快取的帳號表就看得出來）→ 不自動登入 */
+                if (sess) {
+                    const dbRec = userDb[sess.empId];
+                    if (dbRec && dbRec.status === 'inactive') { clearLoginState(false); return; }
+                }
+
+                if (sess) {
+                    // 1) 有本機登入態：立刻進主選單，不等網路
+                    enterMain(sess);
+                    // 2) 背景確認通行證；後端回來的角色/班別若有變更就同步更新
+                    if (token) {
+                        checkToken(token).then(r => {
+                            if (cancelled) return;
+                            if (r.state === 'invalid') { dropSession('⚠️ 登入已過期，請重新登入'); return; }
+                            if (r.state === 'ok') {
+                                const u = r.user;
+                                const fresh = { name: u.name, role: u.role, dept: u.dept, empId: u.empId, shift: u.shift };
+                                if (fresh.empId !== sess.empId) { dropSession('⚠️ 登入狀態異常，請重新登入'); return; }
+                                if (JSON.stringify(fresh) !== JSON.stringify({ name: sess.name, role: sess.role, dept: sess.dept, empId: sess.empId, shift: sess.shift })) {
+                                    setCurrentUser(fresh);
+                                    localStorage.setItem('hsh_session_user', JSON.stringify(fresh));
+                                }
+                            }
+                        });
                     }
-                }
-
-                // 2) 沒有通行證時，沿用現有登入態（從工具頁返回主選單不需重登）
-                if (!sessionUser) {
-                    const sess = JSON.parse(localStorage.getItem('hsh_session_user') || 'null');
-                    if (sess && sess.empId && sess.role) sessionUser = sess;
-                }
-                if (!sessionUser || cancelled) return;
-
-                /* 帳號已被停用 → 不自動登入，並清除登入態
-                   （走路徑 1 時後端已檢查過，這裡是為了路徑 2 的情況補一道） */
-                const dbRec = userDb[sessionUser.empId];
-                if (dbRec && dbRec.status === 'inactive') {
-                    setAuthToken('');
-                    localStorage.removeItem('hsh_remember_user');
-                    localStorage.removeItem('hsh_session_user');
-                    localStorage.removeItem('hsh_ec_contacts');
                     return;
                 }
-                setCurrentUser(sessionUser);
-                localStorage.setItem('hsh_session_user', JSON.stringify(sessionUser));
-                    try { if (typeof logWorkflow === 'function') logWorkflow('app', 'login', '上線'); } catch (e) {}
-                setLoginForm(prev => ({ ...prev, id: sessionUser.empId }));
-                const favKey = 'hsh_favs_' + sessionUser.empId;
-                const savedFavs = localStorage.getItem(favKey);
-                if (savedFavs) { try { setFavorites(JSON.parse(savedFavs)); } catch(e){} }
-                loadLoginBootstrap();
-                if (['executive', 'admin'].includes(sessionUser.role)) loadReviewCounts();
-                setPage("main");
+
+                // 3) 沒有本機登入態、只有通行證（例如被強制登出後又開啟）：只能等後端換回身分
+                if (token) {
+                    const r = await checkToken(token);
+                    if (cancelled) return;
+                    if (r.state === 'ok') {
+                        const u = r.user;
+                        enterMain({ name: u.name, role: u.role, dept: u.dept, empId: u.empId, shift: u.shift });
+                    } else if (r.state === 'invalid') {
+                        clearLoginState(false);
+                    }
+                }
             } catch(e) {}
             finally {
                 // 不論查到有效登入態、沒有登入態、還是查詢失敗，登入檢查都算「跑完了」，
@@ -2891,6 +2974,7 @@ function App() {
            「無線電管理一直跳登入已失效」查出）。token 本身在後端就有
            7 天效期（issueToken_），一律存起來不會比較不安全。 */
         setAuthToken(d.token);
+        markTabSession(true);
         /* 記住我：只決定主控台下次重新整理要不要免密碼自動登入
            （hsh_session_user/hsh_auth_token 已經一律存了，這裡只是額外
            一個開關）。沒勾就清掉，下次開主控台會停在登入頁要求重打密碼。 */
@@ -2977,8 +3061,8 @@ function App() {
                 fetch(REPORT_GAS_URL + '?action=getReports&token=' + _t).then(x => x.json()).catch(() => null),
                 fetch(REPORT_GAS_URL + '?action=getFeedback&token=' + _t).then(x => x.json()).catch(() => null)
             ]);
-            if (r1 && r1.status === 'ok' && Array.isArray(r1.list)) setPendingReports(r1.list);
-            if (r2 && r2.status === 'ok' && Array.isArray(r2.list)) setPendingFeedback(r2.list);
+            if (r1 && r1.status === 'ok' && Array.isArray(r1.list)) { setPendingReports(r1.list); saveReviewCache('report', r1.list); }
+            if (r2 && r2.status === 'ok' && Array.isArray(r2.list)) { setPendingFeedback(r2.list); saveReviewCache('feedback', r2.list); }
         } catch (e) {}
     };
     /* ── 從雲端載入早晚班請假上限（系統設定分頁） ── */
@@ -3203,12 +3287,7 @@ function App() {
         if (!currentUser) return;
         const rec = userDb[currentUser.empId];
         if (rec && rec.status === 'inactive') {
-            try {
-                setAuthToken('');   // 通行證一併作廢，否則下次開啟又被自動登入
-                localStorage.removeItem('hsh_remember_user');
-                localStorage.removeItem('hsh_session_user');
-                localStorage.removeItem('hsh_ec_contacts');
-            } catch (e) { }
+            clearLoginState(false);   // 通行證一併作廢，否則下次開啟又被自動登入
             setCurrentUser(null);
             setPage('login');
             showToast('❌ 此帳號已被停用，請聯絡管理員');
@@ -3888,7 +3967,7 @@ function App() {
                     color: '#fff', cursor: 'pointer', marginBottom: 10,
                     fontFamily: "'Microsoft JhengHei',sans-serif",
                     boxShadow: '0 3px 14px rgba(6,199,85,.3)' } }, "\uD83D\uDCF1 \u7DA1\u5B9A LINE \u901A\u77E5"),
-            React.createElement("button", { className: "logout-btn", onClick: () => { try { if (typeof logWorkflow === 'function') logWorkflow('app', 'logout', '離線'); } catch (e) {} setPage("login"); setCurrentUser(null); localStorage.removeItem('hsh_session_user'); setAuthToken(''); try { localStorage.removeItem('hsh_remember_user'); localStorage.removeItem('hsh_remember_flag'); localStorage.removeItem('hsh_ec_contacts'); } catch (e) {} showToast("已登出"); } }, "\u767B\u51FA\u5E33\u865F")));
+            React.createElement("button", { className: "logout-btn", onClick: () => { try { if (typeof logWorkflow === 'function') logWorkflow('app', 'logout', '離線'); } catch (e) {} setPage("login"); setCurrentUser(null); clearLoginState(true); showToast("已登出"); } }, "\u767B\u51FA\u5E33\u865F")));
     };
     const NAV = [
         { id: "home", icon: "🏠", label: "首頁" },

@@ -103,6 +103,19 @@
         function getAuthToken(){
             try { return localStorage.getItem('hsh_auth_token') || ''; } catch(e){ return ''; }
         }
+        // 主管待審清單快取（index.html 的 saveReviewCache 寫入，key 兩邊必須一致）。只收 10 分鐘內的，
+        // 太舊就當沒有、照常顯示讀取中；sessionStorage 關掉分頁就清，登出時主控台也會清掉。
+        const REVIEW_CACHE_KEY = 'hsh_cache_reports';
+        function readReviewCache(){
+            try {
+                const c = JSON.parse(sessionStorage.getItem(REVIEW_CACHE_KEY) || 'null');
+                if (c && Array.isArray(c.list) && Date.now() - c.t < 10 * 60 * 1000) return c.list;
+            } catch(e){}
+            return [];
+        }
+        function writeReviewCache(list){
+            try { sessionStorage.setItem(REVIEW_CACHE_KEY, JSON.stringify({ t: Date.now(), list: list })); } catch(e){}
+        }
         const STATUS_COLORS = { '未讀': '#F87171', '待處理': '#FB923C', '已知悉再觀察': '#818CF8', '持續追蹤': '#FBBF24', '已讀': '#D4A800', '處理中': '#FB923C', '已處理': '#4ADE80' };
         const ADMIN_GAS_URL = "https://script.google.com/macros/s/AKfycbwHXlwTMmJyA79Cuzdh2IPRnBLUWm2YPEqXn5XJj4GVEUlCnNIv8hgRTJ7Xr198hZxG/exec";
         const WORKFLOW_GAS_URL = "https://script.google.com/macros/s/AKfycbzxjedGAbxj3G85zkybqoFoB-P7uQ9ycqdJZ7mzQ2Ax-vaxKgOTG60120PlGPbcNJpR/exec";
@@ -268,7 +281,9 @@
 
         // ===== 主管審閱畫面（事故報告）=====
         function AdminApp(){
-            const [list, setList] = useState([]);
+            // 2026-09-24：主控台首頁已經讀過一次清單並暫存在 sessionStorage，
+            // 點「待審」小卡進來先拿快取秒開畫面，再背景向後端要最新的（原本每次都要重等一輪 GAS）
+            const [list, setList] = useState(() => readReviewCache());
             const [loading, setLoading] = useState(true);
             const [filter, setFilter] = useState('unread'); // unread | pending | done | all
             const [selected, setSelected] = useState(null);
@@ -284,6 +299,9 @@
                 setTimeout(() => { const s = document.getElementById('splash'); if (s) { s.classList.add('hide'); setTimeout(() => s.remove(), 500); } }, 500);
                 if (allowed) loadList();
             }, []);
+
+            // 清單有變動（背景更新、改狀態、刪除）就同步回快取，下次從首頁點進來才不會看到舊的
+            useEffect(() => { if (list.length || !loading) writeReviewCache(list); }, [list, loading]);
 
             const loadList = async () => {
                 setLoading(true);
@@ -439,7 +457,7 @@
                 React.createElement("div", { style: { display: 'flex', gap: '8px', marginBottom: '14px' } },
                     tabBtn('unread', '未讀'), tabBtn('pending', '待處理'), tabBtn('done', '已處理'), tabBtn('all', '全部')
                 ),
-                loading ? React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '40px' } }, React.createElement("i", { className: "ti ti-loader-2 spin", style: { fontSize: '28px', color: 'var(--primary)' } })) :
+                (loading && !list.length) ? React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '40px' } }, React.createElement("i", { className: "ti ti-loader-2 spin", style: { fontSize: '28px', color: 'var(--primary)' } })) :
                 filtered.length === 0 ? React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' } }, "目前沒有符合條件的報告") :
                 React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
                     filtered.map(it => React.createElement("div", { key: it.row, className: "card", style: { cursor: 'pointer', padding: '14px', position: 'relative' }, onClick: () => openDetail(it, filtered.map(r => r.row)) },

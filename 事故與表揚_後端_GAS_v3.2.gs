@@ -115,7 +115,7 @@ function getSessionSecret_() {
 
 /** 用工號查「帳號管理」分頁的角色/姓名/狀態——跟主App同一份試算表(SS_ID)，不用跨腳本查 */
 function findUserRole_(empId) {
-  var sh = SpreadsheetApp.openById(SS_ID).getSheetByName('帳號管理');
+  var sh = ss_().getSheetByName('帳號管理');
   if (!sh) return null;
   var data = sh.getDataRange().getValues();
   var target = String(empId).trim();
@@ -388,8 +388,18 @@ function saveImages_(arr, namePrefix) {
 }
 
 // ====== 工具函式 ======
+// 2026-09-24：同一次請求內只開一次試算表。原本 getReports 一次請求會 openById 兩次
+// （驗證通行證讀「帳號管理」一次、讀清單一次），openById 本身每次就要數百毫秒～1秒多，
+// 是主管點「待審報告／表揚反應」小卡偏慢的原因之一。GAS 每次執行的全域變數都是全新的，
+// 不會跨請求沿用到舊資料。
+var ssCache_ = null;
+function ss_() {
+  if (!ssCache_) ssCache_ = SpreadsheetApp.openById(SS_ID);
+  return ssCache_;
+}
+
 function getSheet_(name, headers) {
-  var ss = SpreadsheetApp.openById(SS_ID);
+  var ss = ss_();
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
