@@ -11,14 +11,22 @@
 //
 // 三種查詢模式：
 //   mode='active'：初次載入用，抓「近期會用到」的範圍：退場日期或施工日期
-//     在今天往前35天之後的（含進行中的長期單與全部未來申請），
+//     在今天往前7天之後的（含進行中的長期單與全部未來申請），
 //     涵蓋今天/明天/已申請三個分頁需求，不用整表下載。
 //   mode='date'：歷史分頁指定日期，精確比對 work_date。
 //   mode='search'：歷史分頁輸入關鍵字，對主要文字欄位做ILIKE搜尋
 //     （不限日期範圍，搜全部歷史）。
 // ════════════════════════════════════════════════════════════
 
-var 搜尋回溯天數_ = 35;   // 往前抓多少天（「歷史」分頁預設只看近三日，其餘靠 date/search 模式另查）
+// 往前抓多少天。2026-09-24 由 35 天改 7 天：進行中的長期單靠 exit_date 抓得到，
+// 「歷史」分頁預設只看近三日，其餘靠 date/search 模式另查。
+// 實測正式庫（narilpgjmjncladkquly）：施工單 35天=1631筆→7天=574筆，
+// 低於 Supabase 單次上限 1000 筆，一趟就抓完不用分頁；並用 SQL 驗證過
+// 「今天/明天/已申請/近三日」會用到的列，改 7 天後漏掉 0 筆。
+var 搜尋回溯天數_ = 7;
+
+// 只抓畫面用得到的欄位（不抓 dedupe_key／created_at，dedupe_key 是整串長文字，回傳量差很多）
+var 施工單欄位_ = 'id,apply_unit,vendor,work_date,entry_time,exit_time,headcount,supervisor,location,item,exit_date,note,checked_in_at';
 
 function 施工單日期字串_(d) {
   return Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM-dd');
@@ -105,6 +113,7 @@ function getWorkOrders_SQL(sheetName, mode, search, histDate) {
       + '?or=(exit_date.gte.' + lowerStr + ',work_date.gte.' + lowerStr + ')';
   }
 
+  path += '&select=' + 施工單欄位_ + (isHot ? ',equipment' : '');
   var rows = supabase分頁抓全部_(path);
   return 轉為gviz表_(rows, isHot);
 }
