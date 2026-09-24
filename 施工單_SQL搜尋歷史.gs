@@ -10,17 +10,15 @@
 // 只需要換「資料從哪裡來」這一步，把前端改動風險降到最低。
 //
 // 三種查詢模式：
-//   mode='active'：初次載入用，抓「近期會用到」的範圍（今天往前35天、
-//     往後120天），涵蓋今晚/明早/已申請三個分頁需求，不用整表下載。
-//     35/120天是保守估計，之後若真的有更久遠的預約案例查不到，
-//     這兩個數字要跟著調大。
+//   mode='active'：初次載入用，抓「近期會用到」的範圍：退場日期或施工日期
+//     在今天往前35天之後的（含進行中的長期單與全部未來申請），
+//     涵蓋今天/明天/已申請三個分頁需求，不用整表下載。
 //   mode='date'：歷史分頁指定日期，精確比對 work_date。
 //   mode='search'：歷史分頁輸入關鍵字，對主要文字欄位做ILIKE搜尋
 //     （不限日期範圍，搜全部歷史）。
 // ════════════════════════════════════════════════════════════
 
-var 搜尋回溯天數_ = 35;
-var 搜尋前瞻天數_ = 120;
+var 搜尋回溯天數_ = 35;   // 往前抓多少天（「歷史」分頁預設只看近三日，其餘靠 date/search 模式另查）
 
 function 施工單日期字串_(d) {
   return Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM-dd');
@@ -95,12 +93,16 @@ function getWorkOrders_SQL(sheetName, mode, search, histDate) {
     path = '/rest/v1/' + table + '?or=(' + orClause + ')&limit=500';
   } else {
     // active：近期會用到的範圍
+    // 2026-09-24 修正：原本只看「施工日期(work_date)」落在 今天-35天～今天+120天，
+    //   長期施工單（例如 4/23～12/31 的每週進貨）開始日期早就超過 35 天，
+    //   明明今天還在施工區間內，卻會從「今天／明天」分頁消失。
+    //   改成：退場日期還沒超過回溯範圍（進行中的長期單）或 施工日期在回溯範圍內（近期＋所有未來申請）。
+    //   不再設未來上限——「已申請」分頁要看全部未來申請，未來的筆數本來就不多。
     var today = new Date();
     var lower = new Date(today.getTime()); lower.setDate(lower.getDate() - 搜尋回溯天數_);
-    var upper = new Date(today.getTime()); upper.setDate(upper.getDate() + 搜尋前瞻天數_);
+    var lowerStr = 施工單日期字串_(lower);
     path = '/rest/v1/' + table
-      + '?work_date=gte.' + 施工單日期字串_(lower)
-      + '&work_date=lte.' + 施工單日期字串_(upper);
+      + '?or=(exit_date.gte.' + lowerStr + ',work_date.gte.' + lowerStr + ')';
   }
 
   var rows = supabase分頁抓全部_(path);
