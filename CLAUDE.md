@@ -13,7 +13,7 @@
 - 專案概觀、班別定義（早班 08:00~20:00／晚班 20:00~隔日08:00）、工作流程、收工觸發語、Never 清單 → 見 `AGENTS.md`（開機已自動載入，不在此重複）。
 - `tianying-monitor/` 自動化監控系統目前待命；要動它時讀 `tianying-monitor/README.md`。
 - 動工前先查 `docs/技術經驗筆記.md` 有沒有同主題的坑（GAS、Drive、LINE、brain_map、部署都踩過）。
-- ⛔ **Supabase 認明專案**：天鷹正式資料庫＝`narilpgjmjncladkquly`（帳號 sky03104、專案名 tianying-security，新加坡）。Supabase MCP 連接器目前只看得到另一個帳號的「凹子底專案」`tjrlpthprtrlmugrofpj`，**禁止拿連接器查／改天鷹資料**；GAS 連線設定在各專案指令碼屬性 `SUPABASE_URL`，不要動。（2026-09-24 咖哩提醒）
+- ⛔ **Supabase 認明專案**：天鷹正式資料庫＝`narilpgjmjncladkquly`（組織 sky03104、專案名 tianying-security，新加坡）。另一個組織「天鷹凹子底」的專案 `tjrlpthprtrlmugrofpj` **不是天鷹資料，不准碰**。Supabase MCP 連接器 2026-09-24 已重新授權到 sky03104：**只准查 `narilpgjmjncladkquly`，預設只做唯讀查詢**；任何寫入／刪除／改結構都要先給咖哩看 SQL 並取得同意。GAS 連線設定在各專案指令碼屬性 `SUPABASE_URL`，不要動。
 
 ---
 
