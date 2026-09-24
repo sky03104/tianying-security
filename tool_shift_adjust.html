@@ -280,17 +280,23 @@ function populateEmpSelect(){
 async function loadRecords(){
   if(!SHIFT_GAS_URL){ S.error = '尚未設定 SHIFT_GAS_URL，請聯絡系統管理員'; render(); hideSplash(); return; }
   S.loading = true; S.error = null; render();
-  try {
-    var token = encodeURIComponent(getAuthToken());
-    var res = await fetch(SHIFT_GAS_URL + '?action=getRecords&token=' + token);
-    var d = await res.json();
-    if(d.status === 'ok' && Array.isArray(d.records)){
-      S.records = d.records;
-    } else {
+  // 2026-09-24：後端回「伺服器暫時忙碌」（code:SERVER）或連線失敗時自動再試一次，
+  // 不再直接顯示成「登入已失效／權限不足」嚇人
+  for(var attempt = 0; attempt < 2; attempt++){
+    try {
+      var token = encodeURIComponent(getAuthToken());
+      var res = await fetch(SHIFT_GAS_URL + '?action=getRecords&token=' + token);
+      var d = await res.json();
+      if(d.status === 'ok' && Array.isArray(d.records)){
+        S.records = d.records; S.error = null;
+        break;
+      }
       S.error = d.msg || '讀取失敗';
+      if(d.code !== 'SERVER') break;   // 通行證失效／權限不足：重試也沒用
+    } catch(e){
+      S.error = '連線失敗：' + e.message;
     }
-  } catch(e){
-    S.error = '連線失敗：' + e.message;
+    if(attempt === 0) await new Promise(function(ok){ setTimeout(ok, 1500); });
   }
   S.loading = false;
   render();
@@ -323,7 +329,10 @@ function render(){
     return;
   }
   if(S.error){
-    content.innerHTML = '<div class="errbox"><i class="ti ti-alert-circle"></i><div>'+S.error+'</div></div>';
+    content.innerHTML = '<div class="errbox"><i class="ti ti-alert-circle"></i><div>'+S.error+'</div></div>'+
+      '<div style="display:flex;justify-content:center;margin-top:12px">'+
+      '<button class="ibtn" onclick="loadRecords()" style="width:auto;padding:11px 18px;gap:6px;display:flex;align-items:center">'+
+      '<i class="ti ti-refresh"></i>重新讀取</button></div>';
     return;
   }
   var rows = recordsInMonth();
