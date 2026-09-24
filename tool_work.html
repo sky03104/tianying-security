@@ -512,6 +512,10 @@ function fetchSheetFromGAS_含備援(name, mode, extra){
   .catch(function(err){
     if(tid) clearTimeout(tid);
     console.warn('讀Supabase失敗，退回直接讀Sheets：', err);
+    // 記下失敗原因：點右上角「試算表備援」那行字就會跳出來，手機上不用開開發者工具也能查
+    window._sqlFailReason = (err && err.name === 'AbortError')
+      ? '施工單 GAS 超過 ' + (GAS_TIMEOUT_MS/1000) + ' 秒沒有回應'
+      : ((err && err.message) || String(err));
     return fetchSheetJsonp(name).then(function(rows){ rows._src = 'sheets'; return rows; });
   });
 }
@@ -1194,7 +1198,13 @@ function setUpdTime(){
   if(S.loadInfo && S.loadInfo.src){
     txt += ' · ' + (S.loadInfo.src==='sql' ? 'SQL' : '試算表備援') + ' ' + (S.loadInfo.ms/1000).toFixed(1) + '秒';
   }
-  document.getElementById('upd-txt').textContent=txt;
+  var el=document.getElementById('upd-txt');
+  el.textContent=txt;
+  // 走備援時可以點這行字看 SQL 路徑為什麼失敗
+  if(S.loadInfo && S.loadInfo.src==='sheets'){
+    el.style.cursor='pointer'; el.style.textDecoration='underline dotted';
+    el.onclick=function(){ toast('SQL 失敗原因：' + (window._sqlFailReason || '未知'), 'err'); };
+  } else { el.style.cursor=''; el.style.textDecoration=''; el.onclick=null; }
 }
 function updateCounts(){
   document.getElementById('cnt-con').textContent=S.errors.con?'':`(${S.data.con.length})`;
