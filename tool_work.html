@@ -440,13 +440,20 @@ window.google = {
   }
 };
 
+/* 2026-09-24：原本所有請求共用同一個全域 setResponse 回呼，兩張表同時抓時
+   後到的會蓋掉先到的（資料錯置或其中一張卡到 20 秒逾時），所以只能一張抓完再抓下一張。
+   改用 gviz 的 responseHandler 參數，每次請求各自一個回呼名稱，就能兩張同時抓。 */
+var _jsonpSeq = 0;
 function fetchSheetJsonp(name){
   return new Promise(function(resolve, reject){
+    var cb = '__gvizCb' + (++_jsonpSeq) + '_' + Date.now();
     var tid = setTimeout(function(){
+      window[cb] = function(){}; // 逾時後才回來的回應直接丟掉
       reject(new Error('連線逾時（20秒），請確認網路與試算表權限'));
     }, 20000);
-    window.google.visualization.Query.setResponse = function(resp){
+    window[cb] = function(resp){
       clearTimeout(tid);
+      setTimeout(function(){ try{ delete window[cb]; }catch(e){ window[cb]=undefined; } }, 0);
       try {
         if(resp.status === 'error'){
           var msg = '試算表存取失敗';
@@ -461,7 +468,7 @@ function fetchSheetJsonp(name){
     var s = document.createElement('script');
     // 加防快取參數：報到換證後重讀要拿到最新 O 欄，避免 gviz 快取回舊值造成誤報「未生效」
     s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-            '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(name) +
+            '/gviz/tq?tqx=out:json;responseHandler:' + cb + '&sheet=' + encodeURIComponent(name) +
             '&_=' + Date.now();
     s.onerror = function(){
       clearTimeout(tid);
@@ -478,21 +485,34 @@ function fetchSheetJsonp(name){
    後端回傳格式刻意組成跟gviz table一樣，直接丟給 parseGvizTable() 解析，
    失敗（連不上/格式不對）自動退回原本直接讀 gviz 的路徑，維持免登入。
 ══════════════════════════════════════════ */
+/* 2026-09-24：①加 15 秒逾時，GAS 卡住時不會無限等下去才退回備援
+   ②回傳的陣列帶 _src 標記（'sql'＝走 Supabase；'sheets'＝退回整表下載），
+     畫面右上角「更新時間」旁會顯示，現場一眼就看得出是不是一直在走慢的備援路徑 */
+var GAS_TIMEOUT_MS = 15000;
 function fetchSheetFromGAS_含備援(name, mode, extra){
   var body = Object.assign({ action:'getWorkOrders', sheet:name, mode:mode }, extra||{});
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var tid = ctrl ? setTimeout(function(){ ctrl.abort(); }, GAS_TIMEOUT_MS) : null;
   return fetch(CON_GAS_URL, {
     method:'POST',
     headers:{ 'Content-Type':'text/plain' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: ctrl ? ctrl.signal : undefined
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if(!data || !Array.isArray(data.cols)) throw new Error('回應格式不是預期的gviz結構');
-    return parseGvizTable(data);
+    if(tid) clearTimeout(tid);
+    if(!data || !Array.isArray(data.cols)){
+      throw new Error('回應格式不是預期的gviz結構' + (data && (data.error || data.message) ? '：' + (data.error || data.message) : ''));
+    }
+    var rows = parseGvizTable(data);
+    rows._src = 'sql';
+    return rows;
   })
   .catch(function(err){
+    if(tid) clearTimeout(tid);
     console.warn('讀Supabase失敗，退回直接讀Sheets：', err);
-    return fetchSheetJsonp(name);
+    return fetchSheetJsonp(name).then(function(rows){ rows._src = 'sheets'; return rows; });
   });
 }
 
@@ -1169,8 +1189,12 @@ function setSpinning(v){
 }
 function setUpdTime(){
   var n=new Date();
-  document.getElementById('upd-txt').textContent=
-    (n.getHours()<10?'0':'')+n.getHours()+':'+(n.getMinutes()<10?'0':'')+n.getMinutes()+' 更新';
+  var txt=(n.getHours()<10?'0':'')+n.getHours()+':'+(n.getMinutes()<10?'0':'')+n.getMinutes()+' 更新';
+  // 顯示這次讀取花多久、走哪條路（SQL＝正常快速路徑；試算表＝GAS 失敗退回整表下載，會慢很多）
+  if(S.loadInfo && S.loadInfo.src){
+    txt += ' · ' + (S.loadInfo.src==='sql' ? 'SQL' : '試算表備援') + ' ' + (S.loadInfo.ms/1000).toFixed(1) + '秒';
+  }
+  document.getElementById('upd-txt').textContent=txt;
 }
 function updateCounts(){
   document.getElementById('cnt-con').textContent=S.errors.con?'':`(${S.data.con.length})`;
@@ -1226,14 +1250,19 @@ async function loadAll(silent){
     render();
   }
   setSpinning(true);
-  try {
-    if(!silent) document.getElementById('sp-msg').textContent='載入施工單…';
-    S.data.con = dedupeRows(await fetchSheetFromGAS_含備援(SN.con, 'active'));
-  } catch(e){ if(!silent) S.errors.con = e.message; }
-  try {
-    if(!silent) document.getElementById('sp-msg').textContent='載入動火申請…';
-    S.data.hot = dedupeRows(await fetchSheetFromGAS_含備援(SN.hot, 'active'));
-  } catch(e){ if(!silent) S.errors.hot = e.message; }
+  // 2026-09-24：施工單、動火申請改成同時抓（原本一張抓完才抓下一張，等待時間直接加倍）
+  if(!silent) document.getElementById('sp-msg').textContent='載入施工單與動火申請…';
+  var t0 = Date.now();
+  var results = await Promise.allSettled([
+    fetchSheetFromGAS_含備援(SN.con, 'active'),
+    fetchSheetFromGAS_含備援(SN.hot, 'active')
+  ]);
+  var srcs = [];
+  if(results[0].status === 'fulfilled'){ srcs.push(results[0].value._src); S.data.con = dedupeRows(results[0].value); }
+  else if(!silent) S.errors.con = results[0].reason && results[0].reason.message;
+  if(results[1].status === 'fulfilled'){ srcs.push(results[1].value._src); S.data.hot = dedupeRows(results[1].value); }
+  else if(!silent) S.errors.hot = results[1].reason && results[1].reason.message;
+  S.loadInfo = { ms: Date.now() - t0, src: srcs.indexOf('sheets') > -1 ? 'sheets' : (srcs.length ? 'sql' : '') };
   S.loading=false;
   setSpinning(false);
   setUpdTime();
@@ -1398,21 +1427,33 @@ async function checkWorkPermission(){
   var openRoles = ['leader','vicecaptain','captain','executive','admin'];
   if(openRoles.indexOf(u.role) > -1) return true;
   if(u.role !== 'fulltime' && u.role !== 'parttime') return true; // 非既定角色不受此白名單規則影響
-  var allowed = null;
-  try {
-    var raw = localStorage.getItem('tianying_work_allowed_ids');
-    allowed = raw ? JSON.parse(raw) : null;
-  } catch(e){ allowed = null; }
-  try {
+  var raw = null;
+  try { raw = localStorage.getItem('tianying_work_allowed_ids'); } catch(e){}
+  var isAllowed = function(list){ return list === null || list.indexOf(u.empId) > -1; }; // null＝未設定＝不限制
+  var fetchAllowed = async function(){
     var res = await fetch(ACCOUNT_GAS_URL + '?action=getSettings');
     var d = await res.json();
     if(d && Array.isArray(d.workAllowedIds)){
-      allowed = d.workAllowedIds;
-      try { localStorage.setItem('tianying_work_allowed_ids', JSON.stringify(allowed)); } catch(e){}
+      try { localStorage.setItem('tianying_work_allowed_ids', JSON.stringify(d.workAllowedIds)); } catch(e){}
+      return d.workAllowedIds;
     }
-  } catch(e){ /* 拿不到最新值，退回本機快取 */ }
-  if(allowed === null) return true; // 未設定＝不限制（正職/兼職全員可用，現狀）
-  if(allowed.indexOf(u.empId) > -1) return true;
+    return undefined; // 後端沒回白名單：不改變判斷
+  };
+  // 2026-09-24：本機已有白名單快取 → 先照快取判斷、立刻開始載入，背景再向雲端確認；
+  // 雲端說已被取消權限就馬上擋下（原本每次開啟都要先等這支 GAS 回來才開始讀施工單）
+  if(raw !== null){
+    var cached = null;
+    try { cached = JSON.parse(raw); } catch(e){ cached = null; }
+    if(!isAllowed(cached)){ showNoPerm('目前尚無使用權限，請洽管理員開通'); return false; }
+    fetchAllowed().then(function(list){
+      if(list !== undefined && !isAllowed(list)) showNoPerm('目前尚無使用權限，請洽管理員開通');
+    }).catch(function(){ /* 連不上：沿用快取判斷 */ });
+    return true;
+  }
+  // 沒有快取（第一次使用）：只能等雲端
+  var allowed = null;
+  try { var list = await fetchAllowed(); if(list !== undefined) allowed = list; } catch(e){ /* 拿不到 → 視同未設定 */ }
+  if(isAllowed(allowed)) return true;
   showNoPerm('目前尚無使用權限，請洽管理員開通');
   return false;
 }

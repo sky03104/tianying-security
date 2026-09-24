@@ -24,19 +24,82 @@ var SPREADSHEET_ID = '請填入試算表ID'; // ← 部署前務必替換
 var SHEET_NAME = '紀錄';
 var TZ = 'Asia/Taipei';
 
-// 主 App（天鷹保全APP_後端_GAS.gs）部署網址，用來驗證登入通行證
+// 主 App（天鷹保全APP_後端_GAS.gs）部署網址：本機驗證還沒設定好時的備援驗證管道
 var MAIN_APP_GAS_URL_ = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d8kLcCHbVFiKAK9wyoLwqNkt59PS4vPCY9QfG0_wiDJf2coO3zMcg/exec';
+// 主 App 的試算表（「帳號管理」分頁在這裡），本機驗證時用來查角色／停用狀態
+var MAIN_APP_SHEET_ID_ = '1oZsn8WlJ_-qQ6k9tIzm6Ymp3Zp-IfBFCf80Ut7Zw_JU';
 
 // 允許使用本工具的角色：組長以上（2026-09-09：咖哩開放給組長/副隊長，原本只有隊長以上）
 var CAPTAIN_PLUS_ROLES_ = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
 
-/**
- * 驗證通行證，通過回傳 { empId, name, role, ... }，不通過回傳 null。
- * 通行證由主 App 登入時發放，這裡沒有簽章金鑰，直接請主 App 幫忙確認
- * （跟緊急聯絡清單/事故與表揚兩支 GAS 同做法）。
- */
-function verifyAuthToken_(token) {
-  if (!token) return null;
+// 驗證通過的結果快取幾秒（同一張通行證 5 分鐘內不用重驗；停用帳號最慢 5 分鐘後失效）
+var AUTH_CACHE_SEC_ = 300;
+
+/* ══════════════════════════════════════════════════════════════
+   通行證驗證（2026-09-24 改版）
+   舊版：每一次讀取／新增／修改都用 UrlFetchApp 去「問」主 App 的 GAS。
+     ① 慢：等於每次都要多等一支 GAS 冷啟動＋讀帳號表，讀清單動輒多好幾秒
+     ② 會誤判：主 App 那邊只要逾時／忙碌／回傳格式不對，這邊一律當成「登入已失效」，
+        咖哩回報「有時候跳權限錯誤或未登入」就是這個
+   新版：
+     ① 本機驗證：跟事故與表揚 GAS 同一套（HMAC 簽章＋直接讀主 App 試算表的「帳號管理」），
+        不再多打一支 GAS。需要把主 App 的 SESSION_SECRET 複製到本專案的指令碼屬性（見檔尾 forceAuth 說明）；
+        沒設定時自動退回舊的「問主 App」方式，並且伺服器錯誤會重試一次
+     ② 通過的結果快取 5 分鐘
+     ③ 分清楚「通行證真的失效」跟「伺服器暫時出錯」，錯誤訊息不同，後者不叫人重新登入
+   ══════════════════════════════════════════════════════════════ */
+var lastAuthErr_ = '';  // 'INVALID'｜'SERVER'｜'ROLE'，給 authFailRes_() 產生對應訊息
+
+function authCacheKey_(token) {
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token));
+  return 'auth_' + Utilities.base64EncodeWebSafe(digest);
+}
+
+/** 位元組陣列轉16進位字串，需跟主App的 bytesToHex_ 逐位元組一致，簽章才對得起來 */
+function bytesToHex_(bytes) {
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var v = (bytes[i] < 0 ? bytes[i] + 256 : bytes[i]).toString(16);
+    out += (v.length === 1 ? '0' + v : v);
+  }
+  return out;
+}
+
+/** 本機驗證。回傳 { user } 或 { err:'INVALID'|'SERVER' }；沒設定 SESSION_SECRET 時回 null（交給備援） */
+function verifyLocal_(token) {
+  var secret = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
+  if (!secret) return null;
+
+  var parts = String(token).split('.');
+  if (parts.length !== 2) return { err: 'INVALID' };
+  var payload;
+  try {
+    payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+  } catch (e) { return { err: 'INVALID' }; }
+  if (bytesToHex_(Utilities.computeHmacSha256Signature(payload, secret)) !== parts[1]) return { err: 'INVALID' };
+
+  var seg = payload.split('|');
+  if (seg.length !== 2) return { err: 'INVALID' };
+  var empId = seg[0], expireMs = Number(seg[1]);
+  if (!empId || !expireMs || new Date().getTime() > expireMs) return { err: 'INVALID' };
+
+  try {
+    var sh = SpreadsheetApp.openById(MAIN_APP_SHEET_ID_).getSheetByName('帳號管理');
+    if (!sh) return { err: 'SERVER' };
+    var data = sh.getDataRange().getValues();
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][0]).trim() !== String(empId).trim()) continue;
+      if (String(data[r][5] || 'active') === 'inactive') return { err: 'INVALID' };
+      return { user: { empId: String(empId).trim(), name: String(data[r][1]), role: String(data[r][3]) } };
+    }
+    return { err: 'INVALID' };
+  } catch (e) {
+    return { err: 'SERVER' };
+  }
+}
+
+/** 備援：問主 App。回傳 { user } 或 { err:'INVALID'|'SERVER' } */
+function verifyRemote_(token) {
   try {
     var res = UrlFetchApp.fetch(MAIN_APP_GAS_URL_, {
       method: 'post',
@@ -44,19 +107,53 @@ function verifyAuthToken_(token) {
       muteHttpExceptions: true
     });
     var d = JSON.parse(res.getContentText());
-    if (d.status !== 'ok' || !d.user || !d.user.empId) return null;
-    return d.user;
+    if (d.status === 'ok' && d.user && d.user.empId) return { user: d.user };
+    // 主 App 新版會回 code；舊版只回「登入已失效」字樣
+    if (d.code === 'INVALID' || (!d.code && /登入已失效/.test(d.msg || ''))) return { err: 'INVALID' };
+    return { err: 'SERVER' };
   } catch (err) {
-    return null;
+    return { err: 'SERVER' };   // 逾時／回傳不是 JSON（例如 Google 的錯誤頁）
   }
 }
 
-// 驗證通行證＋角色需組長以上，通過回傳使用者物件，不通過回傳 null（呼叫端自行包錯誤訊息）
+/** 驗證通行證，通過回傳 { empId, name, role, ... }，不通過回傳 null（原因記在 lastAuthErr_） */
+function verifyAuthToken_(token) {
+  lastAuthErr_ = 'INVALID';
+  if (!token) return null;
+
+  var cache = CacheService.getScriptCache();
+  var key = authCacheKey_(token);
+  var hit = cache.get(key);
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+
+  var r = verifyLocal_(token);
+  if (r === null) {
+    r = verifyRemote_(token);
+    if (r.err === 'SERVER') { Utilities.sleep(800); r = verifyRemote_(token); } // 伺服器錯誤重試一次
+  }
+  if (!r.user) { lastAuthErr_ = r.err; return null; }
+
+  try { cache.put(key, JSON.stringify(r.user), AUTH_CACHE_SEC_); } catch (e) {}
+  return r.user;
+}
+
+// 驗證通行證＋角色需組長以上，通過回傳使用者物件，不通過回傳 null（呼叫端用 authFailRes_() 回錯誤）
 function requireCaptainPlus_(token) {
   var user = verifyAuthToken_(token);
   if (!user) return null;
-  if (CAPTAIN_PLUS_ROLES_.indexOf(user.role) === -1) return null;
+  if (CAPTAIN_PLUS_ROLES_.indexOf(user.role) === -1) { lastAuthErr_ = 'ROLE'; return null; }
   return user;
+}
+
+// 依失敗原因回不同訊息；code 給前端判斷要顯示「重新登入」還是「稍後再試」
+function authFailRes_() {
+  if (lastAuthErr_ === 'SERVER') {
+    return jsonRes({ status: 'error', code: 'SERVER', msg: '伺服器暫時忙碌，無法確認登入狀態，請稍後再試（不用重新登入）' });
+  }
+  if (lastAuthErr_ === 'ROLE') {
+    return jsonRes({ status: 'error', code: 'ROLE', msg: '權限不足：本工具僅限組長以上使用' });
+  }
+  return jsonRes({ status: 'error', code: 'INVALID', msg: '登入已失效，請回天鷹保全 App 重新登入' });
 }
 
 function doPost(e) {
@@ -129,7 +226,7 @@ function findRowById_(sheet, id) {
 // 新增紀錄
 function addRecord(d, token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
+  if (!user) return authFailRes_();
 
   var date = String(d.date || '').trim();
   var empId = String(d.empId || '').trim();
@@ -165,7 +262,7 @@ function addRecord(d, token) {
 // 登記人工號/姓名/登記時間（H/I/J）維持原樣，不因編輯而改寫
 function updateRecord(d, token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
+  if (!user) return authFailRes_();
 
   var id = d.id;
   if (id === undefined || id === null || String(id).trim() === '') {
@@ -200,7 +297,7 @@ function updateRecord(d, token) {
 // 刪除紀錄
 function deleteRecord(d, token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
+  if (!user) return authFailRes_();
 
   var id = d.id;
   if (id === undefined || id === null || String(id).trim() === '') {
@@ -223,7 +320,7 @@ function deleteRecord(d, token) {
 // 讀取全部紀錄（前端自行依月份篩選、彙總）
 function getRecords(token) {
   var user = requireCaptainPlus_(token);
-  if (!user) return jsonRes({ status: 'error', msg: '登入已失效或權限不足（僅組長以上可使用），請重新登入' });
+  if (!user) return authFailRes_();
 
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
@@ -269,4 +366,17 @@ function fmtDateTime_(v) {
 function jsonRes(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ====== 部署後手動執行一次：觸發授權＋檢查本機驗證設定 ======
+// ⚠ 本機驗證需要跟主 App 同一把 SESSION_SECRET：
+//   1. 開主App「天鷹保全APP_後端_GAS」專案 → 專案設定 → 指令碼屬性 → 複製 SESSION_SECRET 的值
+//   2. 開本專案 → 專案設定 → 指令碼屬性 → 新增同名 SESSION_SECRET，貼上同一個值
+//   沒設定也能用（自動退回「問主 App」的舊方式），只是比較慢。
+function forceAuth() {
+  SpreadsheetApp.openById(SPREADSHEET_ID);
+  SpreadsheetApp.openById(MAIN_APP_SHEET_ID_).getSheetByName('帳號管理');
+  try { UrlFetchApp.fetch(MAIN_APP_GAS_URL_, { muteHttpExceptions: true }); } catch (e) {}
+  var secret = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
+  console.log(secret ? 'SESSION_SECRET 已設定：走本機驗證（快）' : '⚠ 尚未設定 SESSION_SECRET：走備援驗證（問主 App，較慢）');
 }
