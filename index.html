@@ -109,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '45.24';
+const APP_VERSION = '46.25';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -1006,24 +1006,33 @@ function ok(obj) {
         const [curShift, setCurShift] = useState('all'); /* 2026-08-09：預設開「案場班表」（早+晚合併），咖哩最常看的是全案場 */
         const SHED_CACHE_KEYS = { night: 'tianying_sched_v1', morning: 'tianying_sched_m1' };
         /* ── 班表/員工持久化：載入上次快取（員工名單跨月保留；班表僅同月份沿用） ── */
+        /* 2026-09-25：預設畫面是「案場班表」，開啟當下就先顯示早＋晚兩班的本機快取合併結果
+           （原本只放晚班快取，要等雲端回來才補上早班，看起來像少一半人），雲端資料到了再無聲更新。
+           合併規則同 合併案場班表_（早班 id 加 10000 避免撞號）；這裡在元件最上方、那兩支函式
+           宣告之前，所以就地做一次。 */
         const _schedCache = (() => {
-            try {
-                const c = JSON.parse(localStorage.getItem('tianying_sched_v1') || 'null');
-                if (c && Array.isArray(c.staff) && c.staff.length) return c;
-            } catch (e) { }
-            return null;
-        })();
-        if (_schedCache) {
-            // 校正全域流水號，避免新增員工 ID 與快取資料衝突
-            _nid = Math.max(_nid, ..._schedCache.staff.map(s => Number(s.id) || 0));
-        }
-        const [staff, setStaff] = useState(_schedCache ? _schedCache.staff : INIT_STAFF);
-        const [sched, setSched] = useState(() => {
-            if (_schedCache) {
-                return (_schedCache.ym === `${Y}-${M}` && _schedCache.sched) ? _schedCache.sched : buildSched(_schedCache.staff);
+            const 讀 = (k) => {
+                try {
+                    const c = JSON.parse(localStorage.getItem(k) || 'null');
+                    if (c && Array.isArray(c.staff) && c.staff.length) return c;
+                } catch (e) { }
+                return null;
+            };
+            const 夜 = 讀('tianying_sched_v1'), 早 = 讀('tianying_sched_m1');
+            if (!夜 && !早) return null;
+            // 校正全域流水號（只看原始 id，不含早班加上去的偏移），避免新增員工 ID 與快取資料衝突
+            [夜, 早].forEach(c => { if (c) _nid = Math.max(_nid, ...c.staff.map(s => Number(s.id) || 0)); });
+            const 班 = (c) => (c.ym === `${Y}-${M}` && c.sched) ? c.sched : buildSched(c.staff);
+            let staff = [], sched = {};
+            if (夜) { staff = [...夜.staff]; sched = { ...班(夜) }; }
+            if (早) {
+                早.staff.forEach(ms => staff.push({ ...ms, id: ms.id + 10000 }));
+                Object.entries(班(早)).forEach(([id, v]) => { sched[+id + 10000] = v; });
             }
-            return buildSched(INIT_STAFF);
-        });
+            return { staff: staff, sched: sched };
+        })();
+        const [staff, setStaff] = useState(_schedCache ? _schedCache.staff : INIT_STAFF);
+        const [sched, setSched] = useState(() => _schedCache ? _schedCache.sched : buildSched(INIT_STAFF));
         const [view, setView] = useState("month"); /* 2026-08-09：預設開「月班表」分頁 */
         /* ⑤ 分頁滑動膠囊（2026-09-24）：金色膠囊滑到目前分頁。hooks 必須放在元件最上方
            （下面有 early return），每次畫面更新都重新對齊一次（很便宜，只是設幾個樣式） */
@@ -1089,17 +1098,12 @@ function ok(obj) {
            不是塞進A4:AG30那個固定班表格子（AH~AJ已經是既有的表定值/實際值/已休天數
            欄位，不能用）。先只做「存起來」，還沒接自動查帳號設定的邏輯。 ── */
         const staffEmpIdMapRef = useRef({});
-        const loadStaffEmpIds_ = async () => {
-            if (!asUrl) return;
-            try {
-                const r = await fetch(asUrl + '?action=getStaffEmpIds');
-                const d = await r.json();
-                if (d.success && Array.isArray(d.list)) {
-                    const map = {};
-                    d.list.forEach(it => { if (it.name) map[it.name] = it.empId || ''; });
-                    staffEmpIdMapRef.current = map;
-                }
-            } catch (e) { /* 離線或讀取失敗：沿用目前記憶體裡的對照表 */ }
+        const 套用工號對照_ = (d) => {
+            if (d && d.success && Array.isArray(d.list)) {
+                const map = {};
+                d.list.forEach(it => { if (it.name) map[it.name] = it.empId || ''; });
+                staffEmpIdMapRef.current = map;
+            }
         };
         /* 新增/修改/刪除員工後呼叫：把目前staff的姓名→工號整批覆寫回雲端對照表 */
         /* 2026-08-28新增：這個人有對到啟用帳號時，職務一律以帳號設定為準（換算過
@@ -1205,13 +1209,20 @@ function ok(obj) {
            解析規則只有這一份，loadFromCloud 也走它，不會兩處各寫一套。
            回傳 { staff, sched, cnt }；讀不到／月份不符／離線一律回 null。 */
         const 抓班表_ = async (shKey, baseStaff, baseSched) => {
-            const bStaff = baseStaff || [];
-            const bSched = baseSched || {};
             if (!asUrl) return null;
             try {
                 const res = await fetch(asUrl + '?action=getSchedule&shift=' + shKey);
-                const d = await res.json();
-                if (!d.success || !Array.isArray(d.rows) || !d.rows.length) return null;
+                return 解析班表_(shKey, await res.json(), baseStaff, baseSched);
+            }
+            catch (e) { return null; /* 離線或讀取失敗 → 沿用本機快取 */ }
+        };
+        /* 2026-09-25 拆出：把 getSchedule 的回應解析成 { staff, sched, cnt }。
+           單獨抓（抓班表_）跟開啟時一次拿齊（getScheduleBundle）共用這一份，解析規則不寫兩套。 */
+        const 解析班表_ = (shKey, d, baseStaff, baseSched) => {
+            const bStaff = baseStaff || [];
+            const bSched = baseSched || {};
+            try {
+                if (!d || !d.success || !Array.isArray(d.rows) || !d.rows.length) return null;
                 // 線上班表月份（Z1）需與當前月份相符才套用，避免換月初期載入舊月資料
                 const expectYm = `${Y}/${M < 10 ? '0' + M : M}`;
                 if (d.ym && String(d.ym).trim() !== expectYm) return null;
@@ -1255,7 +1266,7 @@ function ok(obj) {
                 finalStaff.forEach(s => { finalSc[s.id] = nSc[s.id]; });
                 return { staff: finalStaff, sched: finalSc, cnt: cnt };
             }
-            catch (e) { return null; /* 離線或讀取失敗 → 沿用本機快取 */ }
+            catch (e) { return null; /* 資料格式不對 → 沿用本機快取 */ }
         };
         /* 套用到畫面：抓班表_ 的結果直接進 state。回傳筆數（0＝沒套用，沿用本機快取）。 */
         const loadFromCloud = async (shiftArg, baseStaff, baseSched) => {
@@ -1333,10 +1344,35 @@ function ok(obj) {
            案場班表的 switchShift('all') 只讀本機快取，所以這裡一定要先把兩班都抓下來
            寫進各自快取，否則第一次開啟或換手機時會是一片空白。
            兩班平行抓，讀不到的那班退回本機快取，不要因為一班離線就整個空掉。 */
+        /* 2026-09-25 加速：原本是 4 次 GAS 請求（工號對照 → 等它回來才抓晚班＋早班 → 最後抓班別設定），
+           每次都要付一次 Apps Script 的連線＋啟動開銷。改成先打 getScheduleBundle 一次拿齊；
+           GAS 還沒部署新版（回應裡沒有 night 欄位）時，退回舊的 4 支，但改成同時發出不再一個等一個。 */
+        const 開啟時一次拿齊_ = async () => {
+            if (!asUrl) return null;
+            const 取 = (q) => fetch(asUrl + '?action=' + q).then(r => r.json()).catch(() => null);
+            const b = await 取('getScheduleBundle');
+            if (b && b.success && b.night !== undefined) return b;
+            const [empIds, night, morning, shiftSettings] = await Promise.all([
+                取('getStaffEmpIds'), 取('getSchedule&shift=night'), 取('getSchedule&shift=morning'), 取('getShiftSettings')]);
+            return { empIds, night, morning, shiftSettings };
+        };
+        const 套用班別設定_ = (d) => {
+            if (d && d.success && Array.isArray(d.types) && d.types.length) {
+                const cs = {};
+                d.types.forEach(t => {
+                    cs[t.code] = { label: t.label, time: t.time, color: t.color, bg: t.color + '33', hours: t.hours };
+                });
+                Object.assign(SHIFT_TYPES, cs);
+                try { localStorage.setItem('tianying_custom_shifts', JSON.stringify(cs)); } catch (e) { }
+                setShiftVer(v => v + 1);
+            }
+        };
         useEffect(() => {
             (async () => {
-                await loadStaffEmpIds_(); // 先載入工號對照表，抓班表_ 組staff時才查得到empId
-                const [夜, 早] = await Promise.all([抓班表_('night', [], {}), 抓班表_('morning', [], {})]);
+                const 包 = await 開啟時一次拿齊_();
+                if (包) { 套用工號對照_(包.empIds); 套用班別設定_(包.shiftSettings); } // 工號對照要先套用，解析班表時才查得到 empId
+                const 夜 = 包 ? 解析班表_('night', 包.night, [], {}) : null;
+                const 早 = 包 ? 解析班表_('morning', 包.morning, [], {}) : null;
                 const ym = `${Y}-${M}`;
                 try {
                     if (夜) localStorage.setItem(SHED_CACHE_KEYS.night, JSON.stringify({ ym: ym, staff: 夜.staff, sched: 夜.sched }));
@@ -1353,21 +1389,6 @@ function ok(obj) {
                     if (Object.keys(staffEmpIdMapRef.current).length === 0) {
                         autoFillStaffEmpIds_(合.staff, 合.sched);
                     }
-                }
-                if (asUrl) {
-                    try {
-                        const r = await fetch(asUrl + '?action=getShiftSettings');
-                        const d = await r.json();
-                        if (d.success && Array.isArray(d.types) && d.types.length) {
-                            const cs = {};
-                            d.types.forEach(t => {
-                                cs[t.code] = { label: t.label, time: t.time, color: t.color, bg: t.color + '33', hours: t.hours };
-                            });
-                            Object.assign(SHIFT_TYPES, cs);
-                            localStorage.setItem('tianying_custom_shifts', JSON.stringify(cs));
-                            setShiftVer(v => v + 1);
-                        }
-                    } catch(e) { /* offline: localStorage already loaded */ }
                 }
             })();
         }, []);

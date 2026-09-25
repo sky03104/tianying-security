@@ -187,7 +187,10 @@ function getScheduleData_含快取(e) {
 
   var result = 讀取含備援_(e, getScheduleData, getScheduleData_SQL, 'getSchedule');
   try {
-    cache.put(key, result.getContent(), 班表快取秒數_);
+    // v2.18：只快取「讀成功」的結果。原本失敗也照存，Sheets 與 Supabase 剛好同時出錯那一次
+    // 會把錯誤結果鎖住 1 小時，期間前端一直只能用本機快取
+    var content = result.getContent();
+    if (JSON.parse(content).success) cache.put(key, content, 班表快取秒數_);
   } catch (err) {
     console.error('寫入班表快取失敗：' + err.toString());
   }
