@@ -141,6 +141,8 @@ function doGet(e) {
     return getShiftSettings_();
   } else if (action === 'getStaffEmpIds') {
     return getStaffEmpIds_();
+  } else if (action === 'getScheduleBundle') {
+    return getScheduleBundle_(); // v2.18：開啟班表管理一次拿齊（見函式說明）
   }
 
   return respond({ success: true, status: 'online' });
@@ -911,6 +913,29 @@ function getStaffEmpIds_() {
     .filter(function (r) { return String(r[0] || '').trim(); })
     .map(function (r) { return { name: String(r[0]).trim(), empId: String(r[1] || '').trim() }; });
   return respond({ success: true, list: list });
+}
+
+// ============================
+// v2.18（2026-09-25）：開啟班表管理一次拿齊
+// ────────────────────────────
+// 前端開啟時原本要打 4 次 GAS（工號對照 → 等它回來才抓晚班＋早班 → 再抓班別設定），
+// 每一次都要付一次 Apps Script 平台的連線＋啟動開銷，而且前兩段還是一個等一個。
+// 改成一次請求在伺服器裡把 4 份都讀好一起回傳。各份獨立 try/catch：某一份讀失敗
+// 只影響那一份（回 success:false），其他照常回傳，前端會退回本機快取。
+// 班表兩份沿用 getScheduleData_含快取（1 小時快取、寫入時主動清除），規則不另寫一套。
+// ============================
+function getScheduleBundle_() {
+  function 取(fn) {
+    try { return JSON.parse(fn().getContent()); }
+    catch (err) { return { success: false, error: err.toString() }; }
+  }
+  return respond({
+    success: true,
+    night: 取(function () { return getScheduleData_含快取({ parameter: { action: 'getSchedule', shift: 'night' } }); }),
+    morning: 取(function () { return getScheduleData_含快取({ parameter: { action: 'getSchedule', shift: 'morning' } }); }),
+    empIds: 取(getStaffEmpIds_),
+    shiftSettings: 取(getShiftSettings_)
+  });
 }
 
 // 2026-08-28修正：原本沒上鎖，短時間內重新整理/重新開啟頁面觸發好幾次自動比對時，
