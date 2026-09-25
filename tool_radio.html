@@ -333,13 +333,14 @@ function 統計列(st){
   cells.push({ key:'其他', label:'繳回/報廢等', n:st.其他 });
   return cells.map(function(c){
     return '<div class="st'+(S.status===c.key?' on':'')+'" onclick="setStatus(\''+c.key+'\')">'+
-      '<div class="v">'+c.n+'</div><div class="k">'+esc(c.label)+'</div></div>';
+      '<div class="v" data-fx-count="'+c.n+'" data-fx-key="'+esc(c.key||'all')+'">'+c.n+'</div><div class="k">'+esc(c.label)+'</div></div>';
   }).join('');
 }
 
 function render(){
   var st = 統計(S.radios);
   $('stats').innerHTML = 統計列(st);
+  if(window.fxCountUpIn) window.fxCountUpIn($('stats'), 'radio-'); // ⑦ 數字有變才跳（切篩選重畫時不會每次從 0 開始）
 
   var list = 排序(篩選(S.radios, { q:$('q').value, status:S.status, own:$('own').value }));
   var dup = 找重複(S.radios);

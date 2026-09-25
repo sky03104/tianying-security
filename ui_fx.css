@@ -88,3 +88,48 @@
 @media (prefers-reduced-motion: reduce){
   .fx-pulse{animation:none}
 }
+
+/* ══ 第三批（2026-09-24）══ */
+/* ① 從 APP 裡進來跳過開場光環（ui_fx.js 在 <html> 加 fx-nosplash） */
+html.fx-nosplash #splash{display:none !important}
+
+/* ② 網路斷線／恢復提示條 */
+.fx-net{position:fixed;left:0;right:0;top:0;z-index:100000;padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));
+  text-align:center;font-size:14px;font-weight:700;font-family:'Microsoft JhengHei','Noto Sans TC',sans-serif;
+  transform:translateY(-110%);transition:transform .3s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.fx-net.fx-on{transform:none}
+.fx-net-off{background:#7F1D1D;color:#FEE2E2;border-bottom:1px solid #F87171}
+.fx-net-ok{background:#064E3B;color:#D1FAE5;border-bottom:1px solid #4ADE80}
+
+/* ④ 欄位錯誤：紅框＋抖動（抖動用獨立 translate 屬性，不影響元素原本的 transform） */
+.fx-field-err{outline:2px solid #F87171 !important;outline-offset:2px;box-shadow:0 0 0 4px rgba(248,113,113,.18) !important;
+  animation:fxShake .38s ease-in-out}
+@keyframes fxShake{0%,100%{translate:0 0}20%{translate:-7px 0}40%{translate:7px 0}60%{translate:-5px 0}80%{translate:5px 0}}
+
+/* ⑤ 回到頂端（右下，避開底部導覽列與右下角＋按鈕） */
+.fx-top{position:fixed;right:16px;bottom:calc(88px + env(safe-area-inset-bottom));z-index:1400;width:46px;height:46px;border-radius:50%;
+  border:1px solid rgba(212,168,0,.55);background:rgba(13,15,20,.92);color:#FFD700;font-size:20px;font-weight:900;cursor:pointer;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);opacity:0;translate:0 14px;pointer-events:none;transition:opacity .2s,translate .2s}
+.fx-top.fx-on{opacity:1;translate:0 0;pointer-events:auto}
+.fx-top:active{scale:.9}
+
+/* ⑥ 下拉更新指示圈 */
+.fx-ptr{position:fixed;left:50%;top:0;z-index:100001;width:40px;height:40px;border-radius:50%;background:rgba(13,15,20,.95);
+  border:1.5px solid rgba(212,168,0,.5);color:#D4A800;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;
+  transform:translate(-50%,-52px);opacity:0;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.fx-ptr.fx-ready{border-color:#FFD700;color:#FFD700}
+.fx-ptr.fx-busy{border-color:rgba(212,168,0,.25);border-top-color:#FFD700;animation:fxSpin .7s linear infinite}
+.fx-ptr.fx-busy span{display:none}
+@keyframes fxSpin{to{rotate:360deg}}
+
+/* ⑧ 按鈕內的小轉圈（例如「登入中…」） */
+.fx-btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(10,12,16,.25);border-top-color:#0A0C10;
+  border-radius:50%;animation:fxSpin .7s linear infinite;vertical-align:-2px;margin-right:7px}
+
+/* ③ 主控台內嵌工具載入中 */
+.fx-frame-loading{position:absolute;inset:0;padding:64px 14px 14px;background:#0A0C10;z-index:1;overflow:hidden}
+
+@media (prefers-reduced-motion: reduce){
+  .fx-field-err{animation:none}
+  .fx-net,.fx-top{transition:none}
+}

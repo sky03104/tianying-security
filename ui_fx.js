@@ -18,6 +18,18 @@
   }
   window.fxReduced = fxReduced;
 
+  /* ── 第三批①（2026-09-24）從 APP 裡進來就跳過開場光環 ──
+     開場光環只在「第一次打開 APP」有品牌意義；從主控台點進工具（同一個分頁已登入過）
+     或在主控台裡面用內嵌視窗開的工具，每次再播一次只是在等。
+     做法：在 <html> 加 class，由 ui_fx.css 把 #splash 藏起來（元素還在，各工具原本收起
+     splash 的程式照樣執行，不會因為找不到元素出錯）。網址帶 ?splash=1 可強制顯示。 */
+  var inFrame = false;
+  try { inFrame = window.self !== window.top; } catch (e) { inFrame = true; }
+  try {
+    var fromApp = sessionStorage.getItem('hsh_tab_session') === '1';
+    if ((inFrame || fromApp) && !/[?&]splash=1\b/.test(location.search)) document.documentElement.classList.add('fx-nosplash');
+  } catch (e) {}
+
   /* ── ③ 主要按鈕：哪些按鈕要有漣漪。
      各工具的主要按鈕 class 不一樣，這裡列白名單；其他按鈕要加的話在標籤上寫 data-fx="ripple" 即可 */
   var RIPPLE_SEL = '.btn-gold,.btn-outline,.btn-indigo,.btn-primary,.btn-pri,.btn-submit,.submit-btn,' +
@@ -335,6 +347,142 @@
       a.onfinish = go; setTimeout(go, 700);
     } catch (e) { done(); }
   };
+
+
+  /* ══════════════════════════════════════════════════════════════
+     第三批（2026-09-24）：離線提示、欄位錯誤標示、回到頂端、下拉更新、數字跳動
+     ══════════════════════════════════════════════════════════════ */
+
+  /* ── ② 網路斷線提示（B1/B2 訊號差時，讓現場知道是「沒網路」不是系統壞了）──
+     內嵌在主控台裡的工具不顯示，避免上下兩條重複 */
+  function netBar() {
+    var b = document.getElementById('fx-net');
+    if (!b) { b = document.createElement('div'); b.id = 'fx-net'; b.className = 'fx-net'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
+    return b;
+  }
+  var netTimer = null;
+  function showOffline() {
+    if (inFrame) return;
+    var b = netBar(); clearTimeout(netTimer);
+    b.className = 'fx-net fx-net-off fx-on';
+    b.textContent = '📡 目前離線，資料會送不出去，恢復連線後再操作';
+    haptic('err');
+  }
+  function showOnline() {
+    var b = document.getElementById('fx-net');
+    if (!b || b.className.indexOf('fx-net-off') < 0) return;
+    b.className = 'fx-net fx-net-ok fx-on';
+    b.textContent = '✅ 已恢復連線';
+    clearTimeout(netTimer); netTimer = setTimeout(function () { b.classList.remove('fx-on'); }, 2200);
+  }
+  window.addEventListener('offline', showOffline);
+  window.addEventListener('online', showOnline);
+  function netInit() { try { if (navigator.onLine === false) showOffline(); } catch (e) {} }
+
+  /* ── ④ 欄位錯誤：漏填的那一格紅框＋抖一下＋捲過去（輸入框會順便把游標放進去）
+     用法：fxFieldError(元素)；使用者一開始輸入／點它，紅框就消失 */
+  window.fxFieldError = function (el) {
+    try {
+      if (!el) return;
+      el.classList.remove('fx-field-err'); void el.offsetWidth; el.classList.add('fx-field-err');
+      try { el.scrollIntoView({ block: 'center', behavior: fxReduced() ? 'auto' : 'smooth' }); } catch (e) {}
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) { try { el.focus({ preventScroll: true }); } catch (e) {} }
+      var clear = function () { el.classList.remove('fx-field-err'); el.removeEventListener('input', clear); el.removeEventListener('click', clear, true); };
+      el.addEventListener('input', clear); el.addEventListener('click', clear, true);
+      setTimeout(clear, 6000);
+      haptic('err');
+    } catch (e) {}
+  };
+
+  /* ── ⑤ 回到頂端：往下滑超過一個多畫面才出現 ── */
+  function topInit() {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'fx-top'; b.setAttribute('aria-label', '回到頂端'); b.textContent = '⬆';
+    b.addEventListener('click', function () { try { window.scrollTo({ top: 0, behavior: fxReduced() ? 'auto' : 'smooth' }); } catch (e) { window.scrollTo(0, 0); } });
+    document.body.appendChild(b);
+    var on = false;
+    window.addEventListener('scroll', function () {
+      var show = window.scrollY > window.innerHeight * 1.2;
+      if (show !== on) { on = show; b.classList.toggle('fx-on', show); }
+    }, { passive: true });
+  }
+
+  /* ── ⑥ 下拉更新：在最上面往下拉，超過門檻放開就執行 fn（fn 可回傳 Promise，轉圈到它結束）──
+     用法：fxPullToRefresh(function(){ return 重新載入(); })
+     在跳出視窗／固定位置的元素上拉不觸發；同時關掉 Android Chrome 內建的下拉重新整理，避免整頁重載 */
+  window.fxPullToRefresh = function (fn) {
+    try {
+      if (!('ontouchstart' in window)) return;
+      document.documentElement.style.overscrollBehaviorY = 'contain';
+      var ind = document.createElement('div');
+      ind.className = 'fx-ptr'; ind.innerHTML = '<span>↓</span>';
+      document.body.appendChild(ind);
+      var startY = null, dist = 0, busy = false, TH = 64;
+      var set = function (d, cls) {
+        ind.style.transform = 'translate(-50%,' + (d - 52) + 'px) rotate(' + (d * 4) + 'deg)';
+        ind.style.opacity = Math.min(1, d / 40);
+        ind.className = 'fx-ptr' + (cls ? ' ' + cls : '');
+      };
+      var reset = function () { startY = null; dist = 0; ind.style.transition = 'transform .25s, opacity .25s'; set(0, ''); setTimeout(function () { ind.style.transition = ''; }, 260); };
+      window.addEventListener('touchstart', function (e) {
+        if (busy || window.scrollY > 0 || e.touches.length !== 1) return;
+        var t = e.target;
+        if (t && t.closest && t.closest('[style*="position: fixed"],.modal,.modal-bg,.modal-overlay,.mask,.mo-ovl,.fx-tool-sheet,input,textarea,select')) return;
+        startY = e.touches[0].clientY;
+      }, { passive: true });
+      window.addEventListener('touchmove', function (e) {
+        if (startY === null) return;
+        var dy = e.touches[0].clientY - startY;
+        if (dy <= 0 || window.scrollY > 0) { if (dist) reset(); else startY = null; return; }
+        dist = Math.min(dy * 0.5, 96);
+        set(dist, dist >= TH ? 'fx-ready' : '');
+      }, { passive: true });
+      window.addEventListener('touchend', function () {
+        if (startY === null) return;
+        if (dist >= TH) {
+          busy = true; startY = null; set(TH, 'fx-busy');
+          var t0 = Date.now(), done = function () {
+            setTimeout(function () { busy = false; reset(); }, Math.max(0, 600 - (Date.now() - t0))); // 至少轉 0.6 秒，看得出有更新
+          };
+          try { Promise.resolve(fn()).then(done, done); } catch (e) { done(); }
+          haptic('ok');
+        } else reset();
+      }, { passive: true });
+    } catch (e) {}
+  };
+
+  /* ── ⑦ 數字跳動（純 HTML 工具用）：fxCountTo(元素, 目標數字, 記憶鍵, 前綴, 後綴)
+     跟上次同一個記憶鍵的值比，一樣就不跳（切換篩選重畫時不會每次都從 0 開始）*/
+  var countMem = {};
+  window.fxCountTo = function (el, to, key, pre, suf) {
+    try {
+      pre = pre || ''; suf = suf || '';
+      var from = key && countMem[key] !== undefined ? countMem[key] : (el._fxLast !== undefined ? el._fxLast : 0);
+      if (key) countMem[key] = to; el._fxLast = to;
+      if (from === to || fxReduced() || typeof to !== 'number') { el.textContent = pre + to + suf; return; }
+      var t0 = 0, step = function (t) {
+        if (!t0) t0 = t;
+        var p = Math.min(1, (t - t0) / 650), e = 1 - Math.pow(1 - p, 3);
+        el.textContent = pre + Math.round(from + (to - from) * e) + suf;
+        if (p < 1) requestAnimationFrame(step);
+      };
+      el.textContent = pre + from + suf;
+      requestAnimationFrame(step);
+    } catch (e) { el.textContent = (pre || '') + to + (suf || ''); }
+  };
+  // 容器內所有 [data-fx-count] 一起跳（例如無線電統計列整排重畫後）
+  window.fxCountUpIn = function (root, prefix) {
+    try {
+      var list = (root || document).querySelectorAll('[data-fx-count]');
+      for (var i = 0; i < list.length; i++) {
+        var el = list[i];
+        window.fxCountTo(el, Number(el.getAttribute('data-fx-count')), (prefix || '') + (el.getAttribute('data-fx-key') || i));
+      }
+    } catch (e) {}
+  };
+
+  function thirdInit() { try { netInit(); topInit(); } catch (e) {} }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', thirdInit); else thirdInit();
 
   window.addEventListener('resize', realignAll);
   window.addEventListener('load', realignAll);

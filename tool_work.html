@@ -1298,8 +1298,13 @@ function setUpdTime(){
   } else { el.style.cursor=''; el.style.textDecoration=''; el.onclick=null; }
 }
 function updateCounts(){
-  document.getElementById('cnt-con').textContent=S.errors.con?'':`(${S.data.con.length})`;
-  document.getElementById('cnt-hot').textContent=S.errors.hot?'':`(${S.data.hot.length})`;
+  // ⑦ 筆數從上一次的值跳到新值（2026-09-24）；ui_fx.js 沒載到就直接顯示
+  [['con','cnt-con'],['hot','cnt-hot']].forEach(function(p){
+    var el=document.getElementById(p[1]);
+    if(S.errors[p[0]]){ el.textContent=''; return; }
+    if(window.fxCountTo) window.fxCountTo(el, S.data[p[0]].length, 'work-'+p[0], '(', ')');
+    else el.textContent='('+S.data[p[0]].length+')';
+  });
 }
 
 /* ══════════════════════════════════════════
@@ -1569,6 +1574,8 @@ async function checkWorkPermission(){
 
 /* 啟動：有快取先上畫面秒開，背景悄悄重新整理；沒快取才走原本的全頁讀取動畫 */
 moveViewSlider(); // 分頁膠囊先定位到預設的「今天」
+// ⑥ 下拉更新＝按右上角重新整理（2026-09-24）
+if(window.fxPullToRefresh) window.fxPullToRefresh(function(){ return loadAll(); });
 checkWorkPermission().then(function(ok){
   if(!ok) return;
   var hadCache = loadWorkCache();

@@ -1037,7 +1037,7 @@ function addToQueue(){
   if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
   // Check floors
   const noFloor=validRows.filter(r=>!r.floor);
-  if(noFloor.length){showToast('請選擇樓層！','err');return;}
+  if(noFloor.length){showToast('請選擇樓層！','err');if(window.fxFieldError)window.fxFieldError(document.getElementById('fsel'+noFloor[0].id));return;}
 
   let inspector=selIns||document.getElementById('insSrch').value.trim();
   let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
@@ -1083,7 +1083,7 @@ async function directSubmitToSheet(){
   const validRows=shopRows.filter(r=>r.shopName.trim());
   if(!validRows.length){showToast('請至少輸入一個廠商！','err');return;}
   const noFloor=validRows.filter(r=>!r.floor);
-  if(noFloor.length){showToast('請選擇樓層！','err');return;}
+  if(noFloor.length){showToast('請選擇樓層！','err');if(window.fxFieldError)window.fxFieldError(document.getElementById('fsel'+noFloor[0].id));return;}
 
   let inspector=selIns||document.getElementById('insSrch').value.trim();
   let wtype=selWt||document.getElementById('wtCustom').value.trim()||'';
@@ -1143,6 +1143,11 @@ function resetForm(){
 // QUEUE
 function renderQueue(){ /* 清單功能已移除：保留空函式避免其他呼叫處報錯 */ }
 
+/* ⑥ 下拉更新（2026-09-24）：只在「今日」分頁有效，重新讀今日清單 */
+if(window.fxPullToRefresh) window.fxPullToRefresh(function(){
+  var pt=document.getElementById('panel-today');
+  if(pt && pt.classList.contains('active')) return loadTodayRecords();
+});
 function delQ(id){queue=queue.filter(i=>i.id!==id);save();(window.fxRemoveThen||function(f){f();})(renderQueue);} // 被刪的那一列先收合淡出再重畫
 function clearQueue(){queue=[];save();renderQueue();document.getElementById('copyArea').style.display='none';showToast('已清空');}
 

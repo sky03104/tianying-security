@@ -467,6 +467,13 @@ window.addEventListener('load',function(){setTimeout(function(){var sp=document.
 if(canManage){var _sb=document.getElementById('settingsBtn');if(_sb)_sb.style.display='flex';}
 loadConditionOptions(); // 2026-09-20新增：登記畫面車況下拉的選項，開工具就先載入
 
+/* ⑥ 下拉更新（2026-09-24）：查詢歷史畫面＝重跑上一次查詢；長期停放／特殊車輛畫面＝重新讀清單 */
+if(window.fxPullToRefresh) window.fxPullToRefresh(function(){
+  var a=document.querySelector('.screen.active'); if(!a) return;
+  if(a.id==='s3' && typeof sqLastQueryLabel!=='undefined' && sqLastQueryLabel) return runSearch();
+  if(a.id==='s4') return openLongTermReview();
+  if(a.id==='s2') return loadWhitelist();
+});
 function showS(n){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});document.getElementById('s'+n).classList.add('active');}
 
 // ═══════ 特殊車輛設定（2026-07-30 新增，僅 canManage 能進入） ═══════
