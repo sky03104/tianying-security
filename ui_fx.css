@@ -55,3 +55,15 @@
   .fx-fadein > *{animation:none}
   .fx-slider.fx-anim{transition:none}
 }
+
+/* ── 換頁動畫（2026-09-24）：主控台 ↔ 各工具是整頁跳轉，用瀏覽器原生的「跨頁轉場」
+   （View Transitions，兩邊都要引入本檔才會生效）：舊頁淡出微縮、新頁淡入上浮。
+   不支援的瀏覽器（較舊的手機）就是跟原本一樣直接換頁，不會壞。 */
+@view-transition { navigation: auto; }
+::view-transition-old(root){ animation: fxVtOut .2s ease both; }
+::view-transition-new(root){ animation: fxVtIn .28s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes fxVtOut{ to{ opacity:0; transform:scale(.985); } }
+@keyframes fxVtIn{ from{ opacity:0; transform:translateY(10px); } }
+@media (prefers-reduced-motion: reduce){
+  @view-transition { navigation: none; }
+}
