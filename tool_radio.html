@@ -295,16 +295,33 @@ async function loadEmployees(){
     if(d && d.status === 'ok' && d.users) S.employees = d.users;
   } catch(e){ /* 拿不到就留空，改用手打姓名，不擋其他功能 */ }
 }
+/* 讀取逾時（2026-09-25）：GAS 冷啟動可能很慢，但超過 25 秒還沒回應就當失敗、給「重新讀取」鈕，
+   不讓畫面一直空白看起來像當機（咖哩回報「點進去會卡住」） */
+function fetchJson_(url){
+  var ctl = window.AbortController ? new AbortController() : null;
+  var t = ctl ? setTimeout(function(){ ctl.abort(); }, 25000) : 0;
+  return fetch(url, ctl ? { signal: ctl.signal } : {})
+    .then(function(r){ return r.json(); })
+    .catch(function(e){ throw (e && e.name === 'AbortError') ? new Error('伺服器回應逾時，請稍後再試') : e; })
+    .finally(function(){ clearTimeout(t); });
+}
+/* 讀取失敗畫面：附「重新讀取」鈕（伺服器忙碌時不用整頁重開） */
+function 讀取失敗_(msg, retry){
+  $('list').innerHTML = '<div class="errbox"><i class="ti ti-alert-triangle"></i><div>載入失敗：'+esc(msg)+'</div></div>'+
+    '<div style="display:flex;justify-content:center;margin-top:12px">'+
+    '<button class="btn btn-pri" onclick="'+retry+'()" style="flex:0 0 auto;padding:12px 22px">'+
+    '<i class="ti ti-refresh"></i> 重新讀取</button></div>';
+}
 async function loadRadios(){
+  // 第一次讀取（還沒有資料）先放骨架，不然清單空白看起來像卡住；之後的重新整理保留舊畫面
+  if(!S.radios.length) $('list').innerHTML = window.fxSkeletonCards ? fxSkeletonCards(4, '讀取無線電清冊中…') : '<div class="fx-sk-hint">讀取無線電清冊中…</div>';
   try {
-    var res = await fetch(RADIO_GAS_URL + '?action=getRadios&token=' + encodeURIComponent(getAuthToken()));
-    var d = await res.json();
+    var d = await fetchJson_(RADIO_GAS_URL + '?action=getRadios&token=' + encodeURIComponent(getAuthToken()));
     if(d.status !== 'ok') throw new Error(d.msg || '讀取失敗');
     S.radios = d.radios || [];
     render();
   } catch(err){
-    $('list').innerHTML = '<div class="errbox"><i class="ti ti-alert-triangle"></i><div>載入失敗：'+
-      esc(err.message)+'</div></div>';
+    讀取失敗_(err.message, 'loadRadios');
   }
 }
 /* 動作完成後刷新：清冊一定要重讀，卡片若是展開狀態連異動紀錄也要重讀，
@@ -650,6 +667,7 @@ window.openEdit = openEdit;
 window.submitEdit = submitEdit;
 window.delRadio = delRadio;
 window.closeModal = closeModal;
+window.loadRadios = loadRadios;
 window.exportXlsx = exportXlsx;
 
 /* ── 啟動 ── */

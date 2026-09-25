@@ -75,5 +75,9 @@ var RADIO_GAS_URL = '請填入無線電管理GAS部署網址';   // ← 換成�
 - 三層把關：`index.html` 的 `DEFAULT_PERMS`（決定看不看得到入口）→
   `tool_radio.html` 的 `checkPermission()`（前端擋）→ GAS 每個 action
   驗 token＋角色。**前兩層都在使用者的瀏覽器裡、改得掉，後端這層才是真的。**
-- token 驗證是打回主 App 的 GAS（`MAIN_APP_GAS_URL_`）確認，跟生理假紀錄、
-  缺班調班紀錄同一套做法。主 App 網址若換了，這裡也要跟著改。
+- token 驗證（2026-09-25 改版，跟缺班調班紀錄同一套）：優先「本機驗證」（HMAC 簽章＋
+  直接讀主 App 試算表的「帳號管理」），通過結果快取 5 分鐘；沒設定 `SESSION_SECRET`
+  時才退回打主 App 的 GAS（`MAIN_APP_GAS_URL_`）確認，會慢好幾秒。
+  **要走快速的本機驗證**：主 App 專案 → 專案設定 → 指令碼屬性 → 複製 `SESSION_SECRET` 的值 →
+  本專案 → 專案設定 → 指令碼屬性 → 新增同名 `SESSION_SECRET` 貼上 → 編輯器選 `forceAuth` 按執行一次
+  （授權讀主 App 試算表，執行紀錄會顯示「已設定：走本機驗證（快）」）→ 部署新版本。
