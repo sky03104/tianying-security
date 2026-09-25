@@ -109,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '46.25';
+const APP_VERSION = '47.25';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -1280,6 +1280,18 @@ function ok(obj) {
         /* 案場班表 ＝ 晚班 ＋ 早班合併。早班 id 一律加 ID_OFFSET，免得跟晚班的 id 撞號
            （撞號會讓兩個人的班表互相蓋掉）。switchShift('all') 與開啟時的初始載入都走這裡，
            合併規則只有這一份。 */
+        /* 兩份 {staff, sched} 內容是否完全相同（逐人逐日比，不受物件鍵順序影響）。
+           相同就不 setState：畫面內容沒變卻重畫，巢狀的 MonthView 會整個重建，看起來就是抖一下。 */
+        const 同一份班表_ = (a, b) => {
+            if (!a || !b || a.staff.length !== b.staff.length) return false;
+            for (let i = 0; i < a.staff.length; i++) {
+                const x = a.staff[i], y = b.staff[i];
+                if (x.id !== y.id || x.name !== y.name || x.role !== y.role || x.shift !== y.shift || (x.empId || '') !== (y.empId || '')) return false;
+                const sx = a.sched[x.id] || {}, sy = b.sched[y.id] || {};
+                for (let d = 1; d <= DAYS; d++) if ((sx[d] || '-') !== (sy[d] || '-')) return false;
+            }
+            return true;
+        };
         const 合併案場班表_ = (夜, 早) => {
             const ID_OFFSET = 10000;
             let nStaff = [], nSc = {};
@@ -1362,8 +1374,12 @@ function ok(obj) {
                 d.types.forEach(t => {
                     cs[t.code] = { label: t.label, time: t.time, color: t.color, bg: t.color + '33', hours: t.hours };
                 });
+                const 新 = JSON.stringify(cs);
+                let 舊 = null;
+                try { 舊 = localStorage.getItem('tianying_custom_shifts'); } catch (e) { }
+                if (新 === 舊) return; // 跟本機已套用的一樣：不重畫（開啟時已從本機載入過）
                 Object.assign(SHIFT_TYPES, cs);
-                try { localStorage.setItem('tianying_custom_shifts', JSON.stringify(cs)); } catch (e) { }
+                try { localStorage.setItem('tianying_custom_shifts', 新); } catch (e) { }
                 setShiftVer(v => v + 1);
             }
         };
@@ -1371,15 +1387,19 @@ function ok(obj) {
             (async () => {
                 const 包 = await 開啟時一次拿齊_();
                 if (包) { 套用工號對照_(包.empIds); 套用班別設定_(包.shiftSettings); } // 工號對照要先套用，解析班表時才查得到 empId
-                const 夜 = 包 ? 解析班表_('night', 包.night, [], {}) : null;
-                const 早 = 包 ? 解析班表_('morning', 包.morning, [], {}) : null;
+                /* 2026-09-25 修「載入完抖一下」：以本機快取為底去解析（同名的人沿用原本的 id），
+                   雲端內容跟畫面上一樣時 id 也一樣，下面比對得出「沒變」就完全不重畫。
+                   原本從空白名單解析，每次都發新 id → 每一列都被當成新的人整個重建。 */
+                const 快夜 = 讀班表快取_('night'), 快早 = 讀班表快取_('morning');
+                const 夜 = 包 ? 解析班表_('night', 包.night, 快夜 ? 快夜.staff : [], 快夜 ? 快夜.sched : {}) : null;
+                const 早 = 包 ? 解析班表_('morning', 包.morning, 快早 ? 快早.staff : [], 快早 ? 快早.sched : {}) : null;
                 const ym = `${Y}-${M}`;
                 try {
                     if (夜) localStorage.setItem(SHED_CACHE_KEYS.night, JSON.stringify({ ym: ym, staff: 夜.staff, sched: 夜.sched }));
                     if (早) localStorage.setItem(SHED_CACHE_KEYS.morning, JSON.stringify({ ym: ym, staff: 早.staff, sched: 早.sched }));
                 } catch (e) { }
-                const 合 = 合併案場班表_(夜 || 讀班表快取_('night'), 早 || 讀班表快取_('morning'));
-                if (合.staff.length) {
+                const 合 = 合併案場班表_(夜 || 快夜, 早 || 快早);
+                if (合.staff.length && !同一份班表_(合, { staff: staffRef.current, sched: schedRef.current })) {
                     setStaff(合.staff);
                     setSched(合.sched);
                     if (夜 && 早) T(`📅 已載入案場班表（早班＋晚班共 ${合.staff.length} 人）`);
@@ -1790,8 +1810,10 @@ function ok(obj) {
             const list = selSt ? staff.filter(s => s.id === selSt) : filtered;
             const cols = Array.from({ length: DAYS }, (_, i) => i + 1);
             const monthScrollEl = useRef(null);
-            /* 掛載時（含雲端資料回填造成的重新掛載）復原上次捲動位置 */
-            useEffect(() => {
+            /* 掛載時（含雲端資料回填造成的重新掛載）復原上次捲動位置。
+               2026-09-25：改 useLayoutEffect——useEffect 是畫面已經畫出來才執行，會先閃一格「捲回最左上」
+               再跳回原位（就是「抖一下」）；useLayoutEffect 在畫出來之前就復原，看不到跳動。 */
+            React.useLayoutEffect(() => {
                 if (monthScrollEl.current) {
                     monthScrollEl.current.scrollLeft = monthScrollLeft.current;
                     monthScrollEl.current.scrollTop = monthScrollTop.current;
