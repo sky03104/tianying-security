@@ -230,7 +230,16 @@ input[type=date]{color-scheme:dark}
   background:linear-gradient(135deg,#D4A800 0%,#FFD700 100%);color:#0A0C10;font-weight:700;
   font-size:.94rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.4rem}
 .mo-submit:disabled{opacity:.55;cursor:not-allowed}
+/* ⑤ 分頁滑動膠囊（2026-09-24）：選中的分頁底色／框線改由膠囊提供，膠囊顏色跟著分頁走 */
+.vbar{position:relative}
+.vbar.fx-has-slider .vbtn[class*="on-"]{background:transparent;border-color:transparent}
+.vbar .fx-slider{border-radius:20px;border:1px solid var(--gld);background:rgba(212,168,0,.12)}
+.vbar .fx-slider[data-tone="morning"]{border-color:var(--ind);background:rgba(129,140,248,.12)}
+.vbar .fx-slider[data-tone="applied"]{border-color:var(--grn);background:rgba(74,222,128,.12)}
+.vbar .fx-slider[data-tone="history"]{border-color:var(--t3);background:rgba(75,85,99,.12)}
 </style>
+<link rel="stylesheet" href="ui_fx.css">
+<script src="ui_fx.js"></script>
 </head>
 <body>
 
@@ -281,7 +290,8 @@ input[type=date]{color-scheme:dark}
   </div>
 
   <!-- 篩選列：今晚→今天、明早→明天 -->
-  <div class="vbar">
+  <div class="vbar" id="vbar">
+    <span class="fx-slider" id="vslider" data-tone="tonight"></span>
     <button class="vbtn on-tonight" id="vbtn-tonight" onclick="switchView('tonight')">
       <i class="ti ti-calendar-day"></i>今天
     </button>
@@ -1042,7 +1052,10 @@ function render(){
   if(S.loading){
     stats.style.display='none';
     document.getElementById('fbar').style.display='none';
-    content.innerHTML='<div class="stctr"><div class="spinner"></div><span style="color:var(--t2);font-size:.88rem">讀取 Google Sheets 中…</span></div>';
+    // ④ 骨架畫面取代轉圈圈（2026-09-24）；ui_fx.js 沒載到就維持原本的轉圈
+    content.innerHTML = (typeof window.fxSkeletonCards === 'function')
+      ? '<div style="padding:.8rem">'+window.fxSkeletonCards(3, '正在讀取施工資料…')+'</div>'
+      : '<div class="stctr"><div class="spinner"></div><span style="color:var(--t2);font-size:.88rem">讀取 Google Sheets 中…</span></div>';
     return;
   }
   if(curErr){
@@ -1091,7 +1104,9 @@ function render(){
     return;
   }
 
-  var html='<div class="grid">';
+  // 剛讀完資料或剛換分頁時卡片依序淡入；打字搜尋時不重播（每打一個字都閃會很煩）
+  var html='<div class="grid'+(S._fxFade?' fx-fadein':'')+'">';
+  S._fxFade = false;
   for(var i=0;i<filtered.length;i++) html+=cardHtml(filtered[i], S.view, isHot, i);
   html+='</div>';
   content.innerHTML=html;
@@ -1212,7 +1227,17 @@ function switchView(v){
   ['tonight','morning','applied','history'].forEach(function(x){
     document.getElementById('vbtn-'+x).className='vbtn'+(x===v?' on-'+x:'');
   });
+  moveViewSlider();
+  S._fxFade = true; // 換分頁時卡片淡入
   render();
+}
+/* ⑤ 分頁滑動膠囊：ui_fx.js 沒載到就什麼都不做，分頁維持原本各自的底色樣式 */
+function moveViewSlider(){
+  if(typeof window.fxMoveSlider !== 'function') return;
+  var sl = document.getElementById('vslider');
+  sl.setAttribute('data-tone', S.view);
+  document.getElementById('vbar').classList.add('fx-has-slider');
+  window.fxMoveSlider(sl, document.getElementById('vbtn-'+S.view));
 }
 function onSearch(v){
   S.search=v; render();
@@ -1345,6 +1370,7 @@ async function loadAll(silent){
   if(results[1].status === 'fulfilled'){ srcs.push(results[1].value._src); S.data.hot = dedupeRows(results[1].value); }
   else if(!silent) S.errors.hot = results[1].reason && results[1].reason.message;
   S.loadInfo = { ms: Date.now() - t0, src: srcs.indexOf('sheets') > -1 ? 'sheets' : (srcs.length ? 'sql' : '') };
+  if(!silent) S._fxFade = true; // 從骨架畫面換成真資料時淡入
   S.loading=false;
   setSpinning(false);
   setUpdTime();
@@ -1541,6 +1567,7 @@ async function checkWorkPermission(){
 }
 
 /* 啟動：有快取先上畫面秒開，背景悄悄重新整理；沒快取才走原本的全頁讀取動畫 */
+moveViewSlider(); // 分頁膠囊先定位到預設的「今天」
 checkWorkPermission().then(function(ok){
   if(!ok) return;
   var hadCache = loadWorkCache();

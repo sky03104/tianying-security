@@ -26,6 +26,8 @@
 <body>
   <div id="splash"><div class="splash-ring"></div><div class="splash-text">天鷹保全</div><div class="splash-sub">TIANYING SECURITY · INTERNAL SYSTEM</div></div>
   <div id="root"></div>
+  <link rel="stylesheet" href="ui_fx.css">
+  <script src="ui_fx.js"></script>
   <script src="react-bundle.js"></script>
   <script defer src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" onerror="window.XLSX={read:function(){return{Sheets:{},SheetNames:[]};},utils:{sheet_to_json:function(){return[];},decode_range:function(){return{s:{r:0,c:0},e:{r:0,c:0}};},encode_cell:function(){return'A1';}}}"></script>
   <script>
@@ -56,6 +58,31 @@ setInterval(function () {
   } catch (e) {}
 }, 60000);
 var useState=React.useState;var useEffect=React.useEffect;var useRef=React.useRef;var useCallback=React.useCallback;var useMemo=React.useMemo;var useReducer=React.useReducer;var useContext=React.useContext;var createContext=React.createContext;
+/* ① 首頁小卡數字跳動（2026-09-24）：值改變時從舊值滾到新值（第一次從 0 開始），約 0.7 秒。
+   一定要用 React 元件做：從外面直接改 DOM 文字會把 React 自己的文字節點換掉，之後資料更新就不會顯示。
+   手機開了「減少動態效果」就直接顯示結果。 */
+function CountUp(props) {
+    var value = props.value;
+    var isNum = typeof value === 'number' && isFinite(value);
+    var st = useState(isNum ? 0 : value), shown = st[0], setShown = st[1];
+    var fromRef = useRef(0);
+    useEffect(function () {
+        if (!isNum || (window.fxReduced && window.fxReduced())) { setShown(value); if (isNum) fromRef.current = value; return; }
+        var from = fromRef.current, to = value;
+        if (from === to) { setShown(to); return; }
+        var raf = 0, t0 = 0;
+        var step = function (t) {
+            if (!t0) t0 = t;
+            var p = Math.min(1, (t - t0) / 700), e = 1 - Math.pow(1 - p, 3);
+            var v = Math.round(from + (to - from) * e);
+            fromRef.current = v; setShown(v);
+            if (p < 1) raf = requestAnimationFrame(step);
+        };
+        raf = requestAnimationFrame(step);
+        return function () { cancelAnimationFrame(raf); };
+    }, [value]);
+    return shown;
+}
 "use strict";
 const POST_PAGE_URL       = 'https://sky03104.github.io/tianying-security/post.html'; // 明日哨表改為 iframe 串接完整頁（永遠同步最新 post.html）
 const OPENING_PAGE_URL    = 'https://sky03104.github.io/tianying-security/tool_opening.html'; // 開店前進出快速登錄：獨立檔，iframe 串接（永遠同步最新 tool_opening.html）
@@ -73,7 +100,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '40.23';
+const APP_VERSION = '41.23';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -464,7 +491,11 @@ const css = `
   .stat-card::before { content:''; position:absolute; top:-16px; right:-16px;
     width:52px; height:52px; border-radius:50%;
     background:radial-gradient(circle, rgba(212,168,0,.12), transparent 70%); }
-  .stat-num { font-size:28px; font-weight:900; color:var(--gold2); }
+  .stat-num { font-size:28px; font-weight:900; color:var(--gold2); font-variant-numeric:tabular-nums; }
+  /* ① 按壓回饋（2026-09-24）：只有可點的小卡（inline style 帶 cursor:pointer）才有，手指按下微縮＋金框 */
+  .stat-card { transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
+  .stat-card[style*="pointer"]:active { transform:scale(.96); border-color:rgba(212,168,0,.7);
+    box-shadow:0 0 0 3px rgba(212,168,0,.15); }
   .stat-lbl { font-size:11px; color:var(--muted); margin-top:2px; }
 
   .section-title { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:2px;
@@ -510,6 +541,27 @@ const css = `
     filter: saturate(.4) brightness(.7);
   }
   .tool-card.pressed:hover { transform: translateY(1px); box-shadow: inset 0 4px 10px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.02); }
+  /* ② 工具卡片依序浮現（2026-09-24）：用 ui_fx.css 的 fxRise（只寫起點、backwards 填充），
+     動畫結束後回到卡片原本的樣式，不會蓋掉 raised/pressed 的立體位移與按壓效果 */
+  .tool-grid > .tool-card { animation:fxRise .42s cubic-bezier(.2,.8,.2,1) backwards; }
+  .tool-grid > .tool-card:nth-child(2) { animation-delay:40ms; }
+  .tool-grid > .tool-card:nth-child(3) { animation-delay:80ms; }
+  .tool-grid > .tool-card:nth-child(4) { animation-delay:120ms; }
+  .tool-grid > .tool-card:nth-child(5) { animation-delay:160ms; }
+  .tool-grid > .tool-card:nth-child(6) { animation-delay:200ms; }
+  .tool-grid > .tool-card:nth-child(7) { animation-delay:240ms; }
+  .tool-grid > .tool-card:nth-child(8) { animation-delay:280ms; }
+  .tool-grid > .tool-card:nth-child(9) { animation-delay:320ms; }
+  .tool-grid > .tool-card:nth-child(10) { animation-delay:360ms; }
+  .tool-grid > .tool-card:nth-child(11) { animation-delay:400ms; }
+  .tool-grid > .tool-card:nth-child(12) { animation-delay:440ms; }
+  .tool-grid > .tool-card:nth-child(13) { animation-delay:480ms; }
+  .tool-grid > .tool-card:nth-child(14) { animation-delay:520ms; }
+  .tool-grid > .tool-card:nth-child(15) { animation-delay:560ms; }
+  .tool-grid > .tool-card:nth-child(n+16) { animation-delay:600ms; }
+  @media (prefers-reduced-motion: reduce){ .tool-grid > .tool-card, .stat-card { animation:none; transition:none; } }
+  /* ⑤ 班表分頁滑動膠囊的外觀（定位由 ui_fx.js 負責） */
+  .sched-slider { background:rgba(212,168,0,.18); border:1.5px solid #D4A800; border-radius:9px; box-sizing:border-box; }
   .tool-emoji { font-size:22px; }
   .tool-name { font-size:11px; font-weight:600; line-height:1.25; }
   .tool-cat { display:none; }
@@ -940,6 +992,16 @@ function ok(obj) {
             return buildSched(INIT_STAFF);
         });
         const [view, setView] = useState("month"); /* 2026-08-09：預設開「月班表」分頁 */
+        /* ⑤ 分頁滑動膠囊（2026-09-24）：金色膠囊滑到目前分頁。hooks 必須放在元件最上方
+           （下面有 early return），每次畫面更新都重新對齊一次（很便宜，只是設幾個樣式） */
+        const schedTabBarRef = useRef(null), schedSliderRef = useRef(null);
+        useEffect(() => {
+            try {
+                const bar = schedTabBarRef.current;
+                if (!bar || typeof window.fxMoveSlider !== 'function') return;
+                window.fxMoveSlider(schedSliderRef.current, bar.querySelector('[data-k="' + view + '"]'));
+            } catch (e) { }
+        });
         const [shiftVer, setShiftVer] = useState(0);
         const [selSt, setSelSt] = useState(null);
         const [editC, setEditC] = useState(null);
@@ -2034,14 +2096,17 @@ function ok(obj) {
                 React.createElement("button", { style: { flex: 1, padding: "8px 4px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", border: curShift === 'morning' ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`, background: curShift === 'morning' ? "rgba(212,168,0,0.18)" : C.card, color: curShift === 'morning' ? C.goldBri : C.textMute }, onClick: () => switchShift('morning') }, "☀️ 早班班表"),
                 React.createElement("button", { style: { flex: 1, padding: "8px 4px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", border: curShift === 'night' ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`, background: curShift === 'night' ? "rgba(212,168,0,0.18)" : C.card, color: curShift === 'night' ? C.goldBri : C.textMute }, onClick: () => switchShift('night') }, "🌙 晚班班表"),
                 React.createElement("button", { style: { flex: 1, padding: "8px 4px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", border: curShift === 'all' ? `1.5px solid ${C.indigo}` : `1px solid ${C.cardBd}`, background: curShift === 'all' ? "rgba(99,102,241,0.18)" : C.card, color: curShift === 'all' ? C.indigoBri : C.textMute }, onClick: () => switchShift('all') }, "🏢 案場班表")),
-            React.createElement("div", { style: { display: "flex", gap: 6, background: C.bg2, borderBottom: `1px solid ${C.cardBd}`, overflowX: "auto", padding: "8px 10px" } }, tabs.map(t => React.createElement("button", { key: t.k, style: {
+            React.createElement("div", { ref: schedTabBarRef, style: { position: "relative", display: "flex", gap: 6, background: C.bg2, borderBottom: `1px solid ${C.cardBd}`, overflowX: "auto", padding: "8px 10px" } },
+                React.createElement("span", { className: "fx-slider sched-slider", ref: schedSliderRef }),
+                tabs.map(t => React.createElement("button", { key: t.k, "data-k": t.k, style: {
                 /* 2026-08-09：原本是 background:none + border:none，只靠一條底線區分，
                    現場有人看不出來這排可以按。改成跟上方班別切換鈕同一種膠囊樣式
                    （有底色、有框、有圓角），一眼就知道是按鈕。 */
                 flex: "0 0 auto", padding: "9px 14px", borderRadius: 9, minHeight: 40,
                 whiteSpace: "nowrap", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5,
-                background: view === t.k ? "rgba(212,168,0,0.18)" : C.card,
-                border: view === t.k ? `1.5px solid ${C.gold}` : `1px solid ${C.cardBd}`,
+                /* 有滑動膠囊時，選中分頁的底色／金框改由膠囊提供；ui_fx.js 沒載到就維持原本樣式 */
+                background: view === t.k ? (typeof window.fxMoveSlider === 'function' ? "transparent" : "rgba(212,168,0,0.18)") : C.card,
+                border: view === t.k ? `1.5px solid ${typeof window.fxMoveSlider === 'function' ? "transparent" : C.gold}` : `1px solid ${C.cardBd}`,
                 color: view === t.k ? C.goldBri : C.text,
                 fontWeight: view === t.k ? 700 : 500
             }, onClick: () => setView(t.k) }, t.l))),
@@ -3588,17 +3653,17 @@ function App() {
             React.createElement("div", { className: "stat-row" },
                 React.createElement("div", { className: "stat-card", style: { cursor: 'pointer' }, onClick: () => openDirectives() },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDCE3"),
-                    React.createElement("div", { className: "stat-num", style: { color: directives.length > 0 ? 'var(--indigo2)' : 'var(--muted)' } }, directives.length),
+                    React.createElement("div", { className: "stat-num", style: { color: directives.length > 0 ? 'var(--indigo2)' : 'var(--muted)' } }, React.createElement(CountUp, { value: directives.length })),
                     React.createElement("div", { className: "stat-lbl" }, "\u5BA3\u5C0E\u4E8B\u9805")),
                 React.createElement("div", { className: "stat-card", style: { cursor: 'pointer' }, onClick: () => openBulletin() },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDCE2"),
-                    React.createElement("div", { className: "stat-num", style: { color: announcements.length > 0 ? 'var(--gold2)' : 'var(--muted)' } }, announcements.length),
+                    React.createElement("div", { className: "stat-num", style: { color: announcements.length > 0 ? 'var(--gold2)' : 'var(--muted)' } }, React.createElement(CountUp, { value: announcements.length })),
                     React.createElement("div", { className: "stat-lbl" }, "\u5247\u516C\u544A")),
                 (currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) === 'admin' ? (React.createElement("div", { className: "stat-card", style: { cursor: pending.length > 0 ? 'pointer' : 'default' }, onClick: () => { if (pending.length > 0) {
                         setTab('admin');
                     } } },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDCCB"),
-                    React.createElement("div", { className: "stat-num", style: { color: pending.length > 0 ? '#F87171' : 'var(--muted)' } }, pending.length),
+                    React.createElement("div", { className: "stat-num", style: { color: pending.length > 0 ? '#F87171' : 'var(--muted)' } }, React.createElement(CountUp, { value: pending.length })),
                     React.createElement("div", { className: "stat-lbl" }, "\u5F85\u5BE9\u5E33\u865F"))) : (
                 /* \u660E\u65E5\u54E8\u9EDE\uFF082026-08-09 \u53D6\u4EE3\u539F\u672C\u7684\u300C\u5E38\u7528\u5DE5\u5177\u6578\u91CF\u300D\uFF09\u3002
                    \u9EDE\u64CA\u76F4\u63A5\u958B\u300C\u4ECA/\u660E\u65E5\u54E8\u8868\u300D\u5DE5\u5177\u770B\u5B8C\u6574\u5167\u5BB9\u3002
@@ -3625,7 +3690,7 @@ function App() {
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDCDD"),
                     React.createElement("div", { className: "stat-num", style: {
                             color: leaveRequests.filter(r => r.status === 'pending').length > 0 ? '#FBBF24' : 'var(--success)'
-                        } }, leaveRequests.filter(r => r.status === 'pending').length),
+                        } }, React.createElement(CountUp, { value: leaveRequests.filter(r => r.status === 'pending').length })),
                     React.createElement("div", { className: "stat-lbl" }, "\u5F85\u5BE9\u8ACB\u5047"))) : (React.createElement("div", { className: "stat-card" },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDDD3\uFE0F"),
                     React.createElement("div", { className: "stat-num", style: { fontSize: 18, marginTop: 2 } }, new Date().toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }).replace('/', '-')),
@@ -3633,11 +3698,11 @@ function App() {
             (['executive', 'admin'].includes(currentUser === null || currentUser === void 0 ? void 0 : currentUser.role)) && (React.createElement("div", { className: "stat-row" },
                 React.createElement("div", { className: "stat-card", style: { cursor: 'pointer' }, onClick: () => { window.location.href = 'tool_report.html?mode=admin&empId=' + encodeURIComponent((currentUser && currentUser.empId) || ''); } },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83D\uDCCB"),
-                    React.createElement("div", { className: "stat-num", style: { color: pendingReports.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length > 0 ? '#F87171' : 'var(--success)' } }, pendingReports.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length),
+                    React.createElement("div", { className: "stat-num", style: { color: pendingReports.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length > 0 ? '#F87171' : 'var(--success)' } }, React.createElement(CountUp, { value: pendingReports.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length })),
                     React.createElement("div", { className: "stat-lbl" }, "\u5F85\u5BE9\u5831\u544A")),
                 React.createElement("div", { className: "stat-card", style: { cursor: 'pointer' }, onClick: () => { window.location.href = 'tool_feedback.html?mode=admin&empId=' + encodeURIComponent((currentUser && currentUser.empId) || ''); } },
                     React.createElement("div", { style: { fontSize: 18, marginBottom: 2 } }, "\uD83C\uDFC5"),
-                    React.createElement("div", { className: "stat-num", style: { color: pendingFeedback.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length > 0 ? '#FB923C' : 'var(--success)' } }, pendingFeedback.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length),
+                    React.createElement("div", { className: "stat-num", style: { color: pendingFeedback.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length > 0 ? '#FB923C' : 'var(--success)' } }, React.createElement(CountUp, { value: pendingFeedback.filter(r => r['\u72C0\u614B'] !== '\u5DF2\u8655\u7406').length })),
                     React.createElement("div", { className: "stat-lbl" }, "\u5F85\u8655\u7406\u8868\u63DA/\u53CD\u61C9")))),
             React.createElement("div", { className: "section-title" }, "\u2B50 \u5E38\u7528\u5DE5\u5177\u5FEB\u6377"),
             favorites.filter(id => userTools.includes(id)).length === 0 ? (React.createElement("div", { style: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10,

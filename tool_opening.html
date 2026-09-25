@@ -244,6 +244,9 @@ select.txt{-webkit-appearance:none;}
 .con-empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:15px;line-height:1.8;}
 .con-loading{text-align:center;padding:32px 20px;color:var(--text2);font-size:15px;}
 </style>
+<!-- 共用 UI 動態效果（2026-09-24）：按鈕漣漪、骨架畫面、滑動膠囊等，見 ui_fx.css／ui_fx.js -->
+<link rel="stylesheet" href="ui_fx.css">
+<script src="ui_fx.js"></script>
 </head>
 <body>
 
@@ -1751,7 +1754,10 @@ var todayRecords=[];
 async function loadTodayRecords(){
   if(!gasUrl){showToast('請先在設定頁設定 GAS 連線','err');return;}
   document.getElementById('todayStatus').textContent='⏳ 載入中...';
-  document.getElementById('todayList').innerHTML='<div class="empty"><div class="empty-ico">⏳</div><p>載入中...</p></div>';
+  // ④ 骨架畫面取代「⏳ 載入中」（2026-09-24）；資料回來時卡片淡入。ui_fx.js 沒載到就維持原本畫面
+  var _tl=document.getElementById('todayList');
+  _tl.classList.add('fx-fadein');
+  _tl.innerHTML=(typeof window.fxSkeletonCards==='function')?window.fxSkeletonCards(3):'<div class="empty"><div class="empty-ico">⏳</div><p>載入中...</p></div>';
   try{
     const res=await fetch(gasUrl+'?action=getTodayRows&sheet='+encodeURIComponent(sheetName));
     const d=await res.json();
