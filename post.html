@@ -66,6 +66,9 @@ body{font-family:'Microsoft JhengHei','PingFang TC',sans-serif;background:var(--
 .btn-ghost{margin-top:20px;border:1px solid var(--glass-bd);border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.05);color:var(--text);}
 .footer{text-align:center;font-size:10px;color:var(--muted2);letter-spacing:1px;padding:18px 0 8px;}
 </style>
+<!-- 共用 UI 動態效果（2026-09-24）：見 ui_fx.css／ui_fx.js -->
+<link rel="stylesheet" href="ui_fx.css">
+<script src="ui_fx.js"></script>
 </head>
 <body>
 
@@ -209,7 +212,9 @@ function loadPost(){
 
 window.addEventListener('load', function(){
   applyViewStyle(currentView);   // 帶 ?view=tomorrow 進來時，分頁鈕與標題要跟著對
-  setTimeout(function(){ $('splash').classList.add('hide'); loadPost(); }, 600);
+  // ① 2026-09-24：原本先等開場動畫 0.6 秒才開始讀哨表，現在同時進行（從 APP 進來時開場動畫直接跳過）
+  loadPost();
+  setTimeout(function(){ $('splash').classList.add('hide'); }, 600);
 });
 </script>
 </body>

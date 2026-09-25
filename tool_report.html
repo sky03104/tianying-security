@@ -194,6 +194,8 @@
                 if (loading) return; // 防重複提交
                 if (!formData.location || !formData.description) {
                     showToast("⚠️ 請填寫地點與事故描述", "err");
+                    // 漏填的那一格標紅＋抖動＋捲過去（2026-09-24）
+                    if (window.fxFieldError) window.fxFieldError(document.querySelector(!formData.location ? 'input[placeholder="例如：A棟大廳"]' : 'textarea[placeholder="請詳細描述經過..."]'));
                     return;
                 }
                 setLoading(true);

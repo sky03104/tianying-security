@@ -61,6 +61,15 @@ var useState=React.useState;var useEffect=React.useEffect;var useRef=React.useRe
 /* ① 首頁小卡數字跳動（2026-09-24）：值改變時從舊值滾到新值（第一次從 0 開始），約 0.7 秒。
    一定要用 React 元件做：從外面直接改 DOM 文字會把 React 自己的文字節點換掉，之後資料更新就不會顯示。
    手機開了「減少動態效果」就直接顯示結果。 */
+/* ④ 表單漏填（2026-09-24）：找出畫面上第一個空白的欄位標紅＋抖動＋捲過去（ui_fx.js 沒載到就什麼都不做） */
+function markFirstEmpty(selector) {
+    try {
+        if (typeof window.fxFieldError !== 'function') return;
+        const list = Array.prototype.slice.call(document.querySelectorAll(selector))
+            .filter(el => el.offsetParent !== null && !String(el.value || '').trim());
+        if (list.length) window.fxFieldError(list[0]);
+    } catch (e) { }
+}
 function CountUp(props) {
     var value = props.value;
     var isNum = typeof value === 'number' && isFinite(value);
@@ -100,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '43.23';
+const APP_VERSION = '44.23';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -2465,6 +2474,12 @@ function App() {
     var _a;
     const [page, setPage] = useState("login"); // login | register | home | tools | admin | profile
     const [tab, setTab] = useState("home");
+    /* ⑥ 首頁下拉更新：重新抓公告、宣導、明日哨點、主管待審數字（只在首頁分頁、沒開工具時有效）。
+       註冊一次就好，實際要做的事放在 ref 裡，每次畫面更新都換成最新的函式 */
+    const ptrRef = useRef(null);
+    useEffect(() => {
+        if (typeof window.fxPullToRefresh === 'function') window.fxPullToRefresh(() => ptrRef.current && ptrRef.current());
+    }, []);
     /* 分頁切換方向（2026-09-24）：記住上一個分頁，往右邊的分頁切→內容從右滑入，往左→從左滑入 */
     const prevTabRef = useRef("home");
     useEffect(() => { prevTabRef.current = tab; }, [tab]);
@@ -2588,6 +2603,17 @@ function App() {
     const [postView, setPostView] = useState(null);
     const [adminSubTab, setAdminSubTab] = useState("perms"); // perms | tools | users | approve
     const [activeToolId, setActiveToolId] = useState(null);
+    /* ③ 內嵌工具（iframe）載入中先顯示骨架，iframe onLoad 才收起；最多 10 秒保底 */
+    const IFRAME_TOOLS = ['closing', 'opening', 'upload', 'emergency', 'signin', 'post', 'aichat', 'logistics', 'handover', 'aiwork', 'car'];
+    const [frameLoading, setFrameLoading] = useState(false);
+    const onToolFrameLoad = useCallback(() => setFrameLoading(false), []);
+    /* ③（必須放在 activeToolId／postView 宣告之後，否則開機就 TDZ 錯誤整個白屏）換工具（或明日哨表切今天/明天，iframe 會重新載入）就重新顯示載入骨架 */
+    useEffect(() => {
+        if (!IFRAME_TOOLS.includes(activeToolId)) { setFrameLoading(false); return; }
+        setFrameLoading(true);
+        const t = setTimeout(() => setFrameLoading(false), 10000);
+        return () => clearTimeout(t);
+    }, [activeToolId, postView]);
         /* 航海日誌：切換工具時回報（brain_map 即時人物移動用） */
         useEffect(() => { if (activeToolId) { try { if (typeof logWorkflow === 'function') logWorkflow(activeToolId, 'open', '使用中'); } catch (e) {} } }, [activeToolId]);
     const [externalScheduleData, setExternalScheduleData] = useState(null);
@@ -3039,6 +3065,7 @@ function App() {
         if (loggingIn) return;
         if (!loginForm.id || !loginForm.pw) {
             showToast("⚠️ 請填寫帳號與密碼");
+            markFirstEmpty('.login-card input');
             return;
         }
         setLoggingIn(true);
@@ -3094,6 +3121,7 @@ function App() {
         if (changingPw) return;
         if (!pwForm.old || !pwForm.new1 || !pwForm.new2) {
             showToast("⚠️ 請填寫所有欄位");
+            markFirstEmpty('input[type=password]');
             return;
         }
         if (pwForm.new1 !== pwForm.new2) {
@@ -3391,6 +3419,7 @@ function App() {
         if (regStep === 1) {
             if (!regForm.name || !regForm.id || !regForm.dept) {
                 showToast("⚠️ 請填寫完整基本資料");
+                markFirstEmpty('input.inp, select');
                 return;
             }
             // Check if empId already exists
@@ -3574,7 +3603,7 @@ function App() {
                                     cursor: "pointer", flexShrink: 0, transition: "all .2s" } },
                                 loginForm.remember && React.createElement("span", { style: { color: "#0A0C10", fontSize: 13, fontWeight: 900 } }, "\u2713")),
                             React.createElement("span", { style: { fontSize: 13, color: "var(--muted)" }, onClick: () => setLoginForm(p => ({ ...p, remember: !p.remember })) }, "\u8A18\u4F4F\u6211\uFF087\u5929\u5167\u514D\u767B\u5165\uFF09"))),
-                    React.createElement("button", { className: "btn-gold", onClick: handleLogin, disabled: loggingIn, style: loggingIn ? { opacity: .6, cursor: 'wait' } : null }, loggingIn ? "\u767B\u5165\u4E2D\u2026" : "\u767B\u5165\u7CFB\u7D71"),
+                    React.createElement("button", { className: "btn-gold", onClick: handleLogin, disabled: loggingIn, style: loggingIn ? { opacity: .6, cursor: 'wait' } : null }, loggingIn ? [React.createElement("span", { key: "sp", className: "fx-btn-spin" }), "\u767B\u5165\u4E2D\u2026"] : "\u767B\u5165\u7CFB\u7D71"),
                     React.createElement("div", { className: "divider" },
                         React.createElement("div", { className: "divider-line" }),
                         React.createElement("span", { className: "divider-text" }, "\u6216"),
@@ -4071,6 +4100,15 @@ function App() {
         ...(CAN_MANAGE_ROLES.includes(currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) ? [{ id: "admin", icon: "⚙️", label: "管理" }] : []),
         { id: "profile", icon: "👤", label: "帳號" },
     ];
+    /* ⑥ 首頁下拉更新實際要做的事（在最上面的 useEffect 註冊，這裡每次渲染換成最新的） */
+    ptrRef.current = () => {
+        if (tab !== 'home' || activeToolId) return;
+        return Promise.all([
+            loadAnnouncementsCloud(),
+            loadDirectivesCloud(),
+            ['executive', 'admin'].includes(currentUser && currentUser.role) ? loadReviewCounts() : null
+        ]);
+    };
     // Auto-reset admin sub-tab when non-admin navigates to admin page
     const handleAdminTab = () => {
         if ((currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) !== 'admin' && (adminSubTab === 'perms' || adminSubTab === 'tools')) {
@@ -4126,7 +4164,8 @@ function App() {
             React.createElement("span", { className: "nav-icon" }, n.icon),
             React.createElement("span", { className: "nav-label" }, n.label))))),
         activeToolId && (React.createElement("div", { className: "fx-tool-sheet" + (toolClosing ? " fx-closing" : ""), style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10', display: 'flex', flexDirection: 'column' } },
-            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10,
+            /* 標題列（含返回鈕）要在載入骨架之上，載入中也按得到返回 */
+            React.createElement("div", { style: { position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 10,
                     padding: '10px 14px', background: 'rgba(10,12,16,.95)',
                     borderBottom: '1px solid rgba(212,168,0,.2)', flexShrink: 0 } },
                 React.createElement("button", { id: 'hsh-tool-back-btn', onClick: () => {
@@ -4153,17 +4192,20 @@ function App() {
                      activeToolId === 'car' && '🅿️ 停車場車位數計算')),
             activeToolId === 'schedule' && (React.createElement("div", { style: { flex: 1, overflow: 'auto' } },
                 React.createElement(ScheduleApp, { currentUser: currentUser, externalScheduleData: externalScheduleData, onExternalApplied: handleExternalApplied, userDb: userDb }))),
-            activeToolId === 'closing' && (React.createElement("iframe", { src: CLOSING_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u6253\u70CA\u5F8C\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
-            activeToolId === 'opening' && (React.createElement("iframe", { src: OPENING_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u958B\u5E97\u524D\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
-            activeToolId === 'upload' && (React.createElement("iframe", { src: UPLOAD_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u8CC7\u6599\u4E0A\u50B3\u5DE5\u5177" })),
-            activeToolId === 'emergency' && (React.createElement("iframe", { src: EMERGENCY_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7DCA\u6025\u806F\u7D61\u6E05\u55AE" })),
-            activeToolId === 'signin' && (React.createElement("iframe", { src: SIGNIN_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u904E\u591C\u8ECA\u8F1B\u767B\u8A18" })),
-            activeToolId === 'post' && (React.createElement("iframe", { src: POST_PAGE_URL + (postView === 'tomorrow' ? '?view=tomorrow' : ''), key: postView || 'today', style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u4ECA/\u660E\u65E5\u54E8\u8868" })),
-            activeToolId === 'aichat' && (React.createElement("iframe", { src: AI_CHAT_URL, allow: "microphone", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5929\u9DF9 AI \u5C0F\u52A9\u624B" })),
-            activeToolId === 'logistics' && (React.createElement("iframe", { src: LOGISTICS_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7269\u6D41\u8ECA\u8F1B\u7D71\u8A08" })),
-            activeToolId === 'handover' && (React.createElement("iframe", { src: HANDOVER_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5E36\u73ED\u4EA4\u63A5\u4E8B\u9805" })),
-            activeToolId === 'aiwork' && (React.createElement("iframe", { src: "https://sky03104.github.io/tianying-security/tool_work.html", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u65BD\u5DE5\u55AE\u67E5\u8A62" })),
-            activeToolId === 'car' && (React.createElement("iframe", { src: CAR_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u505C\u8ECA\u5834\u8ECA\u4F4D\u6578\u8A08\u7B97" })))),
+            activeToolId === 'closing' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: CLOSING_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u6253\u70CA\u5F8C\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
+            activeToolId === 'opening' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: OPENING_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u958B\u5E97\u524D\u9032\u51FA\u5FEB\u901F\u767B\u9304" })),
+            activeToolId === 'upload' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: UPLOAD_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u8CC7\u6599\u4E0A\u50B3\u5DE5\u5177" })),
+            activeToolId === 'emergency' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: EMERGENCY_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7DCA\u6025\u806F\u7D61\u6E05\u55AE" })),
+            activeToolId === 'signin' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: SIGNIN_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u904E\u591C\u8ECA\u8F1B\u767B\u8A18" })),
+            activeToolId === 'post' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: POST_PAGE_URL + (postView === 'tomorrow' ? '?view=tomorrow' : ''), key: postView || 'today', style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u4ECA/\u660E\u65E5\u54E8\u8868" })),
+            activeToolId === 'aichat' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: AI_CHAT_URL, allow: "microphone", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5929\u9DF9 AI \u5C0F\u52A9\u624B" })),
+            activeToolId === 'logistics' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: LOGISTICS_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u7269\u6D41\u8ECA\u8F1B\u7D71\u8A08" })),
+            activeToolId === 'handover' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: HANDOVER_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u5E36\u73ED\u4EA4\u63A5\u4E8B\u9805" })),
+            activeToolId === 'aiwork' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: "https://sky03104.github.io/tianying-security/tool_work.html", style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u65BD\u5DE5\u55AE\u67E5\u8A62" })),
+            activeToolId === 'car' && (React.createElement("iframe", { onLoad: onToolFrameLoad, src: CAR_PAGE_URL, style: { flex: 1, border: 'none', width: '100%', height: '100%' }, title: "\u505C\u8ECA\u5834\u8ECA\u4F4D\u6578\u8A08\u7B97" })),
+            /* ③ 內嵌工具還在載入：先蓋一層骨架，iframe 載好（onLoad）才收起 */
+            frameLoading && React.createElement("div", { className: "fx-frame-loading", dangerouslySetInnerHTML: { __html:
+                (typeof window.fxSkeletonCards === 'function') ? window.fxSkeletonCards(4, '工具載入中…') : '<div style="text-align:center;color:#8A95A8;padding-top:40px">工具載入中…</div>' } }))),
         showLeave && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10',
                 display: 'flex', flexDirection: 'column', fontFamily: "'Microsoft JhengHei',sans-serif" } },
             React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
