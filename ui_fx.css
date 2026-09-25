@@ -1,0 +1,57 @@
+/* ══════════════════════════════════════════════════════════════
+   天鷹保全 · 共用 UI 動態效果（2026-09-24 咖哩選定 5 項全套用）
+   搭配 ui_fx.js 使用；各工具在 <head> 引入：
+     <link rel="stylesheet" href="ui_fx.css">
+     <script src="ui_fx.js"></script>
+   原則：
+   ・只動 transform／opacity（手機 GPU 處理，不拖慢畫面）
+   ・不加任何外部套件
+   ・手機設定「減少動態效果」時全部關閉、直接顯示結果（最下方 media query）
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── ③ 主要按鈕：按下漣漪＋光澤掃過（由 ui_fx.js 在按下時動態插入，動畫結束即移除）──
+   外層 .fx-rip-wrap 貼齊按鈕內框並自己裁切，所以不需要改按鈕本身的 overflow */
+.fx-rip-wrap{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
+.fx-rip{position:absolute;border-radius:50%;background:rgba(255,255,255,.38);transform:scale(0);
+  animation:fxRip .6s ease-out forwards}
+.fx-shine{position:absolute;top:0;bottom:0;left:-60%;width:45%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);
+  transform:skewX(-20deg);animation:fxShine .7s ease forwards}
+@keyframes fxRip{to{transform:scale(1);opacity:0}}
+@keyframes fxShine{from{left:-60%}to{left:130%}}
+
+/* ── ④ 讀取中：骨架畫面（ui_fx.js 的 fxSkeletonCards() 產生）── */
+.fx-sk-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+  border-left:3px solid rgba(212,168,0,.3);border-radius:12px;padding:12px;margin-bottom:10px}
+.fx-sk{display:block;border-radius:8px;
+  background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.05) 75%);
+  background-size:200% 100%;animation:fxShimmer 1.2s linear infinite}
+.fx-sk-row{display:flex;gap:10px;margin-top:10px}
+.fx-sk-hint{text-align:center;font-size:.8rem;color:rgba(255,255,255,.45);margin:4px 0 10px}
+@keyframes fxShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+/* 資料到了之後的卡片淡入（給清單容器加 .fx-fadein 即可） */
+.fx-fadein > *{animation:fxRise .35s cubic-bezier(.2,.8,.2,1) backwards}
+.fx-fadein > *:nth-child(2){animation-delay:40ms}
+.fx-fadein > *:nth-child(3){animation-delay:80ms}
+.fx-fadein > *:nth-child(4){animation-delay:120ms}
+.fx-fadein > *:nth-child(5){animation-delay:160ms}
+.fx-fadein > *:nth-child(n+6){animation-delay:200ms}
+
+/* ── ② 依序浮現用的動畫（只寫 from，結束狀態沿用元素原本的樣式，
+      所以不會蓋掉按鈕原本的立體位移／按壓效果）── */
+@keyframes fxRise{from{opacity:0;transform:translateY(12px)}}
+
+/* ── ⑤ 分頁切換：滑動膠囊（ui_fx.js 的 fxMoveSlider() 負責定位）──
+   容器要 position:relative；膠囊在容器內絕對定位，顏色由各工具自己的 CSS 決定 */
+.fx-slider{position:absolute;left:0;top:0;width:0;height:0;border-radius:999px;pointer-events:none;opacity:0}
+.fx-slider.fx-on{opacity:1}
+.fx-slider.fx-anim{transition:transform .3s cubic-bezier(.3,.9,.3,1),width .3s cubic-bezier(.3,.9,.3,1),
+  height .3s ease,background-color .3s ease,border-color .3s ease}
+
+/* 手機設定「減少動態效果」：全部關掉，直接顯示結果（對長輩／容易頭暈的同事友善） */
+@media (prefers-reduced-motion: reduce){
+  .fx-rip,.fx-shine{display:none}
+  .fx-sk{animation:none}
+  .fx-fadein > *{animation:none}
+  .fx-slider.fx-anim{transition:none}
+}
