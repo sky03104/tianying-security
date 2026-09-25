@@ -29,6 +29,10 @@
     var fromApp = sessionStorage.getItem('hsh_tab_session') === '1';
     if ((inFrame || fromApp) && !/[?&]splash=1\b/.test(location.search)) document.documentElement.classList.add('fx-nosplash');
   } catch (e) {}
+  /* 2026-09-25：在主控台內嵌視窗裡，拉到最上面再往下拉時，捲動會「傳」到外面的主控台，
+     變成主控台整頁在彈（iOS 彈跳期間內嵌工具不能捲，感覺就是卡住一下）。
+     內嵌時一律把上下方向的過度捲動關在自己頁面裡。有下拉更新的工具原本就會設，這裡補齊其他工具。 */
+  if (inFrame) { try { document.documentElement.style.overscrollBehaviorY = 'contain'; } catch (e) {} }
 
   /* ── ③ 主要按鈕：哪些按鈕要有漣漪。
      各工具的主要按鈕 class 不一樣，這裡列白名單；其他按鈕要加的話在標籤上寫 data-fx="ripple" 即可 */

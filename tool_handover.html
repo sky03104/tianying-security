@@ -451,7 +451,10 @@ function closeMo(id) {
 }
 
 (function init() {
-  if (checkRole()) loadItems();
+  if (!checkRole()) return;
+  loadItems();
+  // 下拉更新（2026-09-25）：在最上面往下拉就重新讀取交接事項，跟施工單／打烊等工具一致
+  if (window.fxPullToRefresh) window.fxPullToRefresh(function(){ return loadItems(); });
 })();
 </script>
 </body>
