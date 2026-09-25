@@ -629,7 +629,7 @@ async function confirmDel(){
       showToast('✓ 已刪除', 'ok');
       closeModals();
       if (delMode==='shortcut'){ loadShortcuts(); }
-      else { loadDay(); loadTodaySummary(); }
+      else { (window.fxRemoveThen||function(f){f();})(function(){ loadDay(); loadTodaySummary(); }); } // 被刪的那一列先收合淡出再重畫
     }
     else showToast('刪除失敗：'+(r.msg||''), 'err');
   } catch(e){ showToast('連線失敗，請檢查網路', 'err'); }

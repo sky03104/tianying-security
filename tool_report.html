@@ -219,6 +219,7 @@
                     if (result.status === 'ok') {
                         logWorkflow('report', 'submit', '已完成');
                         showToast("✅ 報告與照片已成功存入雲端！", "success");
+                        if (window.fxSuccess) window.fxSuccess(); // 畫面中央綠色打勾
                         setTimeout(() => window.location.href = `index.html?empId=${empId}`, 2000);
                     } else {
                         showToast("❌ 提交失敗：" + (result.msg || '未知錯誤'), "err");

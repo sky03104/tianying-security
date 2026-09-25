@@ -1164,6 +1164,7 @@ async function checkIn(idx, isHot){
       btn.className = 'cbtn-checkin done';
       btn.innerHTML = '<i class="ti ti-circle-check"></i>已報到換證';
       toast('✓ 報到換證完成','ok');
+      if(window.fxSuccess) window.fxSuccess(); // 畫面中央綠色打勾
     } else {
       btn.disabled = false;
       btn.className = 'cbtn-checkin fail';

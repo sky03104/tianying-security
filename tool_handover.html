@@ -440,7 +440,7 @@ async function confirmDelete() {
   if (r.status === 'ok') {
     closeMo('delModal');
     showToast('已刪除', 'ok');
-    loadItems();
+    (window.fxRemoveThen||function(f){f();})(loadItems); // 被刪的那一列先收合淡出再重畫
   } else {
     showToast(r.msg || '刪除失敗', 'err');
   }
