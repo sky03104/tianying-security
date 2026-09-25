@@ -819,7 +819,7 @@
 
                     if (result.status === 'ok') {
                         logWorkflow('feedback', 'submit', '已完成');
-                        setSubmitSuccess(true);
+                        (window.fxSuccess && window.fxSuccess(), setSubmitSuccess(true));
                         setFormData({
                             targetName: '',
                             category: '',

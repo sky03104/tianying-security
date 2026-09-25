@@ -100,7 +100,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '42.23';
+const APP_VERSION = '43.23';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -3443,6 +3443,7 @@ function App() {
                     setRegStep(1);
                     setRegForm({ name: "", id: "", dept: "", role: "fulltime", pw: "", pw2: "" });
                     showToast("✅ 申請已送出，請等待管理員審核");
+                    if (window.fxSuccess) window.fxSuccess();
                 }
                 else {
                     showToast("❌ 送出失敗：" + (d.msg || '請稍後再試'));
@@ -3709,7 +3710,8 @@ function App() {
                         } },
                         tomorrowPost.state === 'ok' ? tomorrowPost.loc
                         : tomorrowPost.state === 'off' ? "\u4F11\u5047"
-                        : tomorrowPost.state === 'loading' ? "\u8B80\u53D6\u4E2D"
+                        /* 讀取中改顯示骨架條（ui_fx.css 的 .fx-sk） */
+                        : tomorrowPost.state === 'loading' ? React.createElement("span", { className: "fx-sk fx-sk-inline", "aria-label": "\u8B80\u53D6\u4E2D" })
                         : "\u5C1A\u672A\u66F4\u65B0"),
                     React.createElement("div", { className: "stat-lbl" },
                         tomorrowPost.state === 'ok' && tomorrowPost.count > 1
@@ -4104,7 +4106,7 @@ function App() {
                         borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                         color: 'var(--gold2)', fontSize: 12, fontFamily: "'Microsoft JhengHei',sans-serif" } },
                     "\uD83D\uDCE2",
-                    unreadAnnCount > 0 && (React.createElement("span", { style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
+                    unreadAnnCount > 0 && (React.createElement("span", { className: "fx-pulse", style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
                             borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex',
                             alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, unreadAnnCount > 9 ? '9+' : unreadAnnCount))),
                 React.createElement("div", { className: "avatar", onClick: () => setTab("profile") }, currentUser === null || currentUser === void 0 ? void 0 : currentUser.name[0]))),
@@ -4370,6 +4372,7 @@ function App() {
                             setLeaveRequests(prev => [req, ...prev]);
                             setLeaveForm({ type: '排休', selectedDates: [], reason: '' });
                             showToast(`✅ 已送出 ${dates.length} 天請假申請，等待主管審核`);
+                            if (window.fxSuccess) window.fxSuccess(); // 畫面中央綠色打勾
                             /* 同步寫入雲端試算表「請假申請」分頁，供組長以上跨裝置審核 */
                             (async () => {
                                 try {

@@ -601,7 +601,7 @@ async function delRadio(id){
   if(!window.confirm('確定刪除「'+r.model+' '+r.sn+'」？\n\n淘汰請改狀態為「報廢」保留紀錄，刪除只用在誤登記。此動作無法復原。')) return;
   try {
     await api('deleteRadio', { id:id });
-    toast('🗑 已刪除','ok'); loadRadios();
+    toast('🗑 已刪除','ok'); (window.fxRemoveThen||function(f){f();})(loadRadios); // 被刪的那一列先收合淡出再重畫
   } catch(err){ toast('✗ 刪除失敗：'+err.message,'err'); }
 }
 

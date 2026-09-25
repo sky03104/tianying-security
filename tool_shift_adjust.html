@@ -492,7 +492,7 @@ async function deleteRecord(id){
     var d = await res.json();
     if(d.status !== 'ok') throw new Error(d.msg || '未知錯誤');
     toast('🗑 已刪除','ok');
-    loadRecords();
+    (window.fxRemoveThen||function(f){f();})(loadRecords); // 被刪的那一列先收合淡出再重畫
   } catch(err){
     toast('✗ 刪除失敗：'+err.message,'err');
   }

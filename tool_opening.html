@@ -1143,7 +1143,7 @@ function resetForm(){
 // QUEUE
 function renderQueue(){ /* 清單功能已移除：保留空函式避免其他呼叫處報錯 */ }
 
-function delQ(id){queue=queue.filter(i=>i.id!==id);save();renderQueue();}
+function delQ(id){queue=queue.filter(i=>i.id!==id);save();(window.fxRemoveThen||function(f){f();})(renderQueue);} // 被刪的那一列先收合淡出再重畫
 function clearQueue(){queue=[];save();renderQueue();document.getElementById('copyArea').style.display='none';showToast('已清空');}
 
 function openEdit(id){
@@ -1611,6 +1611,7 @@ async function sendToSheet(){
     if(d.status==='ok'){
       shops.forEach(s=>{if(s.isNew)delete s.isNew;});save();
       showToast('✅ 已送出 '+d.added+' 筆！','ok');
+      if(window.fxSuccess) window.fxSuccess(); // 畫面中央綠色打勾
       queue=[];save();renderQueue();
       document.getElementById('copyArea').style.display='none';
     }else showToast('失敗：'+d.msg,'err');

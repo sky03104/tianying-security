@@ -67,3 +67,24 @@
 @media (prefers-reduced-motion: reduce){
   @view-transition { navigation: none; }
 }
+
+/* ── C 送出成功打勾（ui_fx.js 的 fxSuccess() 產生）── */
+.fx-success{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:99999;pointer-events:none;
+  animation:fxSucBg 1s ease forwards}
+.fx-success svg{filter:drop-shadow(0 0 18px rgba(74,222,128,.45));animation:fxSucPop 1s cubic-bezier(.2,1.4,.4,1) forwards}
+.fx-success .fx-sc{fill:rgba(10,12,16,.85);stroke:#4ADE80;stroke-width:2.5;stroke-dasharray:145;stroke-dashoffset:145;animation:fxDraw .45s ease-out forwards}
+.fx-success .fx-sk2{fill:none;stroke:#4ADE80;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:fxDraw .3s .35s ease-out forwards}
+@keyframes fxDraw{to{stroke-dashoffset:0}}
+@keyframes fxSucPop{0%{transform:scale(.6);opacity:0}20%{transform:scale(1.05);opacity:1}80%{transform:scale(1);opacity:1}100%{transform:scale(.9);opacity:0}}
+@keyframes fxSucBg{0%,80%{background:rgba(0,0,0,.18)}100%{background:rgba(0,0,0,0)}}
+
+/* ── D 未讀紅點呼吸（給紅點元素加 class="fx-pulse"）── */
+.fx-pulse{animation:fxPulse 1.8s ease-in-out infinite}
+@keyframes fxPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.6)}50%{box-shadow:0 0 0 5px rgba(248,113,113,0)}}
+
+/* ── E 小塊骨架（行內用，例如首頁明日哨點讀取中）── */
+.fx-sk-inline{display:inline-block;width:72px;height:18px;vertical-align:middle}
+
+@media (prefers-reduced-motion: reduce){
+  .fx-pulse{animation:none}
+}
