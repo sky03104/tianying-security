@@ -100,7 +100,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '41.23';
+const APP_VERSION = '42.23';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -475,7 +475,31 @@ const css = `
     border-top:1px solid rgba(212,168,0,.15); display:flex; padding:8px 0 12px; z-index:50; }
   .nav-item { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
     cursor:pointer; padding:4px; transition:color .2s; }
-  .nav-icon { font-size:20px; }
+  .nav-icon { font-size:20px; display:inline-block; transition:transform .15s ease; }
+  /* 底部導覽（2026-09-24）：金色膠囊滑到目前分頁＋頂端一道金光；選中時圖示彈一下；按下時圖示縮一下 */
+  .bottom-nav { overflow:visible; }
+  .nav-item { position:relative; z-index:1; -webkit-tap-highlight-color:transparent; user-select:none; }
+  .nav-item:active .nav-icon { transform:scale(.85); }
+  .nav-item.active .nav-icon { animation:navPop .38s cubic-bezier(.3,1.6,.5,1); }
+  .nav-item.active .nav-label { font-weight:700; }
+  @keyframes navPop { 0%{transform:scale(.8)} 60%{transform:scale(1.18)} 100%{transform:scale(1)} }
+  .nav-ind { position:absolute; top:4px; bottom:8px; left:0; pointer-events:none;
+    transition:transform .32s cubic-bezier(.3,.9,.3,1); }
+  .nav-ind::before { content:''; position:absolute; top:0; bottom:0; left:14%; right:14%; border-radius:14px;
+    background:rgba(212,168,0,.12); border:1px solid rgba(212,168,0,.35); }
+  .nav-ind::after { content:''; position:absolute; top:-5px; left:34%; right:34%; height:3px; border-radius:0 0 3px 3px;
+    background:linear-gradient(90deg,#D4A800,#FFD700); box-shadow:0 0 8px rgba(255,215,0,.6); }
+  /* 首頁／工具／管理／帳號切換：依方向滑入（只寫起點＋backwards，動畫結束不留 transform） */
+  .fx-page { animation:fxPageIn .28s cubic-bezier(.2,.8,.2,1) backwards; }
+  @keyframes fxPageIn { from { opacity:0; transform:translateX(var(--fx-dx, 0px)); } }
+  /* 工具全螢幕視窗：從右滑入、關閉時往右滑出（像手機 App 開新頁） */
+  .fx-tool-sheet { animation:fxSheetIn .3s cubic-bezier(.2,.8,.2,1) backwards; }
+  .fx-tool-sheet.fx-closing { animation:fxSheetOut .2s ease-in forwards; }
+  @keyframes fxSheetIn { from { opacity:0; transform:translateX(36px); } }
+  @keyframes fxSheetOut { to { opacity:0; transform:translateX(36px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .nav-ind { transition:none; } .nav-item.active .nav-icon, .fx-page, .fx-tool-sheet, .fx-tool-sheet.fx-closing { animation:none; }
+  }
   .nav-label { font-size:10px; letter-spacing:.3px; }
   .nav-item.active { color:var(--gold2); }
   .nav-item:not(.active) { color:var(--muted); }
@@ -2441,6 +2465,11 @@ function App() {
     var _a;
     const [page, setPage] = useState("login"); // login | register | home | tools | admin | profile
     const [tab, setTab] = useState("home");
+    /* 分頁切換方向（2026-09-24）：記住上一個分頁，往右邊的分頁切→內容從右滑入，往左→從左滑入 */
+    const prevTabRef = useRef("home");
+    useEffect(() => { prevTabRef.current = tab; }, [tab]);
+    /* 工具全螢幕視窗關閉時先播滑出動畫再真的關掉 */
+    const [toolClosing, setToolClosing] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     /* ── 個人化背景（存本機，換手機需重設）：type=none|navy|goldmist|nebula|stars|aurora|dust|sky|sakura|cloud|petal|custom ── */
     const [bgType, setBgType] = useState(() => {
@@ -4079,18 +4108,32 @@ function App() {
                             borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex',
                             alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, unreadAnnCount > 9 ? '9+' : unreadAnnCount))),
                 React.createElement("div", { className: "avatar", onClick: () => setTab("profile") }, currentUser === null || currentUser === void 0 ? void 0 : currentUser.name[0]))),
+        React.createElement("div", { key: "fx-page-" + tab, className: "fx-page", style: { "--fx-dx": (function () {
+                const ids = NAV.map(n => n.id), cur = ids.indexOf(tab), prev = ids.indexOf(prevTabRef.current);
+                return (cur < 0 || prev < 0 || cur === prev) ? "0px" : (cur > prev ? "28px" : "-28px");
+            })() } },
         tab === "home" && renderHome(),
         tab === "tools" && renderTools(),
         tab === "admin" && CAN_MANAGE_ROLES.includes(currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) && renderAdmin(),
-        tab === "profile" && renderProfile(),
-        React.createElement("div", { className: "bottom-nav" }, NAV.map(n => (React.createElement("div", { key: n.id, className: `nav-item ${tab === n.id ? 'active' : ''}`, onClick: () => n.id === 'admin' ? handleAdminTab() : setTab(n.id) },
+        tab === "profile" && renderProfile()),
+        React.createElement("div", { className: "bottom-nav" },
+            /* 底部導覽滑動膠囊：導覽鈕等寬，直接用「第幾個 × 100%」定位，不用量尺寸 */
+            NAV.findIndex(n => n.id === tab) >= 0 && React.createElement("div", { className: "nav-ind", style: {
+                    width: (100 / NAV.length) + "%", transform: "translateX(" + (NAV.findIndex(n => n.id === tab) * 100) + "%)" } }),
+            NAV.map(n => (React.createElement("div", { key: n.id, className: `nav-item ${tab === n.id ? 'active' : ''}`, onClick: () => n.id === 'admin' ? handleAdminTab() : setTab(n.id) },
             React.createElement("span", { className: "nav-icon" }, n.icon),
             React.createElement("span", { className: "nav-label" }, n.label))))),
-        activeToolId && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10', display: 'flex', flexDirection: 'column' } },
+        activeToolId && (React.createElement("div", { className: "fx-tool-sheet" + (toolClosing ? " fx-closing" : ""), style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10', display: 'flex', flexDirection: 'column' } },
             React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10,
                     padding: '10px 14px', background: 'rgba(10,12,16,.95)',
                     borderBottom: '1px solid rgba(212,168,0,.2)', flexShrink: 0 } },
-                React.createElement("button", { id: 'hsh-tool-back-btn', onClick: () => setActiveToolId(null), style: { background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.12)',
+                React.createElement("button", { id: 'hsh-tool-back-btn', onClick: () => {
+                        /* 先播 0.2 秒滑出再關；手機開「減少動態效果」就直接關 */
+                        if (toolClosing) return;
+                        if (window.fxReduced && window.fxReduced()) { setActiveToolId(null); return; }
+                        setToolClosing(true);
+                        setTimeout(() => { setActiveToolId(null); setToolClosing(false); }, 200);
+                    }, style: { background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.12)',
                         borderRadius: 8, color: '#F5F5F5', padding: '6px 12px', cursor: 'pointer',
                         fontSize: 13, fontFamily: "'Microsoft JhengHei',sans-serif", display: 'flex', alignItems: 'center', gap: 6 } }, "\u2190 \u8FD4\u56DE"),
                 React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: 'var(--gold2)' } },
