@@ -222,6 +222,8 @@ const DEFAULT_TIME = { early: '0800-2000', late: '2000-0800' };
 // 2026-09-27 咖哩新增 C／D／E 三個班別，上班時段都跟一般早班不同，一併覆寫
 // （沒加的話會被當成一般早班印成 0800-2000）。
 const CODE_TIME_OVERRIDE = { 'S': '0800-1600', 'C': '1400-2200', 'D': '1100-2100', 'E': '1500-2300' };
+// 外哨增派（D 班）固定填寫位置：停巡增派（第14列）下面三格，標籤在增派區標籤欄、姓名在其右一欄
+const OUTER_EXTRA_ROWS = [14, 15, 16];
 function timeForPerson(person, shift) {
   return (person && CODE_TIME_OVERRIDE[person.code]) || DEFAULT_TIME[shift];
 }
@@ -260,7 +262,7 @@ function shuffle(arr) {
 
 function buildGuardMatrix(opts) {
   const { year, month, day, weekdayIdx, earlyRoster, lateRoster, postConfig,
-    southGate, patrolExtra, parkExtra, stopPatrolExtra, parkNames,
+    southGate, patrolExtra, parkExtra, stopPatrolExtra, outerExtra, parkNames,
     manualExtraPosts, leaderEarly, leaderLate } = opts;
   const rows = buildBaseRows();
   const warnings = [];
@@ -303,7 +305,16 @@ function buildGuardMatrix(opts) {
   // 改成直接引用 POST_DEFS 的 forcedCodes，時間只有一個地方能改，不會再改漏。
   const HANLAI_CODE_TIME = POST_DEFS.find(d => d.key === '漢來飯店').forcedCodes;
   const earlyHanlai = earlyRoster.filter(p => HANLAI_CODE_TIME[p.code]);
-  const earlyExclude = new Set(earlyTrainees.concat(earlyL, earlyLN, earlyN, earlySouth, earlyHanlai).map(p => p.name));
+  // 2026-09-27 咖哩新增：C/E 班＝停巡增派、D 班＝外哨增派，時段跟著班別走（CODE_TIME_OVERRIDE，單一來源）。
+  // 早晚班名單都找（排在哪一份班表都不會漏），同名只算一次；這些人不進一般崗位隨機池。
+  const 依代號找_ = (codes) => {
+    const seen = new Set();
+    return earlyRoster.concat(lateRoster).filter(p => codes.indexOf(p.code) >= 0 && !seen.has(p.name) && seen.add(p.name));
+  };
+  const extraStopCE = 依代號找_(['C', 'E']);
+  const extraOuterD = 依代號找_(['D']);
+  const extraCodeNames = extraStopCE.concat(extraOuterD).map(p => p.name);
+  const earlyExclude = new Set(earlyTrainees.concat(earlyL, earlyLN, earlyN, earlySouth, earlyHanlai).map(p => p.name).concat(extraCodeNames));
   if (leaderEarly) earlyExclude.add(leaderEarly); // 被排為早班帶班幹部的人，不再進入其他哨點的隨機分配池
   const earlyPoolBase = earlyRoster.filter(p => !earlyExclude.has(p.name));
 
@@ -319,6 +330,12 @@ function buildGuardMatrix(opts) {
   earlyN.forEach(p => {
     if (!stopPatrolExtra) forcedWarnings.push(p.name + ' 是 N 班，但未勾選「停巡增派」，此人尚未被排入本次哨表');
   });
+  extraStopCE.forEach(p => {
+    if (!stopPatrolExtra) forcedWarnings.push(p.name + ' 是 ' + p.code + ' 班（停巡增派），但未勾選「停巡增派」，此人尚未被排入本次哨表');
+  });
+  extraOuterD.forEach(p => {
+    if (!outerExtra) forcedWarnings.push(p.name + ' 是 D 班（外哨增派），但未勾選「外哨增派」，此人尚未被排入本次哨表');
+  });
   earlySouth.forEach(p => {
     if (!southGate) forcedWarnings.push(p.name + ' 是「南」班，代表當天要開南側門哨，但你沒有勾選「南側門」，此人尚未被排入本次哨表');
   });
@@ -326,7 +343,7 @@ function buildGuardMatrix(opts) {
   // ── 拆分晚班：見習 / 海（海底撈專職）/ 一般池 ──
   const lateTrainees = lateRoster.filter(p => (p.code || '').indexOf('見') >= 0);
   const lateSea = lateRoster.filter(p => p.code === '海');
-  const lateExclude = new Set(lateTrainees.concat(lateSea).map(p => p.name));
+  const lateExclude = new Set(lateTrainees.concat(lateSea).map(p => p.name).concat(extraCodeNames));
   if (leaderLate) lateExclude.add(leaderLate); // 被排為晚班帶班幹部的人，不再進入其他哨點的隨機分配池
   const latePoolBase = lateRoster.filter(p => !lateExclude.has(p.name));
 
@@ -460,13 +477,33 @@ function buildGuardMatrix(opts) {
     else warnings.push('找不到 L/LN 班人員，巡檢增派需手動填寫');
   }
 
-  // ── 停巡增派（早班 LN 或 N） ──
+  // ── 停巡增派（早班 LN 或 N，2026-09-27 起加上 C／E 班） ──
+  // 第一位放原本的停巡增派格（第14列）；不只一位時，其餘的人在下方「找空白列」統一補上，
+  // 不再只帶第一位（C/E 班本來就是整班增派，同一天常會有好幾位）。
+  // 時段：LN/N 固定 2000-2400；C/E 用自己班別的時段（1400-2200／1500-2300）。
+  const extraRowsPending = []; // { label, name, time }：等泊車／增派時數註記佔好位子後再找空白列寫入
   if (stopPatrolExtra) {
-    const stopCands = earlyLN.concat(earlyN);
+    const stopCands = earlyLN.concat(earlyN).map(p => ({ name: p.name, time: '2000-2400' }))
+      .concat(extraStopCE.map(p => ({ name: p.name, time: CODE_TIME_OVERRIDE[p.code] })));
     rows[13][4] = '停巡增派';
-    if (stopCands.length > 1) warnings.push('停巡增派候選（LN/N班）不只一位：' + stopCands.map(p => p.name).join('、') + '，僅自動帶入第一位，請確認');
-    if (stopCands.length) rows[13][5] = stopCands[0].name + '\n2000-2400';
-    else warnings.push('找不到 LN/N 班人員，停巡增派需手動填寫');
+    if (stopCands.length) rows[13][5] = stopCands[0].name + '\n' + stopCands[0].time;
+    else warnings.push('找不到 LN/N/C/E 班人員，停巡增派需手動填寫');
+    stopCands.slice(1).forEach(c => extraRowsPending.push({ label: '停巡增派', name: c.name, time: c.time }));
+  }
+  // ── 外哨增派（2026-09-27 新增：D 班，1100-2100） ──
+  // 咖哩指定位置：停巡增派下面三格（第15～17列，D 班一次三位）。第三格原本是「1600-2000為增派時數」
+  // 註記，咖哩決定 D 優先——那格被 D 填走的日子就不寫註記（見下方註記段）。
+  // 超過三位才放增派區其他空白列；不足三位只填有人的格子。
+  if (outerExtra) {
+    const outers = extraOuterD.map(p => ({ label: '外哨增派', name: p.name, time: CODE_TIME_OVERRIDE[p.code] }));
+    if (!outers.length) { outers.push({ label: '外哨增派', name: '', time: '' }); warnings.push('找不到 D 班人員，外哨增派需手動填寫'); }
+    const outerRows = OUTER_EXTRA_ROWS.slice();
+    outers.forEach(o => {
+      const r = outerRows.shift();
+      if (r === undefined) { extraRowsPending.push(o); return; }
+      rows[r][4] = o.label;
+      if (o.name) rows[r][5] = o.name + '\n' + o.time;
+    });
   }
 
   // ── 泊車增派（手動輸入2人，固定 1230-2030） ──
@@ -480,10 +517,26 @@ function buildGuardMatrix(opts) {
 
   // ── 增派時數註記：先佔位，一定要寫在「手動增派哨點」迴圈之前——不然南側門/巡檢/泊車/
   //    停巡任一勾選時，這裡會直接覆蓋掉迴圈剛寫進第16列的哨點姓名（2026-08-04健檢抓到）。
-  if (southGate || patrolExtra || parkExtra || stopPatrolExtra) {
+  // 2026-09-27：第17列被外哨增派（D 班第三位）填走時不寫註記，咖哩決定 D 優先
+  if ((southGate || patrolExtra || parkExtra || stopPatrolExtra) && rows[16][4] === '') {
     rows[16][4] = '←';
     rows[16][5] = '1600-2000為增派時數';
   }
+
+  // ── 多出來的停巡增派／外哨增派：找 11~16 列第一個空白列寫入（跟手動增派哨點同一套規則）──
+  extraRowsPending.forEach(ep => {
+    let r = 11;
+    while (r <= 16 && rows[r][4] !== '') r++;
+    if (r <= 16) {
+      rows[r][4] = ep.label;
+      if (ep.name) rows[r][5] = ep.name + '\n' + ep.time;
+    } else if (ep.name) {
+      // 有名有姓的人排不進去＝此人不在哨表上，跟其他「尚未被排入」一樣用紅色強制警告點名
+      forcedWarnings.push(ep.label + '「' + ep.name + '」：增派區（11~16列）已滿，此人尚未被排入本次哨表，需手動處理');
+    } else {
+      warnings.push(ep.label + '：11~16列已滿，需手動處理');
+    }
+  });
 
   // ── 手動增派哨點（2026-08-04）：見習人員（早/晚班）＋咖哩用「+」自訂的任意哨點，
   //    都是同一套「手動勾選+填姓名」模式，統一用這個迴圈找 11~16 列的空白列寫入，
@@ -589,11 +642,15 @@ function nameCellTime(v, shift) {
   return i >= 0 ? s.slice(i + 1) : DEFAULT_TIME[shift];
 }
 // 找出所有「該放人名」的格子，連同它屬早班還是晚班、時段跟人走還是跟崗位走
+// 固定時段的增派哨位：格子還空著時（沒人可自動帶入），手動挑人填入要用這個時段，不是一般早班 0800-2000
+const SLOT_LABEL_TIME = { '外哨增派': CODE_TIME_OVERRIDE['D'] };
 function buildNameCellPlan(rows) {
   const plan = [];
-  const add = (r, c, shift, perPerson) => plan.push({
-    r: r, c: c, shift: shift, perPerson: !!perPerson, time: nameCellTime(rows[r][c], shift)
-  });
+  const add = (r, c, shift, perPerson) => {
+    const lab = String(rows[r][c - 1] || '').trim();
+    const time = (!rows[r][c] && SLOT_LABEL_TIME[lab]) || nameCellTime(rows[r][c], shift);
+    plan.push({ r: r, c: c, shift: shift, perPerson: !!perPerson, time: time });
+  };
   // 固定崗位：標籤沒寫出來的（例如當天沒勾南側門）代表這個哨位不存在，不給下拉
   POST_DEFS.forEach(def => {
     // 跟崗位走的判斷：forcedCodes(漢來)或有自己固定time(南側門/海底撈)都不是「跟人走」，
@@ -831,6 +888,7 @@ function GenerateTab({ postConfig }) {
   const [patrolExtra, setPatrolExtra] = useState(false);
   const [parkExtra, setParkExtra] = useState(false);
   const [stopPatrolExtra, setStopPatrolExtra] = useState(false);
+  const [outerExtra, setOuterExtra] = useState(false); // 2026-09-27：外哨增派（月班表 D 班）
   const [parkNames, setParkNames] = useState(['', '']);
   // 2026-08-04 新增：見習人員（早/晚班兩種時段），特殊哨點，手動填1人，跟泊車增派同一套「找空白列」機制
   const [traineeExtra, setTraineeExtra] = useState(false);
@@ -1025,7 +1083,7 @@ function GenerateTab({ postConfig }) {
       const { rows, warnings, forcedWarnings } = buildGuardMatrix({
         year: y, month: m, day: d, weekdayIdx,
         earlyRoster: r.data.early || [], lateRoster: r.data.late || [],
-        postConfig, southGate, patrolExtra, parkExtra, stopPatrolExtra,
+        postConfig, southGate, patrolExtra, parkExtra, stopPatrolExtra, outerExtra,
         parkNames, manualExtraPosts, leaderEarly, leaderLate
       });
       const dateLabel = y + '/' + String(m).padStart(2, '0') + '/' + String(d).padStart(2, '0') + ' 星期' + WEEKDAY_ZH[weekdayIdx];
@@ -1099,6 +1157,7 @@ function GenerateTab({ postConfig }) {
         h('label', { className: 'chk-row' }, h('input', { type: 'checkbox', checked: patrolExtra, onChange: e => setPatrolExtra(e.target.checked) }), h('span', null, '巡檢增派')),
         h('label', { className: 'chk-row' }, h('input', { type: 'checkbox', checked: parkExtra, onChange: e => setParkExtra(e.target.checked) }), h('span', null, '泊車增派')),
         h('label', { className: 'chk-row' }, h('input', { type: 'checkbox', checked: stopPatrolExtra, onChange: e => setStopPatrolExtra(e.target.checked) }), h('span', null, '停巡增派')),
+        h('label', { className: 'chk-row' }, h('input', { type: 'checkbox', checked: outerExtra, onChange: e => setOuterExtra(e.target.checked) }), h('span', null, '外哨增派')),
         h('label', { className: 'chk-row' }, h('input', { type: 'checkbox', checked: traineeExtra, onChange: e => setTraineeExtra(e.target.checked) }), h('span', null, '見習人員（早班）')),
         h('label', { className: 'chk-row' }, h('input', { type: 'checkbox', checked: traineeExtraNight, onChange: e => setTraineeExtraNight(e.target.checked) }), h('span', null, '見習人員（晚班）')),
         customPostDefs.map(p => h('label', { className: 'chk-row', key: p.id },
