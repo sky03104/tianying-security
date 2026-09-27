@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>天鷹保全 · 物流區車位管理</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0C10; --surface:#0D0F14; --card:rgba(255,255,255,.03);
+  --border:rgba(255,255,255,.08); --gold:#D4A800; --gold2:#FFD700;
+  --indigo:#818CF8; --indigo2:#6366F1;
+  --success:#4ADE80; --danger:#F87171; --warn:#FB923C; --info:#38BDF8;
+  --text:#F5F5F5; --muted:#8A95A8;
+  --px-shadow:3px 3px 0 rgba(0,0,0,.55);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;min-height:100vh;}
+.wrap{max-width:980px;margin:0 auto;padding:14px 13px 100px;}
+
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.back{background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:11px 14px;border-radius:10px;text-decoration:none;display:flex;align-items:center;gap:5px;
+  font-size:14px;min-height:44px;}
+.hd-t{flex:1;text-align:center;}
+.hd-t .t1{color:var(--gold);font-size:18px;font-weight:700;letter-spacing:1px;}
+.hd-t .t2{color:var(--muted);font-size:10.5px;letter-spacing:2px;margin-top:2px;}
+.ico-btn{background:var(--card);border:1px solid var(--border);color:var(--text);
+  border-radius:10px;min-width:46px;min-height:44px;font-size:19px;cursor:pointer;font-family:inherit;}
+
+/* ── 統計小卡（像素風：直角、粗框、硬陰影）：點一下＝篩選 ── */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:12px;}
+.st{background:#12151C;border:2px solid #232A38;border-radius:4px;box-shadow:var(--px-shadow);
+  padding:10px 4px 8px;text-align:center;cursor:pointer;min-height:66px;transition:border-color .15s,transform .06s;}
+.st:active{transform:translate(2px,2px);box-shadow:1px 1px 0 rgba(0,0,0,.55);}
+.st.on{border-color:var(--gold);background:rgba(212,168,0,.1);}
+.st .v{font-size:21px;font-weight:900;line-height:1.15;font-variant-numeric:tabular-nums;}
+.st .k{font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap;}
+.st.s-all .v{color:var(--gold2);} .st.s-use .v{color:var(--warn);} .st.s-empty .v{color:var(--success);}
+.st.s-resv .v{color:var(--info);} .st.s-ctl .v{color:var(--danger);}
+@media (max-width:420px){ .stats{grid-template-columns:repeat(5,1fr);gap:5px;} .st .v{font-size:18px;} .st .k{font-size:10px;} }
+
+.bar{display:flex;gap:8px;margin-bottom:12px;}
+input[type=text],input[type=date],textarea{
+  background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text);
+  padding:11px 12px;border-radius:9px;font-size:16px;font-family:inherit;min-height:46px;width:100%;}
+input[type=date]{color-scheme:dark;}
+input:focus,textarea:focus{outline:none;border-color:var(--gold);}
+.bar .q{flex:1;}
+
+/* ── 車格卡片 ── */
+.list{display:grid;grid-template-columns:1fr;gap:10px;}
+@media (min-width:760px){ .list{grid-template-columns:1fr 1fr;} }
+.slot{display:flex;gap:12px;align-items:stretch;background:#12151C;border:2px solid #232A38;border-radius:6px;
+  box-shadow:var(--px-shadow);padding:10px;cursor:pointer;text-align:left;color:inherit;font-family:inherit;width:100%;
+  transition:border-color .15s,transform .06s;}
+.slot:active{transform:translate(2px,2px);box-shadow:1px 1px 0 rgba(0,0,0,.55);}
+.slot.use{border-color:rgba(251,146,60,.45);} .slot.ctl{border-color:rgba(248,113,113,.5);}
+.slot .pic{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:5px;}
+.slot .no{font-size:17px;font-weight:900;letter-spacing:.5px;color:var(--gold2);}
+.slot .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+.row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.sz{font-size:11px;font-weight:700;color:var(--muted);border:1px solid #2A3242;border-radius:3px;padding:1px 6px;}
+.kv{display:grid;grid-template-columns:62px 1fr;gap:2px 8px;font-size:12.5px;line-height:1.5;}
+.kv .k{color:var(--muted);} .kv .v{word-break:break-all;}
+.resv{margin-top:3px;border-top:1px dashed #2A3242;padding-top:5px;}
+.resv .h{font-size:11.5px;color:var(--info);font-weight:700;margin-bottom:2px;}
+.resv .it{font-size:12px;line-height:1.5;color:#CBD5E1;word-break:break-all;}
+.resv .it b{color:var(--text);}
+.idle{font-size:12.5px;color:var(--muted);}
+
+/* 燈號標籤：像素方塊燈 */
+.lamp{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:900;padding:3px 9px 3px 7px;
+  border-radius:3px;white-space:nowrap;}
+.lamp i{width:10px;height:10px;display:inline-block;box-shadow:0 0 0 2px rgba(0,0,0,.4);}
+.lamp.g{background:rgba(74,222,128,.13);color:var(--success);} .lamp.g i{background:var(--success);animation:pxBlink 2.4s steps(1,end) infinite;}
+.lamp.o{background:rgba(251,146,60,.15);color:var(--warn);}     .lamp.o i{background:var(--warn);}
+.lamp.r{background:rgba(248,113,113,.15);color:var(--danger);}  .lamp.r i{background:var(--danger);animation:pxBlink .8s steps(1,end) infinite;}
+.chip-resv{font-size:11px;font-weight:700;color:var(--info);background:rgba(56,189,248,.12);border-radius:3px;padding:2px 6px;}
+@keyframes pxBlink{0%,60%{opacity:1}61%,100%{opacity:.25}}
+
+/* ── 像素車格圖（SVG，1 單位＝1 像素點）── */
+svg.px{display:block;image-rendering:pixelated;shape-rendering:crispEdges;border-radius:3px;}
+svg.px .tk-body{animation:tkBob .6s steps(1,end) infinite;}
+svg.px .tk-wa{animation:tkWa .36s steps(1,end) infinite;}
+svg.px .tk-wb{animation:tkWb .36s steps(1,end) infinite;}
+svg.px .tk-ex .p1{animation:tkPuff 1.2s steps(1,end) infinite;}
+svg.px .tk-ex .p2{animation:tkPuff 1.2s steps(1,end) infinite .6s;}
+@keyframes tkBob{0%,49%{transform:translateY(0)}50%,100%{transform:translateY(-.5px)}}
+@keyframes tkWa{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes tkWb{0%,49%{opacity:0}50%,100%{opacity:1}}
+@keyframes tkPuff{0%{opacity:0;transform:translateX(0)}25%{opacity:1;transform:translateX(0)}60%{opacity:.6;transform:translateX(-1px)}85%,100%{opacity:0;transform:translateX(-2px)}}
+@media (prefers-reduced-motion: reduce){
+  svg.px *{animation:none !important;} svg.px .tk-wb{opacity:0;} .lamp i{animation:none !important;}
+}
+
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:40;
+  background:linear-gradient(135deg,#D4A800,#FFD700);color:#0A0C10;border:none;
+  padding:15px 26px;border-radius:30px;font-size:16px;font-weight:900;font-family:inherit;
+  cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.5);display:flex;align-items:center;gap:7px;}
+
+/* ── 底部視窗 ── */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:60;display:flex;align-items:flex-end;justify-content:center;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:18px 18px 0 0;
+  width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:16px 16px 26px;}
+.modal h3{margin:0 0 14px;font-size:17px;color:var(--gold2);display:flex;align-items:center;gap:8px;}
+.dhero{display:flex;gap:12px;align-items:center;margin-bottom:12px;}
+.sec{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+.sec-h{font-size:13.5px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.bk{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:9px;padding:10px 11px;margin-bottom:8px;}
+.bk.now{border-color:rgba(251,146,60,.45);}
+.bk .t{font-size:14.5px;font-weight:700;} .bk .d{font-size:12.5px;color:#CBD5E1;line-height:1.6;margin-top:2px;}
+.bk .ops{display:flex;gap:8px;margin-top:8px;}
+.act{border:1px solid var(--border);background:var(--card);color:var(--text);
+  border-radius:9px;padding:10px 13px;font-size:13.5px;font-family:inherit;cursor:pointer;min-height:44px;
+  display:inline-flex;align-items:center;gap:5px;}
+.act-gold{border-color:rgba(212,168,0,.35);background:rgba(212,168,0,.14);color:var(--gold2);}
+.act-red{border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.1);color:var(--danger);}
+.acts{display:flex;gap:8px;flex-wrap:wrap;}
+.fld{margin-bottom:12px;}
+.fld label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px;}
+.fld label b{color:var(--danger);}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:-2px 0 8px;min-height:40px;cursor:pointer;}
+.chk input{width:20px;height:20px;accent-color:#D4A800;}
+input[type=date]:disabled{opacity:.4;}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.seg{display:flex;gap:8px;}
+.seg button{flex:1;min-height:48px;border-radius:9px;border:1px solid var(--border);background:var(--card);
+  color:var(--text);font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
+.seg button.on{border-color:var(--gold);background:rgba(212,168,0,.14);color:var(--gold2);}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:4px;}
+.btns{display:flex;gap:9px;margin-top:16px;}
+.btn{flex:1;border:none;border-radius:10px;padding:14px;font-size:15.5px;font-weight:700;
+  font-family:inherit;cursor:pointer;min-height:50px;}
+.btn-pri{background:linear-gradient(135deg,#D4A800,#FFD700);color:#0A0C10;}
+.btn-gh{background:var(--card);border:1px solid var(--border);color:var(--text);flex:0 0 96px;}
+.btn:disabled{opacity:.45;}
+.log{font-size:12px;color:var(--muted);line-height:1.6;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.log b{color:var(--text);}
+.empty{color:var(--muted);font-size:13.5px;text-align:center;padding:34px 12px;line-height:1.8;grid-column:1/-1;}
+.errbox{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);color:var(--danger);
+  border-radius:12px;padding:18px;text-align:center;font-size:14px;line-height:1.7;}
+.errbox i{font-size:30px;display:block;margin-bottom:8px;}
+#twrap{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:80;display:flex;
+  flex-direction:column;gap:8px;align-items:center;}
+.toast{padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;max-width:90vw;text-align:center;}
+.t-ok{background:#22C55E;color:#fff;} .t-err{background:#E53E3E;color:#fff;} .t-inf{background:#334155;color:#fff;}
+#splash{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;
+  z-index:90;transition:opacity .4s;} #splash.out{opacity:0;pointer-events:none;}
+</style>
+<!-- 共用 UI 動態效果：骨架畫面、下拉更新、成功打勾、漏填標紅、刪除收合、數字跳動、視窗動畫，見 ui_fx.css／ui_fx.js -->
+<link rel="stylesheet" href="ui_fx.css">
+<script src="ui_fx.js"></script>
+</head>
+<body>
+<div id="splash"><div style="color:var(--gold);font-size:16px;font-weight:700;letter-spacing:2px">天鷹保全</div></div>
+<div class="wrap" id="app" style="display:none">
+  <div class="hd">
+    <a class="back" id="backBtn" href="index.html"><i class="ti ti-arrow-left"></i>返回</a>
+    <div class="hd-t"><div class="t1">物流區車位管理</div><div class="t2">TIANYING SECURITY</div></div>
+    <button class="ico-btn" onclick="loadAll()" title="重新讀取"><i class="ti ti-refresh"></i></button>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="bar">
+    <input class="q" id="q" type="text" placeholder="🔍 車位編號／借用單位／用途…" oninput="render()">
+  </div>
+  <div class="list" id="list"></div>
+</div>
+<button class="fab" id="fab" style="display:none" onclick="openSlotForm()"><i class="ti ti-plus"></i>新增車格</button>
+<div id="modal"></div>
+<div id="twrap"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   天鷹保全 · 物流區車位管理（2026-09-27）
+   ────────────────────────────────────────────────────────────────────
+   一個車格一張卡片：左邊像素風車格圖（借用中才有貨車停進去），右邊燈號與借用資訊。
+   車位狀態「不存」，每次都用日期算（見 車位狀態）：
+     管制中（手動設定，優先）→ 🔴
+     今天落在某筆登記的期間內 → 🟠 借用中
+     其餘 → 🟢 空車位（有未來的登記＝已預借）
+   存狀態的話就得有人每天去改，忘了改就會出現「期間早過了還顯示借用中」。
+
+   權限：使用與編輯＝正職以上（不含兼職）；刪除車格＝組長以上。三層把關——
+   index.html DEFAULT_PERMS → 本頁 checkPermission() → GAS 每個 action 驗 token+角色
+   （前兩層在瀏覽器裡改得掉，後端那層才是真的）。
+   ════════════════════════════════════════════════════════════════════ */
+
+var PARKING_GAS_URL = '請填入部署網址';  // ← 部署後填入（見 物流區車位管理_GAS_部署說明.md）
+var STAFF_PLUS_ROLES = ['fulltime', 'leader', 'vicecaptain', 'captain', 'executive', 'admin'];
+var LEADER_PLUS_ROLES = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
+var SIZES = ['大', '中', '小'];
+
+/* ════════════════════════════════════════════════════════════════
+   核心邏輯（純函式，可用 node 直接測，不依賴畫面）
+   ════════════════════════════════════════════════════════════════ */
+
+/* 車位編號正規化後才比對（去空白＋轉大寫）。
+   ⚠️ 規則必須跟 GAS 的 normNo_ 一模一樣，否則前端說沒重複、後端卻擋下來。 */
+function 正規化編號(s) { return String(s == null ? '' : s).replace(/\s+/g, '').toUpperCase(); }
+
+/* 'yyyy-MM-dd' → '115年09月27日'（格式不對就原樣回傳，不要顯示 NaN） */
+function 民國日期(s) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return String(s || '');
+  return (Number(m[1]) - 1911) + '年' + m[2] + '月' + m[3] + '日';
+}
+/* 期間顯示。結束日空白＝長期使用（開始日有填就寫「起」，沒填就只寫長期使用） */
+function 民國期間(a, b) {
+  if (!b) return a ? 民國日期(a) + ' 起，長期使用' : '長期使用';
+  return 民國日期(a) + ' 到 ' + 民國日期(b);
+}
+
+function 是日期(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))) return false;
+  var p = s.split('-').map(Number);
+  var d = new Date(p[0], p[1] - 1, p[2]);
+  return d.getFullYear() === p[0] && d.getMonth() === p[1] - 1 && d.getDate() === p[2];
+}
+
+/* 某個車格現在的狀態。today＝'yyyy-MM-dd'（用伺服器給的台北日期，避免手機時間設錯算歪）。
+   回傳 { key:'ctl'|'use'|'resv'|'empty', current, future[], past[] }
+   ・結束日當天仍算借用中（含頭含尾）
+   ・預借依開始日排序；歷史依結束日新到舊 */
+function 車位狀態(slot, bookings, today) {
+  var mine = (bookings || []).filter(function (b) { return b.slotId === slot.id; });
+  var current = null, future = [], past = [];
+  mine.forEach(function (b) {
+    // 結束日空白＝長期使用（到永遠）；開始日空白＝不知道哪天開始（當作早就開始）
+    if (b.start && b.start > today) future.push(b);
+    else if (b.end && b.end < today) past.push(b);
+    else if (!current) current = b;
+  });
+  future.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
+  past.sort(function (a, b) { return a.end > b.end ? -1 : a.end < b.end ? 1 : 0; });
+  var key = slot.control ? 'ctl' : current ? 'use' : future.length ? 'resv' : 'empty';
+  return { key: key, current: current, future: future, past: past };
+}
+
+/* 小卡統計（咖哩決定「分開算」）：總數＝使用中＋空車位＋已預借＋管制中
+   空車位＝現在沒人用、也沒有未來登記；已預借＝現在空著但有未來登記 */
+function 統計(slots, bookings, today) {
+  var o = { 總: slots.length, use: 0, empty: 0, resv: 0, ctl: 0 };
+  slots.forEach(function (s) { o[車位狀態(s, bookings, today).key]++; });
+  return o;
+}
+
+/* 篩選：狀態（''＝全部）＋關鍵字（車位編號、目前與未來登記的單位／用途） */
+function 篩選(slots, bookings, today, opt) {
+  var st = (opt && opt.status) || '';
+  var q = String((opt && opt.q) || '').trim();
+  var qn = 正規化編號(q);
+  return slots.filter(function (s) {
+    var S = 車位狀態(s, bookings, today);
+    if (st && S.key !== st) return false;
+    if (!q) return true;
+    if (正規化編號(s.no).indexOf(qn) >= 0) return true;
+    var bs = (S.current ? [S.current] : []).concat(S.future);
+    return bs.some(function (b) { return String(b.unit).indexOf(q) >= 0 || String(b.purpose).indexOf(q) >= 0; })
+      || String(s.controlReason || '').indexOf(q) >= 0 || String(s.note || '').indexOf(q) >= 0;
+  });
+}
+
+/* 排序：先分區（大車格 → 小車格 → B2F → 其他），同區再依編號自然排序（小7 排在 小10 前面） */
+function 分區序(no) {
+  var n = 正規化編號(no);
+  if (n.charAt(0) === '大') return 0;
+  if (n.charAt(0) === '小') return 1;
+  if (n.indexOf('B2F') === 0) return 2;
+  return 3;
+}
+function 排序(slots) {
+  return slots.slice().sort(function (a, b) {
+    var d = 分區序(a.no) - 分區序(b.no);
+    if (d) return d;
+    return String(a.no).localeCompare(String(b.no), 'zh-Hant', { numeric: true, sensitivity: 'base' });
+  });
+}
+
+/* 檢查一筆登記，回傳 { msg, field }（沒問題 msg 為 ''）。
+   ⚠️ 規則跟 GAS 的 checkBooking_ 一樣：單位、用途必填；日期要真的存在；結束≥開始；
+   結束日空白必須是勾了「長期使用」；同車位期間不可重疊（含頭含尾，長期使用視為到永遠）。
+   others＝同車位其他登記（編輯時要排除自己）。 */
+function 期間重疊(a, b) {
+  var as = a.start || '0000-00-00', ae = a.end || '9999-12-31';
+  var bs = b.start || '0000-00-00', be = b.end || '9999-12-31';
+  return as <= be && bs <= ae;
+}
+function 檢查登記(b, others) {
+  if (!String(b.unit || '').trim()) return { msg: '請填寫借用單位', field: 'unit' };
+  if (!String(b.purpose || '').trim()) return { msg: '請填寫借用用途', field: 'purpose' };
+  if (b.regDate && !是日期(b.regDate)) return { msg: '登記日期格式不正確', field: 'regDate' };
+  if (b.longTerm) {
+    if (b.start && !是日期(b.start)) return { msg: '開始日格式不正確', field: 'start' };
+  } else {
+    if (!是日期(b.start)) return { msg: '請選擇開始日', field: 'start' };
+    if (!是日期(b.end)) return { msg: '請選擇結束日，或勾選「長期使用」', field: 'end' };
+    if (b.end < b.start) return { msg: '結束日不能早於開始日', field: 'end' };
+  }
+  var me = { start: b.start, end: b.longTerm ? '' : b.end };
+  for (var i = 0; i < (others || []).length; i++) {
+    var o = others[i];
+    if (期間重疊(me, o)) {
+      return { msg: '這段期間跟「' + o.unit + '」（' + 民國期間(o.start, o.end) + '）重疊，同一個車位同時只能借給一個單位', field: 'start' };
+    }
+  }
+  return { msg: '', field: '' };
+}
+
+/* ── 像素車格圖 ─────────────────────────────────────────────
+   照娃娃機專案（sky03104/wei）machineSvg 的作法：字元地圖展開成 SVG rect、
+   相鄰同色合併、crispEdges。場景 36×18 點，地面線在第 16 列。
+   色鍵：. 透明 K 外框 B 車頭(依尺寸配色) L 車頭亮部 W 車窗 G 貨箱 g 貨箱暗部
+         O 貨箱金色飾條 S 底盤 R 尾燈 Y 車燈 ／ 輪子：D 輪胎 H 輪轂
+   車身地圖不含輪子，最後一列是底盤；輪子（4×3）另外畫、上緣跟底盤重疊，
+   兩個畫格交替＝輪子在轉。 */
+var PX_W = 36, PX_H = 18, PX_GROUND = 16;
+var PX_BAY = { '小': 24, '中': 30, '大': 36 };          // 車格寬度（依尺寸）
+var PX_COLOR = { '小': '#818CF8', '中': '#38BDF8', '大': '#FB923C' };
+var PX_LETTER = { '小': 'S', '中': 'M', '大': 'L' };
+var PX_TRUCK = {
+  '小': { wheels: [3, 12], body: [ // 廂型貨車
+    '..KKKKKKKKKKKK....',
+    '.KGGGGGGGGGGGGKK..',
+    '.KGGGGGGGGGGGGKWK.',
+    '.KGOOOOOOOOOOGKWWK',
+    '.KGGGGGGGGGGGGKWWK',
+    '.KBBBBBBBBBBBBBBBK',
+    '.KLLLLLLLLLLLLLLYK',
+    '.RBBBBBBBBBBBBBBBK',
+    '.KSSSSSSSSSSSSSSSK'] },
+  '中': { wheels: [3, 18], body: [ // 箱型貨車
+    '.KKKKKKKKKKKKKKKK.......',
+    '.KGGGGGGGGGGGGGGK.......',
+    '.KGGGGGGGGGGGGGGKKKKKK..',
+    '.KGOOOOOOOOOOOOGKBBBBKK.',
+    '.KGGGGGGGGGGGGGGKBWWWWK.',
+    '.KGGGGGGGGGGGGGGKBWWWWWK',
+    '.KggggggggggggggKBWWWWWK',
+    '.KKKKKKKKKKKKKKKKBBBBBBK',
+    '..KSSSSSSSSSSSSSKLLLLLYK',
+    '.RKKKKKKKKKKKKKKKBBBBBBK',
+    '..KSSSSSSSSSSSSSSSSSSSSK'] },
+  '大': { wheels: [3, 8, 24], body: [ // 大貨車（後輪雙軸）
+    '.KKKKKKKKKKKKKKKKKKKKKK........',
+    '.KGGGGGGGGGGGGGGGGGGGGK........',
+    '.KGGGGGGGGGGGGGGGGGGGGK........',
+    '.KGOOOOOOOOOOOOOOOOOOGKKKKKKK..',
+    '.KGGGGGGGGGGGGGGGGGGGGKBBBBBKK.',
+    '.KGGGGGGGGGGGGGGGGGGGGKBWWWWWK.',
+    '.KGGGGGGGGGGGGGGGGGGGGKBWWWWWWK',
+    '.KggggggggggggggggggggKBWWWWWWK',
+    '.KKKKKKKKKKKKKKKKKKKKKKBBBBBBBK',
+    '..KSSSSSSSSSSSSSSSSSSKKLLLLLLYK',
+    '.RKKKKKKKKKKKKKKKKKKKKKBBBBBBBK',
+    '..KSSSSSSSSSSSSSSSSSSSSSSSSSSSK'] }
+};
+var PX_WHEEL_A = ['.DD.', 'DHHD', '.DD.'];
+var PX_WHEEL_B = ['.HD.', 'DDDD', '.DH.'];
+var PX_GLYPH = { // 3×5 像素字
+  P: ['111', '101', '111', '100', '100'], S: ['111', '100', '111', '001', '111'],
+  M: ['101', '111', '111', '101', '101'], L: ['100', '100', '100', '100', '111']
+};
+
+function 調亮(hex, a) {
+  var n = parseInt(String(hex).slice(1), 16);
+  if (isNaN(n)) return '#FFFFFF';
+  return '#' + [16, 8, 0].map(function (s) {
+    var c = (n >> s) & 255; return ('0' + Math.round(c + (255 - c) * a).toString(16)).slice(-2);
+  }).join('');
+}
+function 像素方塊(map, ox, oy, pal) {
+  var s = '';
+  for (var y = 0; y < map.length; y++) {
+    var row = map[y], x = 0;
+    while (x < row.length) {
+      var ch = row[x], run = 1;
+      while (x + run < row.length && row[x + run] === ch) run++;
+      if (ch !== '.') s += '<rect x="' + (ox + x) + '" y="' + (oy + y) + '" width="' + run + '" height="1" fill="' + (pal[ch] || '#000') + '"/>';
+      x += run;
+    }
+  }
+  return s;
+}
+function 像素字(ch, ox, oy, col) {
+  var s = '';
+  PX_GLYPH[ch].forEach(function (r, y) {
+    for (var x = 0; x < r.length; x++) if (r[x] === '1') s += '<rect x="' + (ox + x) + '" y="' + (oy + y) + '" width="1" height="1" fill="' + col + '"/>';
+  });
+  return s;
+}
+/* 產生車格 SVG 字串。size＝'大'|'中'|'小'；key＝車位狀態的 key；h＝顯示高度(px) */
+function 車格圖(size, key, h) {
+  if (!PX_TRUCK[size]) size = '中';
+  var bw = PX_BAY[size], bx = Math.floor((PX_W - bw) / 2), G = PX_GROUND;
+  var s = '<svg class="px" viewBox="0 0 ' + PX_W + ' ' + PX_H + '" width="' + Math.round(h * PX_W / PX_H) + '" height="' + h +
+    '" shape-rendering="crispEdges" role="img" aria-label="' + size + '型車格">';
+  s += '<rect width="' + PX_W + '" height="' + PX_H + '" fill="#161A23"/>' +
+       '<rect y="' + G + '" width="' + PX_W + '" height="2" fill="#1F2531"/>';
+  // 車格白線：地面線＋左右擋線
+  s += '<rect x="' + bx + '" y="' + G + '" width="' + bw + '" height="1" fill="#E8ECF5"/>' +
+       '<rect x="' + bx + '" y="' + (G - 3) + '" width="1" height="3" fill="#E8ECF5"/>' +
+       '<rect x="' + (bx + bw - 1) + '" y="' + (G - 3) + '" width="1" height="3" fill="#E8ECF5"/>';
+  if (key === 'use') {
+    var t = PX_TRUCK[size], c = PX_COLOR[size];
+    var pal = { K: '#05070A', B: c, L: 調亮(c, .4), W: '#BFE3FF', G: '#E8ECF5', g: '#B8C0D0', O: '#D4A800',
+                D: '#3A4150', H: '#D6DCE8', Y: '#FFD34D', R: '#F87171', S: '#566074' };
+    var tw = t.body[0].length, ox = Math.floor((PX_W - tw) / 2), wy = G - 3, oy = wy - t.body.length + 1;
+    s += '<g class="tk-body">' + 像素方塊(t.body, ox, oy, pal) + '</g>';
+    s += '<g class="tk-wa">' + t.wheels.map(function (x) { return 像素方塊(PX_WHEEL_A, ox + x, wy, pal); }).join('') + '</g>';
+    s += '<g class="tk-wb">' + t.wheels.map(function (x) { return 像素方塊(PX_WHEEL_B, ox + x, wy, pal); }).join('') + '</g>';
+    s += '<g class="tk-ex"><rect class="p1" x="' + (ox - 1) + '" y="' + (G - 4) + '" width="1" height="1" fill="#6B7488"/>' +
+         '<rect class="p2" x="' + (ox - 3) + '" y="' + (G - 5) + '" width="2" height="1" fill="#4A5163"/></g>';
+  } else {
+    // 空車格：地上畫 P＋尺寸字母（S/M/L）
+    var col = key === 'resv' ? '#2C5A73' : '#3B4356';
+    s += 像素字('P', Math.floor(PX_W / 2) - 4, 3, col) + 像素字(PX_LETTER[size], Math.floor(PX_W / 2) + 1, 3, col);
+  }
+  if (key === 'ctl') { // 紅白路障
+    var y = G - 5;
+    s += '<rect x="' + (bx + 1) + '" y="' + y + '" width="1" height="5" fill="#8B96AD"/>' +
+         '<rect x="' + (bx + bw - 2) + '" y="' + y + '" width="1" height="5" fill="#8B96AD"/>';
+    for (var x = bx + 1; x < bx + bw - 1; x++) {
+      s += '<rect x="' + x + '" y="' + y + '" width="1" height="2" fill="' + (Math.floor((x - bx) / 2) % 2 ? '#FFFFFF' : '#F87171') + '"/>';
+    }
+  }
+  return s + '</svg>';
+}
+
+try { if (typeof module !== 'undefined') Object.assign(module.exports, {
+  正規化編號: 正規化編號, 民國日期: 民國日期, 民國期間: 民國期間, 是日期: 是日期,
+  車位狀態: 車位狀態, 統計: 統計, 篩選: 篩選, 排序: 排序, 檢查登記: 檢查登記, 期間重疊: 期間重疊, 車格圖: 車格圖,
+  PX_TRUCK: PX_TRUCK, PX_WHEEL_A: PX_WHEEL_A, PX_WHEEL_B: PX_WHEEL_B
+}); } catch (e) {}
+</script>
+<script>
+/* ════════════════════════════════════════════════════════════════
+   以下為畫面與通訊
+   ════════════════════════════════════════════════════════════════ */
+if (typeof document !== 'undefined') {
+
+var S = { slots: [], bookings: [], today: '', status: '', loaded: false, logs: {} };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(m){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+function getSessionUser(){
+  try { return JSON.parse(localStorage.getItem('hsh_session_user') || 'null'); } catch(e){ return null; }
+}
+function getAuthToken(){
+  try { return localStorage.getItem('hsh_auth_token') || ''; } catch(e){ return ''; }
+}
+function 可刪車格(){ var u = getSessionUser(); return !!(u && LEADER_PLUS_ROLES.indexOf(u.role) >= 0); }
+function 本機今天(){
+  var d = new Date();
+  return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+}
+function 今天(){ return S.today || 本機今天(); }
+function toast(msg, type){
+  var d = document.createElement('div');
+  d.className = 'toast ' + (type==='ok'?'t-ok':type==='err'?'t-err':'t-inf');
+  d.textContent = msg;
+  $('twrap').appendChild(d);
+  setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); }, 3200);
+}
+function hideSplash(){ var s=$('splash'); if(s){ s.classList.add('out'); setTimeout(function(){ s.remove(); },450); } }
+function showNoPerm(msg){
+  hideSplash();
+  var backHref = ($('backBtn') && $('backBtn').getAttribute('href')) || 'index.html';
+  document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;flex-direction:column;'+
+    'align-items:center;justify-content:center;gap:16px;padding:20px;background:#0A0C10">'+
+    '<div class="errbox" style="max-width:360px"><i class="ti ti-lock"></i><div>'+esc(msg)+'</div></div>'+
+    '<a class="back" href="'+esc(backHref)+'"><i class="ti ti-arrow-left"></i>返回主選單</a></div>';
+}
+function checkPermission(){
+  var u = getSessionUser();
+  if(!u || !u.empId){ showNoPerm('請從天鷹保全 App 登入後開啟本工具'); return false; }
+  if(!getAuthToken()){ showNoPerm('登入已失效，請重新從天鷹保全 App 登入'); return false; }
+  if(STAFF_PLUS_ROLES.indexOf(u.role) === -1){ showNoPerm('此工具僅限正職以上使用，如有需要請洽主管'); return false; }
+  return true;
+}
+
+/* ── 通訊 ── */
+async function api(action, data){
+  var body = new URLSearchParams();
+  body.append('action', action);
+  body.append('token', getAuthToken());
+  body.append('data', JSON.stringify(data || {}));
+  var res = await fetch(PARKING_GAS_URL, { method:'POST', body:body });
+  var d = await res.json();
+  if(d.status !== 'ok'){ var e = new Error(d.msg || '未知錯誤'); e.code = d.code; throw e; }
+  return d;
+}
+/* GAS 冷啟動可能很慢，但超過 25 秒還沒回應就當失敗、給「重新讀取」鈕，不讓畫面一直空白 */
+function fetchJson_(url){
+  var ctl = window.AbortController ? new AbortController() : null;
+  var t = ctl ? setTimeout(function(){ ctl.abort(); }, 25000) : 0;
+  return fetch(url, ctl ? { signal: ctl.signal } : {})
+    .then(function(r){ return r.json(); })
+    .catch(function(e){ throw (e && e.name === 'AbortError') ? new Error('伺服器回應逾時，請稍後再試') : e; })
+    .finally(function(){ clearTimeout(t); });
+}
+function 讀取失敗_(msg){
+  $('list').innerHTML = '<div style="grid-column:1/-1"><div class="errbox"><i class="ti ti-alert-triangle"></i><div>載入失敗：'+esc(msg)+'</div></div>'+
+    '<div style="display:flex;justify-content:center;margin-top:12px">'+
+    '<button class="btn btn-pri" onclick="loadAll()" style="flex:0 0 auto;padding:12px 22px">'+
+    '<i class="ti ti-refresh"></i> 重新讀取</button></div></div>';
+}
+async function loadAll(){
+  // 第一次讀取先放骨架，不然清單空白看起來像卡住；之後的重新整理保留舊畫面
+  if(!S.loaded) $('list').innerHTML = '<div style="grid-column:1/-1">' +
+    (window.fxSkeletonCards ? fxSkeletonCards(4, '讀取車位中…') : '讀取車位中…') + '</div>';
+  try {
+    var d = await fetchJson_(PARKING_GAS_URL + '?action=getAll&token=' + encodeURIComponent(getAuthToken()));
+    if(d.status !== 'ok') throw new Error(d.msg || '讀取失敗');
+    S.slots = d.slots || []; S.bookings = d.bookings || []; S.today = d.today || 本機今天();
+    var first = !S.loaded; S.loaded = true; S.logs = {};
+    render(first);
+  } catch(err){
+    if(!S.loaded) 讀取失敗_(err.message); else toast('✗ 重新讀取失敗：' + err.message, 'err');
+  }
+}
+
+/* ── 畫面 ── */
+var STAT_DEF = [
+  { key:'',      cls:'s-all',   label:'總車位',   field:'總' },
+  { key:'use',   cls:'s-use',   label:'使用中',   field:'use' },
+  { key:'empty', cls:'s-empty', label:'空車位',   field:'empty' },
+  { key:'resv',  cls:'s-resv',  label:'已預借',   field:'resv' },
+  { key:'ctl',   cls:'s-ctl',   label:'管制中',   field:'ctl' }
+];
+function 燈號(key){
+  if(key === 'ctl') return '<span class="lamp r"><i></i>管制中</span>';
+  if(key === 'use') return '<span class="lamp o"><i></i>借用中</span>';
+  return '<span class="lamp g"><i></i>空車位</span>';
+}
+function 預借清單(future, max){
+  if(!future.length) return '';
+  var list = future.slice(0, max || future.length);
+  return '<div class="resv"><div class="h">📅 車位預借登記（' + future.length + ' 筆）</div>' +
+    list.map(function(b){
+      return '<div class="it"><b>' + esc(b.unit) + '</b>（' + esc(b.purpose) + '）<br>' + esc(民國期間(b.start, b.end)) + '</div>';
+    }).join('') +
+    (future.length > list.length ? '<div class="it" style="color:var(--muted)">…還有 ' + (future.length - list.length) + ' 筆，點開看全部</div>' : '') +
+    '</div>';
+}
+function 卡片(s){
+  var st = 車位狀態(s, S.bookings, 今天());
+  var body = '';
+  if(st.current){
+    var c = st.current;
+    body = '<div class="kv">' +
+      '<div class="k">借用單位</div><div class="v">' + esc(c.unit) + '</div>' +
+      '<div class="k">借用用途</div><div class="v">' + esc(c.purpose) + '</div>' +
+      '<div class="k">登記日期</div><div class="v">' + esc(民國日期(c.regDate) || '—') + '</div>' +
+      '<div class="k">借用期間</div><div class="v">' + esc(民國期間(c.start, c.end)) + '</div></div>';
+  } else if(st.key !== 'ctl'){
+    body = '<div class="idle">目前沒有借用</div>';
+  }
+  if(s.control) body = '<div class="kv"><div class="k">管制原因</div><div class="v" style="color:var(--danger)">' + esc(s.controlReason || '—') + '</div></div>' + body;
+  return '<button class="slot ' + st.key + '" onclick="openDetail(' + s.id + ')">' +
+    '<div class="pic">' + 車格圖(s.size, st.key, 60) + '<div class="no">' + esc(s.no) + '</div></div>' +
+    '<div class="info"><div class="row1">' + 燈號(st.key) + '<span class="sz">' + esc(s.size) + '型</span>' +
+    (st.key === 'resv' ? '<span class="chip-resv">已預借</span>' : '') + '</div>' +
+    body + 預借清單(st.future, 3) + '</div></button>';
+}
+function render(animateIn){
+  var today = 今天();
+  var st = 統計(S.slots, S.bookings, today);
+  $('stats').innerHTML = STAT_DEF.map(function(d){
+    return '<div class="st ' + d.cls + (S.status === d.key ? ' on' : '') + '" onclick="setFilter(\'' + d.key + '\')">' +
+      '<div class="v" data-fx-count="' + st[d.field] + '" data-fx-key="' + (d.key || 'all') + '">' + st[d.field] + '</div>' +
+      '<div class="k">' + d.label + '</div></div>';
+  }).join('');
+  if(window.fxCountUpIn) window.fxCountUpIn($('stats'), 'parking-');
+
+  var list = 排序(篩選(S.slots, S.bookings, today, { status: S.status, q: $('q').value }));
+  var el = $('list');
+  if(!S.slots.length){
+    el.innerHTML = '<div class="empty">還沒有任何車格<br>按下方「新增車格」建立第一格</div>';
+  } else if(!list.length){
+    el.innerHTML = '<div class="empty">沒有符合條件的車格</div>';
+  } else {
+    el.innerHTML = list.map(卡片).join('');
+  }
+  // 資料到了／切換篩選時卡片依序浮現（ui_fx.css 的 .fx-fadein）
+  if(animateIn){ el.classList.remove('fx-fadein'); void el.offsetWidth; el.classList.add('fx-fadein'); }
+}
+function setFilter(k){ S.status = (S.status === k) ? '' : k; render(true); }
+
+/* ── 詳細視窗 ── */
+function closeModal(){ $('modal').innerHTML = ''; }
+function 找車格(id){ return S.slots.filter(function(s){ return s.id === id; })[0]; }
+function 登記卡(b, now){
+  return '<div class="bk' + (now ? ' now' : '') + '"><div class="t">' + esc(b.unit) + '<span style="font-weight:500;color:var(--muted)">（' + esc(b.purpose) + '）</span></div>' +
+    '<div class="d">借用期間：' + esc(民國期間(b.start, b.end)) + '<br>登記日期：' + esc(民國日期(b.regDate) || '—') +
+    (b.byName ? '　登記人：' + esc(b.byName) : '') + (b.note ? '<br>備註：' + esc(b.note) : '') + '</div>' +
+    '<div class="ops"><button class="act" onclick="openBookingForm(' + b.slotId + ',' + b.id + ')"><i class="ti ti-edit"></i>編輯</button>' +
+    '<button class="act act-red" onclick="delBooking(' + b.id + ')"><i class="ti ti-trash"></i>刪除</button></div></div>';
+}
+function openDetail(id){
+  var s = 找車格(id); if(!s) return;
+  var st = 車位狀態(s, S.bookings, 今天());
+  var h = '<div class="mask" onclick="if(event.target===this)closeModal()"><div class="modal">' +
+    '<div class="dhero">' + 車格圖(s.size, st.key, 84) + '<div><div style="font-size:22px;font-weight:900;color:var(--gold2)">' + esc(s.no) + '</div>' +
+    '<div class="row1" style="margin-top:6px">' + 燈號(st.key) + '<span class="sz">' + esc(s.size) + '型</span>' +
+    (st.key === 'resv' ? '<span class="chip-resv">已預借</span>' : '') + '</div></div></div>';
+  if(s.control) h += '<div class="bk" style="border-color:rgba(248,113,113,.45)"><div class="t" style="color:var(--danger)">🚧 管制中</div><div class="d">' + esc(s.controlReason || '—') + '</div></div>';
+  if(s.note) h += '<div class="hint">備註：' + esc(s.note) + '</div>';
+  h += '<div class="acts" style="margin-top:12px">' +
+    '<button class="act act-gold" onclick="openBookingForm(' + s.id + ')"><i class="ti ti-calendar-plus"></i>登記借用／預借</button>' +
+    '<button class="act" onclick="openControlForm(' + s.id + ')"><i class="ti ti-barrier-block"></i>' + (s.control ? '解除管制' : '設定管制') + '</button>' +
+    '<button class="act" onclick="openSlotForm(' + s.id + ')"><i class="ti ti-edit"></i>編輯車格</button>' +
+    (可刪車格() ? '<button class="act act-red" onclick="delSlot(' + s.id + ')"><i class="ti ti-trash"></i>刪除車格</button>' : '') + '</div>';
+  h += '<div class="sec"><div class="sec-h"><i class="ti ti-truck"></i>目前借用</div>' +
+    (st.current ? 登記卡(st.current, true) : '<div class="hint">目前沒有借用</div>') + '</div>';
+  h += '<div class="sec"><div class="sec-h"><i class="ti ti-calendar-event"></i>車位預借登記（' + st.future.length + ' 筆）</div>' +
+    (st.future.length ? st.future.map(function(b){ return 登記卡(b, false); }).join('') : '<div class="hint">沒有預借登記</div>') + '</div>';
+  if(st.past.length){
+    h += '<div class="sec"><details><summary class="sec-h" style="cursor:pointer">📜 過去的借用（' + st.past.length + ' 筆）</summary>' +
+      st.past.slice(0, 20).map(function(b){ return '<div class="log"><b>' + esc(b.unit) + '</b>（' + esc(b.purpose) + '）' + esc(民國期間(b.start, b.end)) + '</div>'; }).join('') +
+      '</details></div>';
+  }
+  h += '<div class="sec"><details ontoggle="if(this.open)loadLogs(' + s.id + ')"><summary class="sec-h" style="cursor:pointer">🧾 異動紀錄</summary><div id="logs-' + s.id + '"><div class="hint">讀取中…</div></div></details></div>';
+  h += '<div class="btns"><button class="btn btn-gh" style="flex:1" onclick="closeModal()">關閉</button></div></div></div>';
+  $('modal').innerHTML = h;
+}
+async function loadLogs(id){
+  var box = $('logs-' + id); if(!box) return;
+  try {
+    var d = await fetchJson_(PARKING_GAS_URL + '?action=getLogs&slotId=' + id + '&token=' + encodeURIComponent(getAuthToken()));
+    if(d.status !== 'ok') throw new Error(d.msg || '讀取失敗');
+    box.innerHTML = (d.logs || []).length ? d.logs.map(function(l){
+      return '<div class="log"><b>' + esc(l.action) + '</b>　' + esc(l.desc) + '<br>' + esc(l.at) + '　' + esc(l.byName) + '</div>';
+    }).join('') : '<div class="hint">沒有紀錄</div>';
+  } catch(e){ box.innerHTML = '<div class="hint" style="color:var(--danger)">讀取失敗：' + esc(e.message) + '</div>'; }
+}
+
+/* ── 表單共用 ── */
+function 送出中(on, text){
+  var b = $('f-submit'); if(!b) return;
+  if(on){ b.dataset.t = b.innerHTML; b.disabled = true; b.innerHTML = text || '送出中…'; }
+  else { b.disabled = false; if(b.dataset.t) b.innerHTML = b.dataset.t; }
+}
+function 標紅(id){ var el = $(id); if(el && window.fxFieldError) fxFieldError(el); else if(el) el.focus(); }
+function 成功後(msg, reopenId){
+  if(window.fxSuccess) fxSuccess();
+  toast('✓ ' + msg, 'ok');
+  closeModal();
+  return loadAll().then(function(){ if(reopenId && 找車格(reopenId)) openDetail(reopenId); });
+}
+function 常用值(field){
+  var seen = {}, out = [];
+  S.bookings.slice().reverse().forEach(function(b){ var v = b[field]; if(v && !seen[v]){ seen[v] = 1; out.push(v); } });
+  return out.slice(0, 30);
+}
+
+/* ── 車格：新增／編輯 ── */
+var 表單尺寸 = '中';
+function openSlotForm(id){
+  var s = id ? 找車格(id) : null;
+  表單尺寸 = s ? s.size : '中';
+  $('modal').innerHTML = '<div class="mask" onclick="if(event.target===this)closeModal()"><div class="modal">' +
+    '<h3><i class="ti ti-parking"></i>' + (s ? '編輯車格 ' + esc(s.no) : '新增車格') + '</h3>' +
+    '<div class="fld"><label>車位編號 <b>*</b></label><input type="text" id="f-no" value="' + esc(s ? s.no : '') + '" placeholder="例：L01"></div>' +
+    '<div class="fld"><label>車格尺寸 <b>*</b></label><div class="seg" id="f-size">' +
+    SIZES.map(function(z){ return '<button type="button" class="' + (z === 表單尺寸 ? 'on' : '') + '" onclick="pickSize(\'' + z + '\')">' + z + '型</button>'; }).join('') +
+    '</div><div class="hint" id="f-size-pv" style="margin-top:8px">' + 車格圖(表單尺寸, 'use', 54) + '</div></div>' +
+    '<div class="fld"><label>備註</label><input type="text" id="f-note" value="' + esc(s ? s.note : '') + '" placeholder="選填"></div>' +
+    '<div class="btns"><button class="btn btn-gh" onclick="' + (s ? 'openDetail(' + s.id + ')' : 'closeModal()') + '">取消</button>' +
+    '<button class="btn btn-pri" id="f-submit" onclick="submitSlot(' + (s ? s.id : 0) + ')">' + (s ? '儲存' : '新增') + '</button></div></div></div>';
+}
+function pickSize(z){
+  表單尺寸 = z;
+  Array.prototype.forEach.call($('f-size').children, function(b){ b.classList.toggle('on', b.textContent === z + '型'); });
+  $('f-size-pv').innerHTML = 車格圖(z, 'use', 54);
+}
+async function submitSlot(id){
+  var no = $('f-no').value.trim();
+  if(!no){ toast('✗ 請填寫車位編號', 'err'); 標紅('f-no'); return; }
+  var dup = S.slots.filter(function(s){ return s.id !== id && 正規化編號(s.no) === 正規化編號(no); })[0];
+  if(dup){ toast('✗ 車位編號「' + no + '」已經存在', 'err'); 標紅('f-no'); return; }
+  送出中(true);
+  try {
+    await api(id ? 'updateSlot' : 'addSlot', { id: id, no: no, size: 表單尺寸, note: $('f-note').value.trim() });
+    await 成功後(id ? '已更新車格' : '已新增車格 ' + no, id || 0);
+  } catch(e){ toast('✗ ' + e.message, 'err'); 送出中(false); }
+}
+
+/* ── 管制 ── */
+function openControlForm(id){
+  var s = 找車格(id); if(!s) return;
+  if(s.control){
+    if(!window.confirm('確定解除「' + s.no + '」的管制？\n\n管制原因：' + (s.controlReason || '—'))) return;
+    api('setControl', { id: id, control: false })
+      .then(function(){ return 成功後('已解除管制', id); })
+      .catch(function(e){ toast('✗ ' + e.message, 'err'); });
+    return;
+  }
+  $('modal').innerHTML = '<div class="mask" onclick="if(event.target===this)closeModal()"><div class="modal">' +
+    '<h3><i class="ti ti-barrier-block"></i>設定管制：' + esc(s.no) + '</h3>' +
+    '<div class="fld"><label>管制原因 <b>*</b></label><input type="text" id="f-reason" placeholder="例：地面施工、消防檢查"></div>' +
+    '<div class="hint">管制中的車格會顯示紅燈，優先於借用狀態；已有的借用／預借登記會保留。</div>' +
+    '<div class="btns"><button class="btn btn-gh" onclick="openDetail(' + id + ')">取消</button>' +
+    '<button class="btn btn-pri" id="f-submit" onclick="submitControl(' + id + ')">設為管制中</button></div></div></div>';
+}
+async function submitControl(id){
+  var reason = $('f-reason').value.trim();
+  if(!reason){ toast('✗ 請填寫管制原因', 'err'); 標紅('f-reason'); return; }
+  送出中(true);
+  try { await api('setControl', { id: id, control: true, reason: reason }); await 成功後('已設為管制中', id); }
+  catch(e){ toast('✗ ' + e.message, 'err'); 送出中(false); }
+}
+
+/* ── 刪除車格（組長以上；後端同樣擋） ── */
+async function delSlot(id){
+  var s = 找車格(id); if(!s) return;
+  var n = S.bookings.filter(function(b){ return b.slotId === id; }).length;
+  if(!window.confirm('確定刪除車格「' + s.no + '」？\n\n' + (n ? '這個車格的 ' + n + ' 筆借用／預借登記會一起刪除。\n' : '') + '此動作無法復原（異動紀錄會保留）。')) return;
+  try {
+    await api('deleteSlot', { id: id });
+    closeModal();
+    toast('✓ 已刪除車格 ' + s.no, 'ok');
+    (window.fxRemoveThen || function(f){ f(); })(loadAll);
+  } catch(e){ toast('✗ ' + e.message, 'err'); }
+}
+
+/* ── 借用／預借登記 ── */
+function openBookingForm(slotId, bookingId){
+  var s = 找車格(slotId); if(!s) return;
+  var b = bookingId ? S.bookings.filter(function(x){ return x.id === bookingId; })[0] : null;
+  var units = 常用值('unit'), purposes = 常用值('purpose');
+  $('modal').innerHTML = '<div class="mask" onclick="if(event.target===this)closeModal()"><div class="modal">' +
+    '<h3><i class="ti ti-calendar-plus"></i>' + (b ? '編輯登記' : '登記借用／預借') + '：' + esc(s.no) + '</h3>' +
+    '<div class="fld"><label>借用單位 <b>*</b></label><input type="text" id="f-unit" list="dl-unit" value="' + esc(b ? b.unit : '') + '" placeholder="例：B1F美食課"></div>' +
+    '<div class="fld"><label>借用用途 <b>*</b></label><input type="text" id="f-purpose" list="dl-purpose" value="' + esc(b ? b.purpose : '') + '" placeholder="例：進貨卸貨"></div>' +
+    '<datalist id="dl-unit">' + units.map(function(u){ return '<option value="' + esc(u) + '">'; }).join('') + '</datalist>' +
+    '<datalist id="dl-purpose">' + purposes.map(function(u){ return '<option value="' + esc(u) + '">'; }).join('') + '</datalist>' +
+    '<div class="fld"><label>登記日期</label><input type="date" id="f-reg" value="' + esc(b ? b.regDate : 今天()) + '"></div>' +
+    '<div class="two"><div class="fld"><label>開始日 <b>*</b></label><input type="date" id="f-start" value="' + esc(b ? b.start : '') + '" onchange="bookingHint()"></div>' +
+    '<div class="fld"><label>結束日 <b>*</b></label><input type="date" id="f-end" value="' + esc(b ? b.end : '') + '" onchange="bookingHint()"></div></div>' +
+    '<label class="chk"><input type="checkbox" id="f-long" ' + (b && !b.end ? 'checked' : '') + ' onchange="bookingHint()"> 長期使用（沒有結束日）</label>' +
+    '<div class="hint" id="f-kind"></div>' +
+    '<div class="fld" style="margin-top:10px"><label>備註</label><input type="text" id="f-bnote" value="' + esc(b ? b.note : '') + '" placeholder="選填"></div>' +
+    '<div class="btns"><button class="btn btn-gh" onclick="openDetail(' + slotId + ')">取消</button>' +
+    '<button class="btn btn-pri" id="f-submit" onclick="submitBooking(' + slotId + ',' + (b ? b.id : 0) + ')">' + (b ? '儲存' : '登記') + '</button></div></div></div>';
+  bookingHint();
+}
+// 依開始日即時提示這筆會變成「借用中」還是「預借」，不用使用者自己選
+function bookingHint(){
+  var st = $('f-start') && $('f-start').value, en = $('f-end') && $('f-end').value, t = 今天();
+  var lt = $('f-long') && $('f-long').checked;
+  var el = $('f-kind'); if(!el) return;
+  if($('f-end')){ $('f-end').disabled = lt; if(lt) $('f-end').value = ''; }
+  if(lt){
+    el.innerHTML = st && st > t ? '📅 長期使用，' + esc(民國日期(st)) + ' 起轉為借用中。'
+      : '🟠 長期使用：會一直顯示「借用中」，直到有人編輯或刪除這筆登記。' + (st ? '' : '（開始日可不填）');
+    return;
+  }
+  en = $('f-end') && $('f-end').value;
+  if(!st){ el.innerHTML = '系統會依日期自動判斷：開始日是今天或之前＝借用中；之後＝預借。'; return; }
+  if(en && en < t) el.innerHTML = '⚠️ 這段期間已經過了，會記成「過去的借用」。';
+  else if(st <= t) el.innerHTML = '🟠 這筆登記後會立刻顯示為「借用中」。';
+  else el.innerHTML = '📅 這筆會列在「車位預借登記」，' + esc(民國日期(st)) + ' 起自動轉為借用中。';
+}
+async function submitBooking(slotId, bookingId){
+  var lt = $('f-long').checked;
+  var b = { unit: $('f-unit').value.trim(), purpose: $('f-purpose').value.trim(), regDate: $('f-reg').value,
+            start: $('f-start').value, end: lt ? '' : $('f-end').value, longTerm: lt, note: $('f-bnote').value.trim() };
+  var others = S.bookings.filter(function(x){ return x.slotId === slotId && x.id !== bookingId; });
+  var chk = 檢查登記(b, others);
+  if(chk.msg){
+    toast('✗ ' + chk.msg, 'err');
+    標紅({ unit:'f-unit', purpose:'f-purpose', regDate:'f-reg', start:'f-start', end:'f-end' }[chk.field]);
+    return;
+  }
+  送出中(true);
+  try {
+    b.slotId = slotId; if(bookingId) b.id = bookingId;
+    await api(bookingId ? 'updateBooking' : 'addBooking', b);
+    await 成功後(bookingId ? '已更新登記' : '已登記 ' + b.unit, slotId);
+  } catch(e){
+    toast('✗ ' + e.message, 'err'); 送出中(false);
+    if(e.code === 'BOOKING') 標紅('f-start');
+  }
+}
+async function delBooking(id){
+  var b = S.bookings.filter(function(x){ return x.id === id; })[0]; if(!b) return;
+  if(!window.confirm('確定刪除這筆登記？\n\n' + b.unit + '（' + b.purpose + '）\n' + 民國期間(b.start, b.end))) return;
+  try {
+    await api('deleteBooking', { id: id });
+    toast('✓ 已刪除登記', 'ok');
+    (window.fxRemoveThen || function(f){ f(); })(function(){ return loadAll().then(function(){ if(找車格(b.slotId)) openDetail(b.slotId); }); });
+  } catch(e){ toast('✗ ' + e.message, 'err'); }
+}
+
+/* onclick 用到的函式一律明確掛到 window：包在 if 區塊裡的 async function 不會自動變成全域，
+   onclick 會找不到而且靜默失敗（2026-08-10 生理假工具踩過）。 */
+window.render = render; window.loadAll = loadAll; window.setFilter = setFilter;
+window.openDetail = openDetail; window.closeModal = closeModal; window.loadLogs = loadLogs;
+window.openSlotForm = openSlotForm; window.pickSize = pickSize; window.submitSlot = submitSlot;
+window.openControlForm = openControlForm; window.submitControl = submitControl; window.delSlot = delSlot;
+window.openBookingForm = openBookingForm; window.bookingHint = bookingHint; window.submitBooking = submitBooking;
+window.delBooking = delBooking;
+
+/* ── 啟動 ── */
+window.addEventListener('load', function(){
+  // 返回主選單要保留工號（天鷹規範：工號狀態不可遺失）
+  var empId = new URLSearchParams(location.search).get('empId') || '';
+  if(empId) $('backBtn').href = 'index.html?empId=' + encodeURIComponent(empId);
+  if(!checkPermission()) return;
+  $('app').style.display = '';
+  $('fab').style.display = '';
+  loadAll().then(hideSplash);
+  setTimeout(hideSplash, 3000); // 保險：網路慢也要讓畫面出現
+  // 下拉更新：在最上面往下拉就重新讀取
+  if(window.fxPullToRefresh) window.fxPullToRefresh(function(){ return loadAll(); });
+});
+
+}
+</script>
+</body>
+</html>

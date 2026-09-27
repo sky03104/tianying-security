@@ -109,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '51.26';
+const APP_VERSION = '52.27';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -169,6 +169,7 @@ const TOOLS = [
     { id: 22, name: "請款資料產生", icon: "💰", category: "人事管理", externalUrl: "https://sky03104.github.io/tianying-security/tool_billing.html" },
     { id: 23, name: "生理假紀錄", icon: "🌸", category: "資料管理", externalUrl: "https://sky03104.github.io/tianying-security/tool_menstrual.html" },
     { id: 24, name: "無線電管理", icon: "📻", category: "資料管理", externalUrl: "https://sky03104.github.io/tianying-security/tool_radio.html" },
+    { id: 25, name: "物流區車位管理", icon: "🚛", category: "門禁管理", externalUrl: "https://sky03104.github.io/tianying-security/tool_parking.html" },
 ];
 const ROLES = [
     { id: "fulltime", label: "正職保全", color: "#3B82F6" },
@@ -266,17 +267,18 @@ function clearLoginState(forgetRemember) {
     } catch (e) {}
 }
 const DEFAULT_PERMS = {
-    fulltime: [1, 2, 3, 7, 6, 9, 12, 13, 18, 99],
+    // id 25（物流區車位管理）給正職以上、不含兼職（咖哩 2026-09-27 指定）；刪除車格另限組長以上，由工具與 GAS 把關
+    fulltime: [1, 2, 3, 7, 6, 9, 12, 13, 18, 25, 99],
     parttime: [1, 2, 3, 7, 6, 9, 12, 13, 18, 99],
     // id 24（無線電管理）給組長以上：設備清冊含全體員工姓名與配發狀況，不是公開資料
-    leader: [1, 2, 3, 7, 4, 6, 9, 12, 13, 18, 19, 24, 99],
+    leader: [1, 2, 3, 7, 4, 6, 9, 12, 13, 18, 19, 24, 25, 99],
     // id 23（生理假紀錄）給副隊長以上：內容是女性員工的健康相關資料，
     // 屬個資法第6條的特種個資，工具前端與 GAS 每個 action 都會再驗一次角色
-    vicecaptain: [1, 2, 3, 7, 4, 6, 9, 12, 13, 18, 19, 23, 24, 99],
-    captain: [1, 2, 3, 7, 4, 6, 9, 12, 13, 14, 18, 19, 21, 23, 24, 99],
-    executive: [1, 2, 3, 7, 4, 6, 9, 12, 13, 14, 18, 19, 21, 23, 24, 99],
+    vicecaptain: [1, 2, 3, 7, 4, 6, 9, 12, 13, 18, 19, 23, 24, 25, 99],
+    captain: [1, 2, 3, 7, 4, 6, 9, 12, 13, 14, 18, 19, 21, 23, 24, 25, 99],
+    executive: [1, 2, 3, 7, 4, 6, 9, 12, 13, 14, 18, 19, 21, 23, 24, 25, 99],
     // id 22（請款資料產生）只給 admin：內容是對業主的請款金額，屬財務資料
-    admin: [1, 2, 3, 7, 4, 6, 9, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 99],
+    admin: [1, 2, 3, 7, 4, 6, 9, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 99],
 };
 /* 2026-07-26：原本這裡有一份全公司 48 筆的帳號密碼表（USER_DB）。
    因為 index.html 會整份下載到每個使用者的手機上，等於把密碼公開，
