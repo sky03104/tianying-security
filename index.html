@@ -109,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '53.27';
+const APP_VERSION = '54.27';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -3249,12 +3249,20 @@ function App() {
                 const cp = typeof d.toolPerms === 'string' ? JSON.parse(d.toolPerms) : d.toolPerms;
                 if (cp && typeof cp === 'object') {
                     // ── 自動補「雲端資料產生後系統才新增的工具」之預設權限 ──
-                    //    依本機已知工具清單(known)比對，找出雲端舊值缺漏的新工具(如績效報表15)，
                     //    僅補 DEFAULT_PERMS 有給該角色的新工具；管理員日後在後台關閉並儲存即不再補回。
-                    let prevKnown = new Set();
-                    try { const k = JSON.parse(localStorage.getItem('tianying_perms_known') || 'null'); if (Array.isArray(k)) prevKnown = new Set(k); } catch (e) { }
+                    //    2026-09-27 修正：「哪些是新工具」要跟「雲端那份權限儲存當下有哪些工具」比，
+                    //    不能跟本機的已知清單比——原本第一次開啟時補上新工具、同時把本機已知清單更新，
+                    //    下次重新載入時本機已知清單已經有它，就不再補，雲端舊值又沒有它 → 變成無權限
+                    //    （物流區車位管理 id25 上線當天咖哩實機抓到：打開一次、回主選單就變無權限）。
+                    //    新版儲存時會把當下工具清單一起存進 toolPerms._known；舊的雲端資料沒有 _known，
+                    //    就改用「任何角色清單裡都沒出現過的工具」當新工具。
                     const allIds = TOOLS.map(t => t.id);
-                    const newToolIds = prevKnown.size > 0 ? allIds.filter(id => !prevKnown.has(id)) : [];
+                    let cloudKnown = Array.isArray(cp._known) ? new Set(cp._known) : null;
+                    if (!cloudKnown) {
+                        cloudKnown = new Set();
+                        Object.keys(cp).forEach(r => { if (Array.isArray(cp[r])) cp[r].forEach(id => cloudKnown.add(id)); });
+                    }
+                    const newToolIds = allIds.filter(id => !cloudKnown.has(id));
                     const fillNew = (arr, role) => {
                         const base = Array.isArray(arr) ? [...arr] : [];
                         newToolIds.forEach(id => { if (!base.includes(id) && (DEFAULT_PERMS[role] || []).includes(id)) base.push(id); });
@@ -3266,7 +3274,7 @@ function App() {
                         return m;
                     });
                     const cpFilled = {};
-                    Object.keys(cp).forEach(role => { cpFilled[role] = fillNew(cp[role], role); });
+                    Object.keys(cp).forEach(role => { if (role !== '_known' && Array.isArray(cp[role])) cpFilled[role] = fillNew(cp[role], role); });
                     localStorage.setItem('tianying_perms', JSON.stringify(cpFilled));
                     localStorage.setItem('tianying_perms_known', JSON.stringify(allIds));
                     localStorage.setItem('tianying_perms_ver', PERMS_VER);
@@ -3967,7 +3975,8 @@ function App() {
                             try {
                                 const body = new FormData();
                                 body.append('action', 'setSettings');
-                                body.append('data', JSON.stringify({ toolPerms: JSON.stringify(perms), workAllowedIds: workAllowedIds }));
+                                // _known＝儲存當下系統有哪些工具，之後新增的工具才能正確判斷成「新工具」自動補預設權限
+                                body.append('data', JSON.stringify({ toolPerms: JSON.stringify(Object.assign({}, perms, { _known: TOOLS.map(t => t.id) })), workAllowedIds: workAllowedIds }));
                                 const r = await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
                                 const d = await r.json();
                                 showToast(d.status === 'ok' ? "✅ 權限已同步到雲端，所有裝置將自動更新！" : "✅ 本機已儲存（雲端同步失敗）");
@@ -3994,7 +4003,7 @@ function App() {
                         try {
                             const body = new FormData();
                             body.append('action', 'setSettings');
-                            body.append('data', JSON.stringify({ toolPerms: JSON.stringify(DEFAULT_PERMS), workAllowedIds: null }));
+                            body.append('data', JSON.stringify({ toolPerms: JSON.stringify(Object.assign({}, DEFAULT_PERMS, { _known: TOOLS.map(t => t.id) })), workAllowedIds: null }));
                             await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
                         } catch (e) { }
                         showToast("🔄 已還原為原廠預設權限");
