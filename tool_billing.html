@@ -194,6 +194,9 @@ const ITEMS = [
   { no:6, 代號:['南','D'], 代號時數:{'D':10}, 班別:'morning', 預設時:12, 預設人:1,
     發票:'6.其他費用', 明細:'其他費用明細', 附表:'其他附表五', 附表號:'五',
     標題:'6.其他費用', 明細標題:'其他費用', 組別:'(一)保安組南側門哨增派',
+    // 2026-09-27 咖哩要求：附表分兩組列，(一)南側門哨、(二)外哨增派（D 班 10H）。
+    // 靠時數分組：10H＝外哨增派，其餘（南側門 11/12H、手動輸入的其他時數）歸第一組。
+    分組:[{ 組別:'(一)保安組南側門哨增派', 時數:null }, { 組別:'(二)保安組外哨增派', 時數:[10] }],
     發票合計欄:'F', 發票標題合併:'A1:E1', 時數欄:'C', 計價:{一般:'D4',假日:'D8',共計:'D6'},
     時段:{11:'南側門哨 12:00-23:00',12:'南側門哨 11:00-23:00',10:'外哨增派 11:00-21:00'} },
   { no:7, 代號:[], 班別:null, 預設時:8, 預設人:2, 手動:true,
@@ -335,6 +338,24 @@ function 附表內容_(it, 月, days) {
     };
   });
   return { 段: 段, 總時: 段.reduce((s, x) => s + x.小計, 0) };
+}
+
+/* 附表分組（2026-09-27）：有 it.分組 的項目（目前只有項6）附表要分成 (一)(二)… 各自列日期與時段。
+   依每筆班次的時數歸組（時數:null 的組收「其他組都沒認領」的時數），沒有資料的組不列。
+   沒有 分組 的項目回傳單一組，內容跟原本 附表內容_ 完全一樣。
+   產生 xlsx 與畫面預覽都走這裡，確保預覽＝實際檔案。 */
+function 附表分組內容_(it, 月, days) {
+  const 定義 = it.分組 || [{ 組別: it.組別, 時數: null }];
+  const 有認領 = [].concat.apply([], 定義.map(g => g.時數 || []));
+  const 組們 = 定義.map(g => {
+    const 本組 = (days || []).filter(x => g.時數 ? g.時數.indexOf(Number(x.時)) >= 0
+                                             : 有認領.indexOf(Number(x.時)) < 0);
+    return Object.assign({ 組別: g.組別 }, 附表內容_(it, 月, 本組));
+  }).filter((g, i) => g.段.length || (i === 0 && !(days || []).length));
+  // 沒資料的組不列，序號要跟著重編（例：當月只有外哨增派 → 寫「(一)保安組外哨增派」，不會只出現一個「(二)」）
+  const 序 = ['一', '二', '三', '四', '五', '六'];
+  if (it.分組) 組們.forEach((g, i) => { g.組別 = '(' + 序[i] + ')' + g.組別.replace(/^\([^)]*\)/, ''); });
+  return { 組: 組們, 總時: 組們.reduce((s, g) => s + g.總時, 0) };
 }
 
 /* 附表要把同時數的日期歸成一組（南側門那種同月有 11H 和 12H 的） */
@@ -734,13 +755,17 @@ function 建附表(wb, it, cfg, days) {
   // 列高 24（原 19.9）：咖哩回報附表的字擠在一起，行距要鬆一點才好讀
   for (let r = 1; r <= 38; r++) ws.getRow(r).height = 24;
   ws.getCell('B1').value = '附表' + it.附表號; ws.getCell('B1').font = 字型(16, true);
-  ws.getCell('B2').value = '    ' + it.組別;   ws.getCell('B2').font = 字型(13, true);
-  ws.getCell('B2').alignment = { horizontal:'left', vertical:'middle' };
-  const merges = ['B1:L1','B2:F2'];
+  const merges = ['B1:L1'];
   const 靠左 = r => { ws.getCell(r,2).alignment = { horizontal:'left', vertical:'middle' }; ws.getCell(r,2).font = 字型(12); };
-  let r = 3;
-  const 內容 = 附表內容_(it, cfg.月, days);  // 與畫面預覽共用同一份內容，確保預覽＝實際檔案
-  內容.段.forEach(g => {
+  let r = 2;
+  const 分組 = 附表分組內容_(it, cfg.月, days);  // 與畫面預覽共用同一份內容，確保預覽＝實際檔案
+  const 內容 = { 總時: 分組.總時 };
+  // 分組標題：第一組在第 2 列（原本組別的位置），之後每組標題接在前一組內容下面
+  分組.組.forEach(組 => {
+  ws.getCell(r, 2).value = '    ' + 組.組別; ws.getCell(r, 2).font = 字型(13, true);
+  ws.getCell(r, 2).alignment = { horizontal:'left', vertical:'middle' };
+  merges.push('B'+r+':F'+r); r++;
+  組.段.forEach(g => {
     g.日期行.forEach(t => {
       ws.getCell(r, 2).value = t; 靠左(r); merges.push('B'+r+':E'+r); r++;
     });
@@ -754,6 +779,7 @@ function 建附表(wb, it, cfg, days) {
     ws.getCell(r,3).value='每日共計'; ws.getCell(r,4).value=g.每日; ws.getCell(r,5).value='小時'; r++;
     ws.getCell(r,3).value='共小計';   ws.getCell(r,4).value=g.小計; ws.getCell(r,5).value='小時'; r++;
     r++;
+  });
   });
   const 末 = Math.max(30, r + 1);
   ws.getCell(末,3).value = '以上共計'; ws.getCell(末,3).font = 字型(12, true);
@@ -782,7 +808,7 @@ function buildWorkbook(ExcelJSLib, cfg) {
 
 try { if (typeof module !== 'undefined') Object.assign(module.exports, {
   一般費率, 假日費率, ITEMS, ITEM_BY_NO, 總表項目名,
-  算項目, 算主合約, 撈代號日期, 日期分行, 依時數分組, 月天數, 附表內容_, 依日聚合_, 時段文字_,
+  算項目, 算主合約, 撈代號日期, 日期分行, 依時數分組, 月天數, 附表內容_, 附表分組內容_, 依日聚合_, 時段文字_,
   buildWorkbook, 位移, 公式
 }); } catch (e) {}
 
@@ -914,7 +940,7 @@ function PreviewModal({ cfg, 結果, mc, 總金額, onClose, onDownload, busy })
   const 項目區塊 = (it) => {
     const days = (cfg.items[it.no] || {}).days || [];
     const res = 結果[it.no];
-    const 附 = 附表內容_(it, cfg.月, days);
+    const 附 = 附表分組內容_(it, cfg.月, days);
     return h('div', { className: 'pv', id: 'pv-' + it.no, key: it.no },
       h('div', { className: 'pv-h' }, it.no + '. ' + 總表項目名[it.no].replace('\n', '')),
       h('div', { className: 'pv-sub' },
@@ -933,11 +959,12 @@ function PreviewModal({ cfg, 結果, mc, 總金額, onClose, onDownload, busy })
         : h('div', { className: 'empty-note' }, '本月沒有資料，這一項的金額是 0'),
       h('div', { className: 'pv-txt', style: { marginTop: '9px' } }, 計價文字(res)),
       days.length ? h('div', null,
-        h('div', { className: 'pv-sub', style: { marginTop: '11px' } }, '附表' + it.附表號 + '　' + it.組別),
-        h('div', { className: 'pv-txt' },
-          附.段.map(g => g.日期行.join('\n') + '\n'
-            + g.明細行.map(行 => '　　' + 行.文字 + '　→ ' + 行.小時 + ' 小時').join('\n')).join('\n\n')
-          + '\n\n以上共計 ' + 附.總時 + ' 小時')) : null
+        ...附.組.map((組, i) => h('div', { key: i },
+          h('div', { className: 'pv-sub', style: { marginTop: '11px' } }, (i === 0 ? '附表' + it.附表號 + '　' : '') + 組.組別),
+          h('div', { className: 'pv-txt' },
+            組.段.map(g => g.日期行.join('\n') + '\n'
+              + g.明細行.map(行 => '　　' + 行.文字 + '　→ ' + 行.小時 + ' 小時').join('\n')).join('\n\n')
+            + (i === 附.組.length - 1 ? '\n\n以上共計 ' + 附.總時 + ' 小時' : '')))) ) : null
     );
   };
 
