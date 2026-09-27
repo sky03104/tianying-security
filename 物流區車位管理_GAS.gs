@@ -274,6 +274,19 @@ function readBookings_() {
   return { sheet: sh, rows: rows };
 }
 
+function bookingOut_(b) {
+  return { id: b.id, slotId: b.slotId, unit: b.unit, purpose: b.purpose, regDate: b.regDate,
+           start: b.start, end: b.end, note: b.note, byName: b.byName };
+}
+
+// 「近期」的分界：今天往前推 6 個月（台北時間，yyyy-MM-dd）。結束日早於這天的借用算「更早的紀錄」
+var HISTORY_MONTHS_ = 6;
+function historyCutoff_() {
+  var d = new Date();
+  d.setMonth(d.getMonth() - HISTORY_MONTHS_);
+  return Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+}
+
 function findBy_(rows, id) {
   for (var i = 0; i < rows.length; i++) if (rows[i].id === Number(id)) return rows[i];
   return null;
@@ -352,14 +365,35 @@ function doGet(e) {
         return { id: s.id, no: s.no, size: s.size, control: s.control, controlReason: s.controlReason,
                  note: s.note, updatedAt: s.updatedAt };
       });
-      var books = readBookings_().rows.map(function (b) {
-        return { id: b.id, slotId: b.slotId, unit: b.unit, purpose: b.purpose, regDate: b.regDate,
-                 start: b.start, end: b.end, note: b.note, byName: b.byName };
+      // 2026-09-27：只回「近期」登記——目前借用、預借、長期使用，以及結束在最近 6 個月內的過去借用。
+      // 更早的歷史只回每格有幾筆（olderCount），點進車格詳細頁按「載入更早的紀錄」才讀（getHistory）。
+      // 登記只會一直增加，這樣累積再多年，打開畫面要傳的資料量都差不多。
+      var cutoff = historyCutoff_();
+      var books = [], olderCount = {};
+      readBookings_().rows.forEach(function (b) {
+        if (b.end && b.end < cutoff) { olderCount[b.slotId] = (olderCount[b.slotId] || 0) + 1; return; }
+        books.push(bookingOut_(b));
       });
       // today 由伺服器給（台北時間），前端用它判斷狀態，避免手機時區/時間設錯算歪
-      return jsonRes_({ status: 'ok', today: today_(), slots: slots, bookings: books });
+      return jsonRes_({ status: 'ok', today: today_(), cutoff: cutoff, slots: slots, bookings: books, olderCount: olderCount });
     } catch (err) {
       return jsonRes_({ status: 'error', msg: err.message });
+    }
+  }
+
+  if (action === 'getHistory') {
+    var u3 = requireRole_(token, STAFF_PLUS_ROLES_);
+    if (!u3) return authFailRes_();
+    try {
+      var sid = Number((e.parameter && e.parameter.slotId) || 0);
+      var cut = historyCutoff_();
+      var old = readBookings_().rows
+        .filter(function (b) { return b.slotId === sid && b.end && b.end < cut; })
+        .map(bookingOut_)
+        .sort(function (a, b) { return a.end > b.end ? -1 : a.end < b.end ? 1 : 0; });
+      return jsonRes_({ status: 'ok', slotId: sid, bookings: old });
+    } catch (err3) {
+      return jsonRes_({ status: 'error', msg: err3.message });
     }
   }
 
