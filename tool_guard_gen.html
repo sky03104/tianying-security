@@ -219,8 +219,9 @@ function priorityFor(list, key) {
 const DEFAULT_TIME = { early: '0800-2000', late: '2000-0800' };
 // S班（0800-1600）月班表代號本身就代表實際上班時段跟一般早班08:00~20:00不同，
 // 2026-07-20咖哩用真實資料抓到：李怡蒨是S班卻被寫成0800-2000。
-// 目前只處理S這一種代號覆寫，其他代號（如有）之後遇到再加。
-const CODE_TIME_OVERRIDE = { 'S': '0800-1600' };
+// 2026-09-27 咖哩新增 C／D／E 三個班別，上班時段都跟一般早班不同，一併覆寫
+// （沒加的話會被當成一般早班印成 0800-2000）。
+const CODE_TIME_OVERRIDE = { 'S': '0800-1600', 'C': '1400-2200', 'D': '1100-2100', 'E': '1500-2300' };
 function timeForPerson(person, shift) {
   return (person && CODE_TIME_OVERRIDE[person.code]) || DEFAULT_TIME[shift];
 }

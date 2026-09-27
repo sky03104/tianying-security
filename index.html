@@ -109,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '48.25';
+const APP_VERSION = '49.26';
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -773,6 +773,10 @@ const ScheduleApp = (() => {
         H2: { label: "H2班", time: "11:00-22:30", color: "#C4B5FD", bg: "rgba(167,139,250,0.18)", hours: 11.5 },
         LN: { label: "LN班", time: "12:00-24:00", color: "#E879F9", bg: "rgba(232,121,249,0.2)", hours: 12 },
         N: { label: "N班", time: "20:00-24:00", color: "#F472B6", bg: "rgba(131,24,67,0.2)", hours: 4 },
+        /* 2026-09-27 咖哩新增：C／D／E 三個班別 */
+        C: { label: "C班", time: "14:00-22:00", color: "#38BDF8", bg: "rgba(56,189,248,0.2)", hours: 8 },
+        D: { label: "D班", time: "11:00-21:00", color: "#FB7185", bg: "rgba(251,113,133,0.2)", hours: 10 },
+        E: { label: "E班", time: "15:00-23:00", color: "#818CF8", bg: "rgba(129,140,248,0.2)", hours: 8 },
         休: { label: "休假", time: "—", color: C.warn, bg: "rgba(180,83,9,0.2)", hours: 0 },
         排休: { label: "排休", time: "—", color: "#FB923C", bg: "rgba(154,52,18,0.2)", hours: 0 },
         事: { label: "事假", time: "—", color: "#C084FC", bg: "rgba(99,102,241,0.15)", hours: 0 },
@@ -1980,7 +1984,7 @@ function ok(obj) {
             const [showAdd, setShowAdd] = useState(false);
             const [addForm, setAddForm] = useState({ code: '', label: '', time: '', hours: '', color: '#60A5FA' });
             const saveST = (extra) => {
-                const baseCodes = new Set(["B","海","A","S","L","H","H2","LN","N","休","排休","事","病","補","見","離","國例","休B","休A"]);
+                const baseCodes = new Set(["B","海","A","S","L","H","H2","LN","N","C","D","E","休","排休","事","病","補","見","離","國例","休B","休A"]);
                 const custom = Object.entries(SHIFT_TYPES)
                     .filter(([k]) => !baseCodes.has(k))
                     .map(([code, v]) => ({ code, label: v.label, time: v.time, hours: v.hours, color: v.color }));

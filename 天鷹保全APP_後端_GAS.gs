@@ -83,6 +83,10 @@ var SHIFT_INFO_ = {
   'LN':   { label: 'LN班',   time: '12:00-24:00', color: '#E879F9' },
   '南':   { label: '南館班', time: '11:00-23:00', color: '#FB7185' },
   'A':    { label: 'A班',    time: '08:00-20:00', color: '#A78BFA' },
+  // 2026-09-27 咖哩新增：沒列在這裡的代號會被顯示成「未排班」
+  'C':    { label: 'C班',    time: '14:00-22:00', color: '#38BDF8' },
+  'D':    { label: 'D班',    time: '11:00-21:00', color: '#FB7185' },
+  'E':    { label: 'E班',    time: '15:00-23:00', color: '#818CF8' },
   '休':   { label: '休假',   time: '—', color: '#FB923C' },
   '排休': { label: '排休',   time: '—', color: '#FB923C' },
   '事':   { label: '事假',   time: '—', color: '#C084FC' },
