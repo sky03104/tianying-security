@@ -442,7 +442,9 @@ try { if (typeof module !== 'undefined') Object.assign(module.exports, {
    ════════════════════════════════════════════════════════════════ */
 if (typeof document !== 'undefined') {
 
-var S = { slots: [], bookings: [], today: '', status: '', loaded: false, logs: {} };
+/* bookings 只有「近期」的（目前、預借、長期、最近 6 個月內結束的）；更早的歷史每格只知道筆數（older），
+   點「載入更早的紀錄」才讀，讀過的放 oldLoaded[車位ID]（2026-09-27 讀取優化）。 */
+var S = { slots: [], bookings: [], today: '', status: '', loaded: false, logs: {}, older: {}, oldLoaded: {} };
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(m){
@@ -517,6 +519,7 @@ async function loadAll(){
     var d = await fetchJson_(PARKING_GAS_URL + '?action=getAll&token=' + encodeURIComponent(getAuthToken()));
     if(d.status !== 'ok') throw new Error(d.msg || '讀取失敗');
     S.slots = d.slots || []; S.bookings = d.bookings || []; S.today = d.today || 本機今天();
+    S.older = d.olderCount || {};
     var first = !S.loaded; S.loaded = true; S.logs = {};
     render(first);
   } catch(err){
@@ -619,14 +622,32 @@ function openDetail(id){
     (st.current ? 登記卡(st.current, true) : '<div class="hint">目前沒有借用</div>') + '</div>';
   h += '<div class="sec"><div class="sec-h"><i class="ti ti-calendar-event"></i>車位預借登記（' + st.future.length + ' 筆）</div>' +
     (st.future.length ? st.future.map(function(b){ return 登記卡(b, false); }).join('') : '<div class="hint">沒有預借登記</div>') + '</div>';
-  if(st.past.length){
-    h += '<div class="sec"><details><summary class="sec-h" style="cursor:pointer">📜 過去的借用（' + st.past.length + ' 筆）</summary>' +
-      st.past.slice(0, 20).map(function(b){ return '<div class="log"><b>' + esc(b.unit) + '</b>（' + esc(b.purpose) + '）' + esc(民國期間(b.start, b.end)) + '</div>'; }).join('') +
+  var 更早 = S.oldLoaded[s.id];            // 已載入的更早紀錄（沒載過是 undefined）
+  var 更早筆數 = Number(S.older[s.id] || 0);  // 伺服器說還有幾筆更早的
+  var 過去 = st.past.concat(更早 || []);
+  if(過去.length || 更早筆數){
+    h += '<div class="sec"><details' + (更早 ? ' open' : '') + '><summary class="sec-h" style="cursor:pointer">📜 過去的借用（' +
+      (更早 ? 過去.length : st.past.length + (更早筆數 ? '＋更早 ' + 更早筆數 : '')) + ' 筆）</summary>' +
+      過去.map(function(b){ return '<div class="log"><b>' + esc(b.unit) + '</b>（' + esc(b.purpose) + '）' + esc(民國期間(b.start, b.end)) + '</div>'; }).join('') +
+      (更早筆數 && !更早 ? '<button class="act" style="margin-top:8px" id="btn-older" onclick="loadOlder(' + s.id + ')"><i class="ti ti-history"></i>載入更早的紀錄（' + 更早筆數 + ' 筆）</button>' : '') +
       '</details></div>';
   }
   h += '<div class="sec"><details ontoggle="if(this.open)loadLogs(' + s.id + ')"><summary class="sec-h" style="cursor:pointer">🧾 異動紀錄</summary><div id="logs-' + s.id + '"><div class="hint">讀取中…</div></div></details></div>';
   h += '<div class="btns"><button class="btn btn-gh" style="flex:1" onclick="closeModal()">關閉</button></div></div></div>';
   $('modal').innerHTML = h;
+}
+/* 讀某車格 6 個月以前的借用紀錄（平常不讀，登記只會一直增加，全部讀會越來越慢） */
+async function loadOlder(id){
+  var btn = $('btn-older'); if(btn){ btn.disabled = true; btn.innerHTML = '讀取中…'; }
+  try {
+    var d = await fetchJson_(PARKING_GAS_URL + '?action=getHistory&slotId=' + id + '&token=' + encodeURIComponent(getAuthToken()));
+    if(d.status !== 'ok') throw new Error(d.msg || '讀取失敗');
+    S.oldLoaded[id] = d.bookings || [];
+    openDetail(id);
+  } catch(e){
+    toast('✗ ' + e.message, 'err');
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-history"></i>載入更早的紀錄'; }
+  }
 }
 async function loadLogs(id){
   var box = $('logs-' + id); if(!box) return;
@@ -800,7 +821,7 @@ async function delBooking(id){
 /* onclick 用到的函式一律明確掛到 window：包在 if 區塊裡的 async function 不會自動變成全域，
    onclick 會找不到而且靜默失敗（2026-08-10 生理假工具踩過）。 */
 window.render = render; window.loadAll = loadAll; window.setFilter = setFilter;
-window.openDetail = openDetail; window.closeModal = closeModal; window.loadLogs = loadLogs;
+window.openDetail = openDetail; window.closeModal = closeModal; window.loadLogs = loadLogs; window.loadOlder = loadOlder;
 window.openSlotForm = openSlotForm; window.pickSize = pickSize; window.submitSlot = submitSlot;
 window.openControlForm = openControlForm; window.submitControl = submitControl; window.delSlot = delSlot;
 window.openBookingForm = openBookingForm; window.bookingHint = bookingHint; window.submitBooking = submitBooking;
