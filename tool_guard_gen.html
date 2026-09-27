@@ -222,6 +222,8 @@ const DEFAULT_TIME = { early: '0800-2000', late: '2000-0800' };
 // 2026-09-27 咖哩新增 C／D／E 三個班別，上班時段都跟一般早班不同，一併覆寫
 // （沒加的話會被當成一般早班印成 0800-2000）。
 const CODE_TIME_OVERRIDE = { 'S': '0800-1600', 'C': '1400-2200', 'D': '1100-2100', 'E': '1500-2300' };
+// 外哨增派（D 班）固定填寫位置：[P3車道下面那格(＝南側門的位置), 南側門下面那格]，標籤在第2欄、姓名在第3欄
+const OUTER_EXTRA_ROWS = [7, 8];
 function timeForPerson(person, shift) {
   return (person && CODE_TIME_OVERRIDE[person.code]) || DEFAULT_TIME[shift];
 }
@@ -489,19 +491,18 @@ function buildGuardMatrix(opts) {
     stopCands.slice(1).forEach(c => extraRowsPending.push({ label: '停巡增派', name: c.name, time: c.time }));
   }
   // ── 外哨增派（2026-09-27 新增：D 班，1100-2100） ──
-  // 咖哩指定位置：P3車道下面那格（第8列，平常是南側門的位置）。當天有開南側門時那格被佔用，
-  // 改到增派區找空白列；D 班不只一位時，第二位起也放增派區。
+  // 咖哩指定位置：P3車道下面那格（第8列，平常是南側門的位置）；當天有開南側門，
+  // 就填在南側門下面那格（第9列）。D 班不只一位時依序往下填，這兩格都用完才放增派區。
   if (outerExtra) {
     const outers = extraOuterD.map(p => ({ label: '外哨增派', name: p.name, time: CODE_TIME_OVERRIDE[p.code] }));
     if (!outers.length) { outers.push({ label: '外哨增派', name: '', time: '' }); warnings.push('找不到 D 班人員，外哨增派需手動填寫'); }
-    if (!southGate) {
-      rows[7][1] = '外哨增派';
-      if (outers[0].name) rows[7][2] = outers[0].name + '\n' + outers[0].time;
-      outers.slice(1).forEach(o => extraRowsPending.push(o));
-    } else {
-      warnings.push('今天有開南側門，P3車道下面那格已被佔用，外哨增派改排到下方增派區');
-      outers.forEach(o => extraRowsPending.push(o));
-    }
+    const outerRows = southGate ? [OUTER_EXTRA_ROWS[1]] : OUTER_EXTRA_ROWS.slice();
+    outers.forEach(o => {
+      const r = outerRows.shift();
+      if (r === undefined) { extraRowsPending.push(o); return; }
+      rows[r][1] = o.label;
+      if (o.name) rows[r][2] = o.name + '\n' + o.time;
+    });
   }
 
   // ── 泊車增派（手動輸入2人，固定 1230-2030） ──
@@ -650,6 +651,10 @@ function buildNameCellPlan(rows) {
     // 跟崗位走的判斷：forcedCodes(漢來)或有自己固定time(南側門/海底撈)都不是「跟人走」，
     // 換誰上時段都一樣，下拉才不會照本人月班表代號重算出錯的時段。
     if (String(rows[def.row][def.col - 1] || '') !== '') add(def.row, def.col, def.shift, !def.forcedCodes && !def.time);
+  });
+  // 外哨增派填在南側門下面那格時（第9列不在 POST_DEFS 裡），一樣要算人名格
+  OUTER_EXTRA_ROWS.forEach(r => {
+    if (!POST_DEFS.some(d => d.row === r && d.col === 2) && String(rows[r][1] || '') !== '') add(r, 2, 'early', false);
   });
   add(2, 4, 'early', true);  // 早班帶隊幹部
   add(2, 11, 'late', true);  // 晚班帶隊幹部
