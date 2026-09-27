@@ -489,9 +489,19 @@ function buildGuardMatrix(opts) {
     stopCands.slice(1).forEach(c => extraRowsPending.push({ label: '停巡增派', name: c.name, time: c.time }));
   }
   // ── 外哨增派（2026-09-27 新增：D 班，1100-2100） ──
+  // 咖哩指定位置：P3車道下面那格（第8列，平常是南側門的位置）。當天有開南側門時那格被佔用，
+  // 改到增派區找空白列；D 班不只一位時，第二位起也放增派區。
   if (outerExtra) {
-    if (extraOuterD.length) extraOuterD.forEach(p => extraRowsPending.push({ label: '外哨增派', name: p.name, time: CODE_TIME_OVERRIDE[p.code] }));
-    else { extraRowsPending.push({ label: '外哨增派', name: '', time: '' }); warnings.push('找不到 D 班人員，外哨增派需手動填寫'); }
+    const outers = extraOuterD.map(p => ({ label: '外哨增派', name: p.name, time: CODE_TIME_OVERRIDE[p.code] }));
+    if (!outers.length) { outers.push({ label: '外哨增派', name: '', time: '' }); warnings.push('找不到 D 班人員，外哨增派需手動填寫'); }
+    if (!southGate) {
+      rows[7][1] = '外哨增派';
+      if (outers[0].name) rows[7][2] = outers[0].name + '\n' + outers[0].time;
+      outers.slice(1).forEach(o => extraRowsPending.push(o));
+    } else {
+      warnings.push('今天有開南側門，P3車道下面那格已被佔用，外哨增派改排到下方增派區');
+      outers.forEach(o => extraRowsPending.push(o));
+    }
   }
 
   // ── 泊車增派（手動輸入2人，固定 1230-2030） ──
@@ -626,11 +636,15 @@ function nameCellTime(v, shift) {
   return i >= 0 ? s.slice(i + 1) : DEFAULT_TIME[shift];
 }
 // 找出所有「該放人名」的格子，連同它屬早班還是晚班、時段跟人走還是跟崗位走
+// 固定時段的增派哨位：格子還空著時（沒人可自動帶入），手動挑人填入要用這個時段，不是一般早班 0800-2000
+const SLOT_LABEL_TIME = { '外哨增派': CODE_TIME_OVERRIDE['D'] };
 function buildNameCellPlan(rows) {
   const plan = [];
-  const add = (r, c, shift, perPerson) => plan.push({
-    r: r, c: c, shift: shift, perPerson: !!perPerson, time: nameCellTime(rows[r][c], shift)
-  });
+  const add = (r, c, shift, perPerson) => {
+    const lab = String(rows[r][c - 1] || '').trim();
+    const time = (!rows[r][c] && SLOT_LABEL_TIME[lab]) || nameCellTime(rows[r][c], shift);
+    plan.push({ r: r, c: c, shift: shift, perPerson: !!perPerson, time: time });
+  };
   // 固定崗位：標籤沒寫出來的（例如當天沒勾南側門）代表這個哨位不存在，不給下拉
   POST_DEFS.forEach(def => {
     // 跟崗位走的判斷：forcedCodes(漢來)或有自己固定time(南側門/海底撈)都不是「跟人走」，
