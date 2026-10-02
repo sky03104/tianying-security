@@ -100,6 +100,7 @@ body{
 .cal-cell.past{opacity:.28; cursor:not-allowed;}
 .cal-cell.sel{background:linear-gradient(135deg,var(--gold3),var(--gold4)); color:var(--bg); font-weight:900; border-color:var(--gold2);}
 .cal-cell.today{border-color:var(--indigo);}
+.cal-cell.mine{border:1.5px dashed #4ADE80;}
 .cal-cell.full{background:rgba(248,113,113,.1); color:#F87171; cursor:not-allowed;}
 .cal-cell{position:relative;}
 .cal-cell .cnt{position:absolute; bottom:2px; left:0; right:0; text-align:center; font-size:8px; line-height:1; font-weight:700;}
@@ -238,6 +239,7 @@ body{
       <div class="cal-legend">
         <span><span class="dot" style="background:linear-gradient(135deg,var(--gold3),var(--gold4));"></span>已選</span>
         <span><span class="dot" style="background:rgba(248,113,113,.2);"></span>已滿</span>
+        <span><span class="dot" style="border:1.5px dashed #4ADE80;box-sizing:border-box;"></span>你已申請</span>
         <span>數字＝你班別當天人數/上限</span>
       </div>
       <div class="sel-count">已選 <b id="sel-count">0</b> 天</div>
@@ -394,7 +396,8 @@ function renderCal(){
     if(isSel) cls += ' sel';
     if(cur.getTime()===today.getTime()) cls += ' today';
     if(isFull && !isSel && !isPast) cls += ' full';
-    var canPick = !isPast && (!isFull || isSel);
+    if(myTaken[key] && !isSel && !isPast) cls += ' mine';  // 自己已申請過（待審核／已核准）
+    var canPick = !isPast && (!isFull || isSel || myTaken[key]);  // 自己申請過的要能點，才會跳「已申請過」提示
     var cntHtml = used>0 ? '<span class="cnt">'+used+'/'+myCap+'</span>' : '';
     html += '<div class="'+cls+'" data-key="'+key+'" '+(canPick?'onclick="toggleDay(this)"':'')+'>'+d+cntHtml+'</div>';
   }
@@ -418,11 +421,15 @@ function toggleDay(el){
   var myShift = (ME.shift === '早班') ? '早班' : '晚班';
   var myCap = CAP[myShift];
   var used = (dayCount[myShift] && dayCount[myShift][key]) || 0;
+  if(!isSel && myTaken[key]){
+    alert('⚠️ ' + key + ' 此日期已申請過');
+    return;
+  }
   if(used >= myCap && !isSel){
     alert('⚠️ ' + key + ' 當天「' + myShift + '」請假人數已滿（' + used + '/' + myCap + '）');
     return;
   }
-  if(!isSel && CAP_MONTH > 0 && !myTaken[key] && monthUsed(key.slice(0,7)) >= CAP_MONTH){
+  if(!isSel && CAP_MONTH > 0 && monthUsed(key.slice(0,7)) >= CAP_MONTH){
     alert('⚠️ 每人每月最多請 ' + CAP_MONTH + ' 天，' + parseInt(key.slice(5,7),10) + ' 月已申請 ' + monthUsed(key.slice(0,7)) + ' 天（含待審核）');
     return;
   }

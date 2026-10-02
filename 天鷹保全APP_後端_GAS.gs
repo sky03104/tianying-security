@@ -390,7 +390,11 @@ function submitLeave(e) {
 
     // ★ 每人每月請假天數上限（2026-10-02）：前端會先擋，但前端名單可能是舊的
     //   （兩支手機同時送、LINE 頁開著很久沒重整），以後端這份試算表為準再算一次
-    var over = checkMonthlyLeaveCap_(sh, d.empId, d.dates || []);
+    // ★ 同一人同一天不可重複申請（2026-10-02）：已拒絕的不算，可以重新申請
+    var taken = takenLeaveDates_(sh, d.empId);
+    var dup = (d.dates || []).filter(function (x) { return taken[String(x).trim()]; });
+    if (dup.length) return jsonRes({status:'err', code:'DUP_DATE', msg:'此日期已申請過：' + dup.join('、')});
+    var over = checkMonthlyLeaveCap_(sh, d.empId, d.dates || [], taken);
     if (over) return jsonRes({status:'err', code:'MONTH_CAP', msg:over});
 
     // 用工號查帳號管理的班別；前端有帶明確的 早班/晚班 才優先採用
@@ -419,11 +423,10 @@ function submitLeave(e) {
 //   ・同一天重複申請只算一天（用日期去重，不是加總 days 欄）
 //   ・跨月的申請逐日歸到各自月份分開算
 //   ・上限設 0 ＝ 不限制
-function checkMonthlyLeaveCap_(sh, empId, newDates) {
-  var cap = readSetting_(SETTING_KEY_CAP_MONTHLY, DEFAULT_CAP_MONTHLY);
-  if (!cap || cap <= 0) return '';
+// 此人已申請的日期（待審核＋已核准，已拒絕不算）：{ 'YYYY-MM-DD': true }
+function takenLeaveDates_(sh, empId) {
   var data = sh.getDataRange().getValues();
-  var taken = {};   // 'YYYY-MM-DD' → true（此人已申請的日期）
+  var taken = {};
   for (var r = 1; r < data.length; r++) {
     if (String(data[r][1]).replace(/^'/, '') !== String(empId)) continue;
     if (String(data[r][10]) === 'rejected') continue;
@@ -432,6 +435,13 @@ function checkMonthlyLeaveCap_(sh, empId, newDates) {
       : String(raw == null ? '' : raw).replace(/^'/, '').split(',');
     ds.forEach(function (x) { x = String(x).trim(); if (x) taken[x] = true; });
   }
+  return taken;
+}
+
+function checkMonthlyLeaveCap_(sh, empId, newDates, taken) {
+  var cap = readSetting_(SETTING_KEY_CAP_MONTHLY, DEFAULT_CAP_MONTHLY);
+  if (!cap || cap <= 0) return '';
+  taken = taken || takenLeaveDates_(sh, empId);
   var perMonth = {};  // 'YYYY-MM' → 天數（舊的＋這次新增、去重後）
   var all = {};
   Object.keys(taken).forEach(function (x) { all[x] = true; });

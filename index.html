@@ -4390,19 +4390,24 @@ function App() {
                                     const isPast = dStr < todayStr;
                                     const isTooSoon = dStr === todayStr || dStr === tomorrowStr; // 當天/隔天不開放申請
                                     const isSel = leaveForm.selectedDates.includes(dStr);
+                                    const isMine = myTaken.has(dStr); // 自己已申請過（待審核／已核准）
                                     const usedM = dayCount['早班'][dStr] || 0;
                                     const usedN = dayCount['晚班'][dStr] || 0;
                                     const fullM = usedM >= leaveCapMorning;
                                     const fullN = usedN >= leaveCapNight;
                                     const isFull = fullM && fullN; // 早晚都滿才視為該日額滿
                                     const isBlocked = isPast || isTooSoon;
-                                    const canPick = !isBlocked && (!isFull || isSel);
+                                    const canPick = !isBlocked && (!isFull || isSel || isMine); // 自己申請過的要能點，才會跳「已申請過」提示
                                     return (React.createElement("button", { key: i, disabled: !canPick, onClick: () => {
+                                            if (!isSel && isMine) {
+                                                showToast(`⚠️ ${dStr} 此日期已申請過`, 'err');
+                                                return;
+                                            }
                                             if (isFull && !isSel) {
                                                 showToast(`⚠️ ${dStr} 早晚班皆已額滿`);
                                                 return;
                                             }
-                                            if (!isSel && leaveCapMonthly > 0 && !myTaken.has(dStr) && usedThisMonth >= leaveCapMonthly) {
+                                            if (!isSel && leaveCapMonthly > 0 && usedThisMonth >= leaveCapMonthly) {
                                                 showToast(`⚠️ 每人每月最多請 ${leaveCapMonthly} 天，${month + 1} 月已申請 ${usedThisMonth} 天（含待審核）`, 'err');
                                                 return;
                                             }
@@ -4425,6 +4430,7 @@ function App() {
                                                         : 'var(--text)',
                                             border: isSel
                                                 ? '1px solid var(--gold)'
+                                                : isMine && !isBlocked ? '1.5px dashed #4ADE80'
                                                 : '1px solid rgba(255,255,255,.06)',
                                             borderRadius: 6,
                                             padding: 0,
@@ -4460,6 +4466,10 @@ function App() {
                                                 background: 'rgba(248,113,113,.2)',
                                                 borderRadius: 3, verticalAlign: 'middle' } }),
                                         " \u5DF2\u6EFF"),
+                                    React.createElement("span", null,
+                                        React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10,
+                                                border: '1.5px dashed #4ADE80', borderRadius: 3, verticalAlign: 'middle', boxSizing: 'border-box' } }),
+                                        " 你已申請"),
                                     React.createElement("span", null, "\u65E9/\u665A = \u65E9\u73ED\u00B7\u665A\u73ED\u7533\u8ACB\u4EBA\u6578/\u4E0A\u9650"),
                                     React.createElement("span", null, "\u7576\u5929\u3001\u9694\u5929\u4E0D\u958B\u653E\u7533\u8ACB"))));
                         })()),
@@ -4500,8 +4510,14 @@ function App() {
                                 return;
                             }
                             const dates = [...leaveForm.selectedDates].sort();
+                            const 已申請 = 我的請假日期_(leaveRequests, currentUser.empId);
+                            const 重複 = dates.filter(x => 已申請.has(x));
+                            if (重複.length) {
+                                showToast(`⚠️ 此日期已申請過：${重複.join('、')}`, 'err');
+                                return;
+                            }
                             if (leaveCapMonthly > 0) {
-                                const taken = 我的請假日期_(leaveRequests, currentUser.empId);
+                                const taken = 已申請;
                                 const over = [...new Set(dates.map(x => x.slice(0, 7)))]
                                     .map(ym => [ym, 月請假天數_(taken, dates, ym)])
                                     .filter(([, n]) => n > leaveCapMonthly);
@@ -4537,7 +4553,7 @@ function App() {
                                     body.append('data', JSON.stringify(req));
                                     const res = await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
                                     const d = await res.json();
-                                    if (d.code === 'MONTH_CAP') {
+                                    if (d.code === 'MONTH_CAP' || d.code === 'DUP_DATE') {
                                         // 後端以試算表為準再算一次，超過上限就退件：把剛剛先放進清單的那筆拿掉
                                         setLeaveRequests(prev => prev.filter(x => x.id !== req.id));
                                         showToast('❌ 未送出：' + d.msg, 'err');
