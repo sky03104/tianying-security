@@ -1558,15 +1558,20 @@ function handleLineWebhook_(e) {
           writeSetting_('tomorrowPostGroupId', gid);
           if (ev.replyToken) {
             replyLineMessage_(ev.replyToken,
-              '✅ 已將本群組設為「明日哨表」推播群組。\n每晚 21:00 將自動發送完整哨表（早班區／晚班區）至此群組。');
+              '✅ 已記錄本群組。\n要看明天的完整哨表，在群組裡輸入「明日哨表」即可。');
           }
         }
         continue;
       }
 
-      // ── 群組/聊天室來源：只接受推播，不回應任何文字訊息 ──
+      // ── 群組/聊天室來源：只回應「明日哨表」這一個指令（完全符合才回），其他聊天一律不理 ──
+      //   2026-10-02：21:00 群組推播停用後，大家改在群組打「明日哨表」查，用回覆送出不扣額度
       var sourceType = (ev.source && ev.source.type) || 'user';
-      if ((sourceType === 'group' || sourceType === 'room') && ev.type === 'message') continue;
+      if ((sourceType === 'group' || sourceType === 'room') && ev.type === 'message') {
+        var gText = (ev.message && ev.message.type === 'text') ? String(ev.message.text || '').trim() : '';
+        if (gText === '明日哨表' && ev.replyToken) replyFullPost_(ev.replyToken);
+        continue;
+      }
 
       if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') continue;
 
@@ -1598,6 +1603,8 @@ function handleLineWebhook_(e) {
         }
       } else if (text.indexOf('請假') !== -1 || text === '排休' || text === '我要請假') {
         replyLineFlex_(replyToken, '📝 請假申請', buildLeaveEntryFlex_());
+      } else if (text === '明日哨表' || text === '完整哨表') {
+        replyFullPost_(replyToken);
       } else if (text.indexOf('今日哨點') !== -1) {
         handleMyTodayPost_(lineUserId, replyToken);
       } else if (text.indexOf('哨點') !== -1 || text.indexOf('上哪') !== -1) {
@@ -1611,6 +1618,7 @@ function handleLineWebhook_(e) {
           '📅 班表查詢：輸入「本週班表」「本月班表」「今日班表」「明日班表」\n\n' +
           '📝 請假申請：輸入「請假」開啟線上請假表單。\n\n' +
           '📍 今日／明日哨點：輸入「今日哨點」或「哨點」查詢執勤位置。\n\n' +
+          '📋 明日完整哨表：輸入「明日哨表」（群組裡也可以打）。\n\n' +
           '🔓 解除綁定：輸入「解除綁定」即可解除目前 LINE 帳號與工號的連結。');
       }
     }
@@ -1813,6 +1821,94 @@ function getLineUserIdByEmpId_(empId) {
   return null;
 }
 
+// ════════════════════════════════════════════════════════════
+// 【LINE 推播紀錄】2026-10-02 新增
+//   LINE 免費訊息額度：push 到「個人」算 1 則；push 到「群組」＝群組有幾人就算幾則
+//   （LINE 官方計費規則：依收到訊息的人數計算）。reply（回覆使用者打的字）不算額度。
+//   之前以為群組只算 1 則，把逐人推播改成群組推播並沒有省到額度。
+//   每次推播都記一筆到「推播紀錄」分頁，額度又燒光時直接看這張表就知道是誰花的。
+// ════════════════════════════════════════════════════════════
+function logPush_(to, summary, code) {
+  try {
+    var isGroup = /^[CR]/.test(String(to || ''));   // C 開頭＝群組、R 開頭＝多人聊天室、U 開頭＝個人
+    var n = isGroup ? getGroupMemberCount_(String(to)) : 1;
+    var sh = ss_().getSheetByName('推播紀錄');
+    if (!sh) {
+      sh = ss_().insertSheet('推播紀錄');
+      sh.appendRow(['時間', '對象', '估計則數', 'HTTP', '內容摘要']);
+      sh.setFrozenRows(1);
+      sh.getRange(1, 1, 1, 5).setBackground('#D4A800').setFontColor('#0A0C10').setFontWeight('bold');
+    }
+    sh.appendRow([
+      Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'),
+      isGroup ? '群組' : '個人',
+      code === 200 ? n : 0,      // 失敗的推播不扣額度
+      code,
+      String(summary || '').replace(/\s+/g, ' ').slice(0, 60)
+    ]);
+  } catch (err) {
+    console.error('logPush_ 失敗（不影響推播本身）：' + err.toString());
+  }
+}
+
+// 群組人數（快取 6 小時，避免每次推播都多打一次 API；此 API 本身不扣額度）
+function getGroupMemberCount_(groupId) {
+  var cache = CacheService.getScriptCache();
+  var key = 'grpcnt_' + groupId;
+  var hit = cache.get(key);
+  if (hit) return Number(hit);
+  try {
+    var token = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+    var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/group/' + groupId + '/members/count', {
+      headers: { 'Authorization': 'Bearer ' + token }, muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() !== 200) return -1;   // -1＝查不到人數
+    var n = Number(JSON.parse(resp.getContentText()).count) || -1;
+    if (n > 0) cache.put(key, String(n), 21600);
+    return n;
+  } catch (err) {
+    return -1;
+  }
+}
+
+// 【診斷】在 Apps Script 編輯器選這個函式執行，看執行紀錄：
+//   本月已用／上限、群組人數、最近 7 天每天各類訊息用了幾則（LINE 官方統計）
+function 診斷LINE訊息用量() {
+  var token = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+  if (!token) { Logger.log('❌ 沒有 LINE_CHANNEL_ACCESS_TOKEN'); return; }
+  var get = function (path) {
+    var r = UrlFetchApp.fetch('https://api.line.me' + path, { headers: { 'Authorization': 'Bearer ' + token }, muteHttpExceptions: true });
+    return r.getResponseCode() === 200 ? JSON.parse(r.getContentText()) : { _err: r.getResponseCode() + ' ' + r.getContentText() };
+  };
+  var quota = get('/v2/bot/message/quota');
+  var used = get('/v2/bot/message/quota/consumption');
+  Logger.log('① 本月免費額度：' + (quota.value != null ? quota.value : JSON.stringify(quota)) +
+    '　已用：' + (used.totalUsage != null ? used.totalUsage : JSON.stringify(used)));
+
+  var groupId = readSettingStr_('tomorrowPostGroupId', '');
+  if (groupId) {
+    CacheService.getScriptCache().remove('grpcnt_' + groupId);
+    var n = getGroupMemberCount_(groupId);
+    Logger.log('② 哨表群組人數：' + n + ' 人 → 每推一次到群組就扣 ' + n + ' 則');
+    Logger.log('   每天 21:00 明日哨表推播 → 一個月約 ' + (n * 30) + ' 則（免費額度 ' + quota.value + '）');
+  } else {
+    Logger.log('② 沒有設定哨表群組');
+  }
+
+  Logger.log('③ 最近 7 天每天用量（LINE 官方統計，前一天的數字隔天才出來；apiPush＝程式推播、apiReply＝回覆不扣額度）');
+  for (var i = 1; i <= 7; i++) {
+    var d = new Date(Date.now() - i * 86400000);
+    var ymd = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyyMMdd');   // LINE 統計用日本時間的日期
+    var st = get('/v2/bot/insight/message/delivery?date=' + ymd);
+    if (st._err) { Logger.log('   ' + ymd + '：查詢失敗 ' + st._err); continue; }
+    if (st.status !== 'ready') { Logger.log('   ' + ymd + '：統計尚未產生（' + st.status + '）'); continue; }
+    Logger.log('   ' + ymd + '：程式推播 apiPush=' + (st.apiPush || 0) +
+      '　群發 broadcast=' + (st.broadcast || 0) + '　分眾 targeting=' + (st.targeting || 0) +
+      '　回覆 apiReply=' + (st.apiReply || 0) + '（不扣額度）');
+  }
+  Logger.log('④ 之後每一次推播都會記在「推播紀錄」分頁（時間／個人或群組／估計則數／內容），額度又燒光時看那張表');
+}
+
 function getLeaveTypeColor_(type) {
   return LEAVE_TYPE_COLOR_[type] || '#818CF8';
 }
@@ -1822,7 +1918,7 @@ function pushLineMessage_(lineUserId, text) {
     var token = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
     if (!token || !lineUserId) return;
 
-    UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
       method: 'post',
       contentType: 'application/json',
       headers: { 'Authorization': 'Bearer ' + token },
@@ -1832,6 +1928,7 @@ function pushLineMessage_(lineUserId, text) {
       }),
       muteHttpExceptions: true
     });
+    logPush_(lineUserId, text, resp.getResponseCode());
   } catch (err) {
     console.error('pushLineMessage_ 失敗：' + err.toString());
   }
@@ -1860,6 +1957,7 @@ function pushLineFlex_(lineUserId, altText, flexContents) {
       muteHttpExceptions: true
     });
     var code = resp.getResponseCode();
+    logPush_(lineUserId, altText, code);
     if (code !== 200) {
       console.error('pushLineFlex_ 推播失敗 HTTP ' + code + '：' + resp.getContentText());
     }
@@ -2609,6 +2707,7 @@ function pushTextToGroup_(groupId, text) {
     muteHttpExceptions: true
   });
   var code = resp.getResponseCode();
+  logPush_(groupId, text, code);
   if (code !== 200) console.error('群組文字推播失敗 HTTP ' + code + '：' + resp.getContentText());
   return code;
 }
@@ -3117,7 +3216,7 @@ function 測試群組哨表推播() {
   var code = pushFullPostToGroup_(groupId, full.dateInfo.label, full.early, full.late);
   Logger.log('④ HTTP 回應碼：' + code);
   if (code === 200) Logger.log('✅ 群組推播成功！群組應已收到完整哨表。');
-  else if (code === 429) Logger.log('❌ 429 → 本月推播額度已用完（但群組只算1則，下月重置即可，或升級方案）');
+  else if (code === 429) Logger.log('❌ 429 → 本月推播額度已用完（下月重置，或升級方案）。注意：群組推播是「群組有幾人就算幾則」，不是只算 1 則');
   else if (code === 400) Logger.log('❌ 400 → groupId 失效（機器人可能已被踢出群組）');
   else if (code === 401) Logger.log('❌ 401 → Token 失效');
   Logger.log('===== 診斷結束 =====');
@@ -3680,6 +3779,7 @@ function pushFullPostToGroup_(groupId, dateLabel, early, late) {
     muteHttpExceptions: true
   });
   var code = resp.getResponseCode();
+  logPush_(groupId, '📋 明日完整哨表 ' + (dateLabel || ''), code);
   if (code !== 200) console.error('群組哨表推播失敗 HTTP ' + code + '：' + resp.getContentText());
   return code;
 }
@@ -3753,7 +3853,13 @@ function pushTomorrowPostAction_(e) {
   }
 }
 
+// ⛔ 2026-10-02 停用（咖哩決定）：群組推播是「群組有幾人就扣幾則」，每天推一次一個月要上千則，
+//   免費 200 則幾天就燒光，連請假審核等個人通知都跟著發不出去。改成群組裡打「明日哨表」用回覆查（不扣額度）。
+//   觸發器若還在也不會推播；執行一次「一鍵重建哨表觸發器」會把 21:00 觸發器刪掉。
+//   要恢復：刪掉下面這行 return，並在一鍵重建哨表觸發器補回 21:00 觸發器。
 function pushTomorrowPostScheduled_() {
+  Logger.log('21:00 明日哨表群組推播已停用（2026-10-02），未推播');
+  return;
   try {
     var pv = tomorrowPostGroupCore_(false);
     if (pv.status === 'err') { console.error('明日哨表群組推播失敗：' + pv.msg); return; }
@@ -3772,14 +3878,30 @@ function pushTomorrowPostScheduled_() {
   }
 }
 
+// 2026-10-02：21:00 推播停用，這支改成只刪除觸發器
 function setupTomorrowPostTrigger_() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
     if (triggers[i].getHandlerFunction() === 'pushTomorrowPostScheduled_') ScriptApp.deleteTrigger(triggers[i]);
   }
-  ScriptApp.newTrigger('pushTomorrowPostScheduled_')
-    .timeBased().everyDays(1).atHour(21).inTimezone('Asia/Taipei').create();
-  Logger.log('已建立明日哨點每日21:00推播觸發器');
+  Logger.log('已刪除明日哨點 21:00 推播觸發器（推播已停用）');
+}
+
+// 用回覆送出明日完整哨表（reply 不扣免費額度）。哨表日期不是明天就明講，不拿舊的充數
+function replyFullPost_(replyToken) {
+  try {
+    var full = parsePostFullList_();
+    if (full.error) { replyLineMessage_(replyToken, '⚠️ 讀取明日哨表失敗：' + full.error); return; }
+    var dm = checkDateMatch_(full.dateInfo, 1);
+    if (!dm.match) {
+      replyLineMessage_(replyToken, '⏳ 明日哨表尚未更新（目前是 ' + full.dateInfo.label + ' 的哨表），請稍後再查。');
+      return;
+    }
+    replyLineFlex_(replyToken, '📋 明日完整哨表 ' + (full.dateInfo.label || ''),
+      buildFullPostFlex_(full.dateInfo.label, full.early, full.late));
+  } catch (err) {
+    console.error('replyFullPost_ 失敗：' + err.toString());
+  }
 }
 
 // 每日08:00：把當時的 明日哨表 內容原地覆寫進 今日哨表（保留分頁gid不變，完全靜默無推播）
@@ -3900,11 +4022,10 @@ function 一鍵重建哨表觸發器() {
       log.push('⏭️ 保留（非哨表相關）：' + fn);
     }
   }
-  ScriptApp.newTrigger('pushTomorrowPostScheduled_')
-    .timeBased().everyDays(1).atHour(21).inTimezone('Asia/Taipei').create();
+  // 2026-10-02：21:00 群組哨表推播停用（群組推播按人數扣額度），不再重建
   ScriptApp.newTrigger('snapshotTodayPostScheduled_')
     .timeBased().everyDays(1).atHour(8).inTimezone('Asia/Taipei').create();
-  log.push('✅ 已重建：pushTomorrowPostScheduled_（每日21:00 群組版完整哨表，只吃1則額度）');
+  log.push('⛔ 不再建立：pushTomorrowPostScheduled_（21:00 群組哨表推播已停用，群組推播是按群組人數扣額度）');
   log.push('✅ 已重建：snapshotTodayPostScheduled_（每日08:00 今日哨表快照，無推播）');
   log.push('提醒：個人「哨點」查詢是 reply 回覆訊息，不佔每月200則推播額度，可放心使用。');
   Logger.log(log.join('\n'));
