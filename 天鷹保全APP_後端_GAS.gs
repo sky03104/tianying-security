@@ -1558,20 +1558,16 @@ function handleLineWebhook_(e) {
           writeSetting_('tomorrowPostGroupId', gid);
           if (ev.replyToken) {
             replyLineMessage_(ev.replyToken,
-              '✅ 已記錄本群組。\n要看明天的完整哨表，在群組裡輸入「明日哨表」即可。');
+              '✅ 已記錄本群組。\n要看明天的完整哨表，請私訊本帳號輸入「明日哨表」。');
           }
         }
         continue;
       }
 
-      // ── 群組/聊天室來源：只回應「明日哨表」這一個指令（完全符合才回），其他聊天一律不理 ──
-      //   2026-10-02：21:00 群組推播停用後，大家改在群組打「明日哨表」查，用回覆送出不扣額度
+      // ── 群組/聊天室來源：只接受推播，不回應任何文字訊息 ──
+      //   2026-10-02 咖哩決定：「明日哨表」也只開放私訊查，群組不回，避免很多人在群組一直打造成洗版
       var sourceType = (ev.source && ev.source.type) || 'user';
-      if ((sourceType === 'group' || sourceType === 'room') && ev.type === 'message') {
-        var gText = (ev.message && ev.message.type === 'text') ? String(ev.message.text || '').trim() : '';
-        if (gText === '明日哨表' && ev.replyToken) replyFullPost_(ev.replyToken);
-        continue;
-      }
+      if ((sourceType === 'group' || sourceType === 'room') && ev.type === 'message') continue;
 
       if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') continue;
 
@@ -1618,7 +1614,7 @@ function handleLineWebhook_(e) {
           '📅 班表查詢：輸入「本週班表」「本月班表」「今日班表」「明日班表」\n\n' +
           '📝 請假申請：輸入「請假」開啟線上請假表單。\n\n' +
           '📍 今日／明日哨點：輸入「今日哨點」或「哨點」查詢執勤位置。\n\n' +
-          '📋 明日完整哨表：輸入「明日哨表」（群組裡也可以打）。\n\n' +
+          '📋 明日完整哨表：輸入「明日哨表」。\n\n' +
           '🔓 解除綁定：輸入「解除綁定」即可解除目前 LINE 帳號與工號的連結。');
       }
     }
@@ -3854,7 +3850,7 @@ function pushTomorrowPostAction_(e) {
 }
 
 // ⛔ 2026-10-02 停用（咖哩決定）：群組推播是「群組有幾人就扣幾則」，每天推一次一個月要上千則，
-//   免費 200 則幾天就燒光，連請假審核等個人通知都跟著發不出去。改成群組裡打「明日哨表」用回覆查（不扣額度）。
+//   免費 200 則幾天就燒光，連請假審核等個人通知都跟著發不出去。改成私訊機器人打「明日哨表」用回覆查（不扣額度，群組不回避免洗版）。
 //   觸發器若還在也不會推播；執行一次「一鍵重建哨表觸發器」會把 21:00 觸發器刪掉。
 //   要恢復：刪掉下面這行 return，並在一鍵重建哨表觸發器補回 21:00 觸發器。
 function pushTomorrowPostScheduled_() {
