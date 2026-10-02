@@ -388,6 +388,11 @@ function submitLeave(e) {
     if (!d.empId || !d.name) return jsonRes({status:'err', msg:'申請資料不完整'});
     var sh = getLeaveSheet();
 
+    // ★ 每人每月請假天數上限（2026-10-02）：前端會先擋，但前端名單可能是舊的
+    //   （兩支手機同時送、LINE 頁開著很久沒重整），以後端這份試算表為準再算一次
+    var over = checkMonthlyLeaveCap_(sh, d.empId, d.dates || []);
+    if (over) return jsonRes({status:'err', code:'MONTH_CAP', msg:over});
+
     // 用工號查帳號管理的班別；前端有帶明確的 早班/晚班 才優先採用
     // 查不到就存空字串，不准偷偷塞晚班——空字串代表「帳號未設定班別」，
     // getLeaveRequests() 統計人數時會直接略過，不計入任何一班的上限
@@ -407,6 +412,40 @@ function submitLeave(e) {
   } catch(err) {
     return jsonRes({status:'err', msg:err.toString()});
   }
+}
+
+// 每人每月請假天數上限檢查：超過回傳錯誤訊息字串，沒超過回傳空字串。
+//   ・全部假別合計（咖哩 2026-10-02 決定），待審核＋已核准都算，已拒絕不算
+//   ・同一天重複申請只算一天（用日期去重，不是加總 days 欄）
+//   ・跨月的申請逐日歸到各自月份分開算
+//   ・上限設 0 ＝ 不限制
+function checkMonthlyLeaveCap_(sh, empId, newDates) {
+  var cap = readSetting_(SETTING_KEY_CAP_MONTHLY, DEFAULT_CAP_MONTHLY);
+  if (!cap || cap <= 0) return '';
+  var data = sh.getDataRange().getValues();
+  var taken = {};   // 'YYYY-MM-DD' → true（此人已申請的日期）
+  for (var r = 1; r < data.length; r++) {
+    if (String(data[r][1]).replace(/^'/, '') !== String(empId)) continue;
+    if (String(data[r][10]) === 'rejected') continue;
+    var raw = data[r][5];
+    var ds = (raw instanceof Date) ? [normDate_(raw)]
+      : String(raw == null ? '' : raw).replace(/^'/, '').split(',');
+    ds.forEach(function (x) { x = String(x).trim(); if (x) taken[x] = true; });
+  }
+  var perMonth = {};  // 'YYYY-MM' → 天數（舊的＋這次新增、去重後）
+  var all = {};
+  Object.keys(taken).forEach(function (x) { all[x] = true; });
+  (newDates || []).forEach(function (x) { x = String(x).trim(); if (x) all[x] = true; });
+  Object.keys(all).forEach(function (x) { var k = x.slice(0, 7); perMonth[k] = (perMonth[k] || 0) + 1; });
+  var bad = [];
+  var seen = {};
+  (newDates || []).forEach(function (x) {
+    var k = String(x).trim().slice(0, 7);
+    if (!k || seen[k]) return;
+    seen[k] = true;
+    if (perMonth[k] > cap) bad.push(parseInt(k.slice(5), 10) + ' 月合計 ' + perMonth[k] + ' 天');
+  });
+  return bad.length ? ('超過每人每月最多 ' + cap + ' 天的請假上限（' + bad.join('、') + '，含待審核）') : '';
 }
 
 function normDate_(val) {
@@ -2742,11 +2781,13 @@ function buildLeaveEntryFlex_() {
 // 設定鍵名常數（LIFF 頁、管理員頁、GAS 三方必須一致）
 var SETTING_KEY_CAP_MORNING = 'leaveCapMorning';
 var SETTING_KEY_CAP_NIGHT   = 'leaveCapNight';
+var SETTING_KEY_CAP_MONTHLY = 'leaveCapMonthly'; // ★ 每人每月最多請假天數（2026-10-02 新增，全部假別合計，0＝不限制）
 var SETTING_KEY_TOOL_PERMS  = 'toolPerms';   // ★ 工具權限雲端同步用設定鍵
 var SETTING_KEY_WORK_ALLOWED = 'workAllowedIds'; // ★ 施工單查詢 正職/兼職個別白名單（JSON字串；空=不限制）
 var SETTING_KEY_TOOLS_CONFIG = 'toolsConfig'; // ★ 工具名稱/圖示/分類 覆寫表（JSON字串，id→{icon,name,category}；空=沿用預設）
 var DEFAULT_CAP_MORNING = 5;
 var DEFAULT_CAP_NIGHT   = 3;
+var DEFAULT_CAP_MONTHLY = 3;
 
 function getSettingsSheet_() {
   var ss = ss_();
@@ -2810,7 +2851,8 @@ function getSettings() {
     var res = {
       status: 'ok',
       leaveCapMorning: readSetting_(SETTING_KEY_CAP_MORNING, DEFAULT_CAP_MORNING),
-      leaveCapNight:   readSetting_(SETTING_KEY_CAP_NIGHT,   DEFAULT_CAP_NIGHT)
+      leaveCapNight:   readSetting_(SETTING_KEY_CAP_NIGHT,   DEFAULT_CAP_NIGHT),
+      leaveCapMonthly: readSetting_(SETTING_KEY_CAP_MONTHLY, DEFAULT_CAP_MONTHLY)
     };
     // ★ 工具權限：有設定才回傳（空字串代表雲端尚未設定，前端沿用本機）
     var tp = readSettingStr_(SETTING_KEY_TOOL_PERMS, '');
@@ -2829,7 +2871,8 @@ function getSettings() {
     return jsonRes(res);
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString(),
-      leaveCapMorning: DEFAULT_CAP_MORNING, leaveCapNight: DEFAULT_CAP_NIGHT});
+      leaveCapMorning: DEFAULT_CAP_MORNING, leaveCapNight: DEFAULT_CAP_NIGHT,
+      leaveCapMonthly: DEFAULT_CAP_MONTHLY});
   }
 }
 
@@ -2863,6 +2906,8 @@ function setSettings(e) {
     var n = parseInt(d.leaveCapNight, 10);
     if (!isNaN(m) && m >= 0) writeSetting_(SETTING_KEY_CAP_MORNING, m);
     if (!isNaN(n) && n >= 0) writeSetting_(SETTING_KEY_CAP_NIGHT, n);
+    var mo = parseInt(d.leaveCapMonthly, 10);
+    if (!isNaN(mo) && mo >= 0) writeSetting_(SETTING_KEY_CAP_MONTHLY, mo);
 
     // ★ 工具權限：前端有帶非空字串才寫入（toolPerms 為 JSON 字串）
     if (typeof d.toolPerms === 'string' && d.toolPerms.trim() !== '') {
@@ -2884,7 +2929,8 @@ function setSettings(e) {
     var res = {
       status: 'ok',
       leaveCapMorning: readSetting_(SETTING_KEY_CAP_MORNING, DEFAULT_CAP_MORNING),
-      leaveCapNight:   readSetting_(SETTING_KEY_CAP_NIGHT,   DEFAULT_CAP_NIGHT)
+      leaveCapNight:   readSetting_(SETTING_KEY_CAP_NIGHT,   DEFAULT_CAP_NIGHT),
+      leaveCapMonthly: readSetting_(SETTING_KEY_CAP_MONTHLY, DEFAULT_CAP_MONTHLY)
     };
     var tp = readSettingStr_(SETTING_KEY_TOOL_PERMS, '');
     if (tp) res.toolPerms = tp;

@@ -109,7 +109,28 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '56.28';
+const APP_VERSION = '57.29';
+
+/* ── 每人每月請假天數上限（2026-10-02 新增）──
+   全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
+   後端 checkMonthlyLeaveCap_() 規則必須跟這裡一致（後端以試算表為準再擋一次）。
+   liff_leave.html（LINE 請假頁）也有同一套規則。 */
+function 我的請假日期_(list, empId) {
+  const taken = new Set();
+  if (!empId) return taken;
+  (list || []).forEach(r => {
+    if (String(r.empId) !== String(empId) || r.status === 'rejected') return;
+    (r.dates || []).forEach(d => { if (d) taken.add(String(d)); });
+  });
+  return taken;
+}
+// 某月（'YYYY-MM'）合計天數：已申請的＋這次要送的，去重後算
+function 月請假天數_(taken, newDates, ym) {
+  const all = new Set();
+  taken.forEach(d => { if (d.slice(0, 7) === ym) all.add(d); });
+  (newDates || []).forEach(d => { if (String(d).slice(0, 7) === ym) all.add(String(d)); });
+  return all.size;
+}
 
 // PWA版本自動偵測（2026-08-27新增）：定期重新抓index.html比對APP_VERSION，
 // 版本不同就跳提示讓使用者自己按更新，不強制自動重整（避免打字打到一半被reload）
@@ -2744,6 +2765,7 @@ function App() {
     });
     const [leaveCapMorning, setLeaveCapMorning] = useState(5); // 早班每天最多請假人數
     const [leaveCapNight, setLeaveCapNight] = useState(3);     // 晚班每天最多請假人數
+    const [leaveCapMonthly, setLeaveCapMonthly] = useState(3); // 每人每月最多請假天數（全部假別合計，0＝不限制）
     const [userDb, setUserDb] = useState(() => {
         // 2026-07-26：帳號資料一律以雲端「帳號管理」表為準，前端不再內建任何帳號資料。
         // 這裡只讀本機快取，用途是「雲端還沒載完 / 剛好離線」時畫面有東西可顯示；
@@ -3104,9 +3126,14 @@ function App() {
         })();
         return () => { cancelled = true; };
     }, []);
+    /* 新提示出現時要取消上一個的計時器：原本各自 setTimeout，前一個提示的計時器會把
+       緊接著出現的提示提早關掉（例如請假「已送出」後馬上被後端退件，錯誤訊息只閃不到 1 秒）。
+       錯誤提示多停留一點，現場才看得完。 */
+    const toastTimerRef = React.useRef(null);
     const showToast = (msg, type = 'ok') => {
         setToast({ msg, type });
-        setTimeout(() => setToast(null), 2200);
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToast(null), type === 'err' ? 3500 : 2200);
     };
     /* 登入改由後端驗證（2026-07-26）：前端不再持有密碼，也不再自己比對。
        loggingIn 同時兼作防連點，避免網路慢的時候按兩下送出兩次。 */
@@ -3244,6 +3271,7 @@ function App() {
         if (!d || d.status !== 'ok') return;
         if (typeof d.leaveCapMorning === 'number') setLeaveCapMorning(d.leaveCapMorning);
         if (typeof d.leaveCapNight === 'number') setLeaveCapNight(d.leaveCapNight);
+        if (typeof d.leaveCapMonthly === 'number') setLeaveCapMonthly(d.leaveCapMonthly);
         if (d.toolPerms) {
             try {
                 const cp = typeof d.toolPerms === 'string' ? JSON.parse(d.toolPerms) : d.toolPerms;
@@ -3332,15 +3360,15 @@ function App() {
         }
     };
     /* ── 管理員儲存早晚班上限到雲端 ── */
-    const saveLeaveSettings = async (m, n) => {
+    const saveLeaveSettings = async (m, n, mo) => {
         try {
             const body = new FormData();
             body.append('action', 'setSettings');
-            body.append('data', JSON.stringify({ leaveCapMorning: m, leaveCapNight: n }));
+            body.append('data', JSON.stringify({ leaveCapMorning: m, leaveCapNight: n, leaveCapMonthly: mo }));
             const res = await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
             const d = await res.json();
             if (d.status === 'ok') {
-                showToast(`✅ 已儲存上限（早${d.leaveCapMorning}／晚${d.leaveCapNight}）`);
+                showToast(`✅ 已儲存上限（早${d.leaveCapMorning}／晚${d.leaveCapNight}／每人每月${d.leaveCapMonthly ? d.leaveCapMonthly + '天' : '不限'}）`);
             } else {
                 showToast('⚠️ 上限儲存失敗：' + (d.msg || '未知錯誤'), 'err');
             }
@@ -4338,6 +4366,10 @@ function App() {
                                     dayCount[sh][d] = (dayCount[sh][d] || 0) + 1;
                                 });
                             });
+                            // 每人每月上限：自己各月已申請的日期（待審核＋已核准，已拒絕不算；同一天只算一次）
+                            const myTaken = 我的請假日期_(leaveRequests, currentUser && currentUser.empId);
+                            const ymNow = `${year}-${String(month + 1).padStart(2, '0')}`;
+                            const usedThisMonth = 月請假天數_(myTaken, leaveForm.selectedDates, ymNow);
                             const cells = [];
                             for (let i = 0; i < firstDay; i++)
                                 cells.push(null);
@@ -4346,6 +4378,9 @@ function App() {
                             return (React.createElement("div", { style: { background: 'rgba(255,255,255,.04)',
                                     border: '1px solid rgba(255,255,255,.08)', borderTop: 'none',
                                     borderRadius: '0 0 8px 8px', padding: 8 } },
+                                leaveCapMonthly > 0 && (React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 6, textAlign: 'center',
+                                        color: usedThisMonth >= leaveCapMonthly ? '#F87171' : 'var(--muted)' } },
+                                    `📊 ${month + 1} 月已申請 ${usedThisMonth}／${leaveCapMonthly} 天（含待審核與這次選的）`)),
                                 React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 } }, ['日', '一', '二', '三', '四', '五', '六'].map(w => (React.createElement("div", { key: w, style: { textAlign: 'center', fontSize: 11, fontWeight: 700,
                                         color: 'var(--muted)', padding: '4px 0' } }, w)))),
                                 React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 } }, cells.map((d, i) => {
@@ -4365,6 +4400,10 @@ function App() {
                                     return (React.createElement("button", { key: i, disabled: !canPick, onClick: () => {
                                             if (isFull && !isSel) {
                                                 showToast(`⚠️ ${dStr} 早晚班皆已額滿`);
+                                                return;
+                                            }
+                                            if (!isSel && leaveCapMonthly > 0 && !myTaken.has(dStr) && usedThisMonth >= leaveCapMonthly) {
+                                                showToast(`⚠️ 每人每月最多請 ${leaveCapMonthly} 天，${month + 1} 月已申請 ${usedThisMonth} 天（含待審核）`, 'err');
                                                 return;
                                             }
                                             setLeaveForm(p => ({
@@ -4427,7 +4466,7 @@ function App() {
                     ['captain', 'executive', 'admin'].includes(currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) && (React.createElement("div", { className: "input-group", style: { background: 'rgba(99,102,241,.08)',
                             border: '1px solid rgba(99,102,241,.25)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 } },
                         React.createElement("label", { style: { fontSize: 11, color: 'var(--indigo2)', fontWeight: 700,
-                                letterSpacing: 1, display: 'block', marginBottom: 6 } }, "\uD83D\uDD27 \u7BA1\u7406\u54E1\u5C08\u5C6C\uFF1A\u6BCF\u65E5\u8ACB\u5047\u4EBA\u6578\u4E0A\u9650\uFF08\u65E9/\u665A\u73ED\uFF09"),
+                                letterSpacing: 1, display: 'block', marginBottom: 6 } }, "\uD83D\uDD27 \u7BA1\u7406\u54E1\u5C08\u5C6C\uFF1A\u8ACB\u5047\u4E0A\u9650\uFF08\u6BCF\u65E5\u65E9/\u665A\u73ED\u4EBA\u6578\u3001\u6BCF\u4EBA\u6BCF\u6708\u5929\u6578\uFF09"),
                         React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
                             React.createElement("span", { style: { fontSize: 12, color: '#818CF8', fontWeight: 700, minWidth: 30 } }, "\u65E9\u73ED"),
                             React.createElement("input", { type: "number", min: "0", max: "50", value: leaveCapMorning, onChange: e => setLeaveCapMorning(Math.max(0, parseInt(e.target.value) || 0)), style: { width: 60, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(129,140,248,.3)',
@@ -4438,7 +4477,14 @@ function App() {
                                     borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)',
                                     fontFamily: "'Microsoft JhengHei',sans-serif", outline: 'none' } }),
                             React.createElement("span", { style: { fontSize: 12, color: 'var(--muted)' } }, "\u4EBA / \u5929")),
-                        React.createElement("button", { onClick: () => saveLeaveSettings(leaveCapMorning, leaveCapNight), style: { marginTop: 8, width: '100%',
+                        /* 2026-10-02 新增：每人每月最多請假天數（全部假別合計，待審核＋已核准都算，0＝不限制） */
+                        React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 } },
+                            React.createElement("span", { style: { fontSize: 12, color: 'var(--text)', fontWeight: 700 } }, "每人每月最多"),
+                            React.createElement("input", { type: "number", min: "0", max: "31", value: leaveCapMonthly, onChange: e => setLeaveCapMonthly(Math.max(0, Math.min(31, parseInt(e.target.value) || 0))), style: { width: 60, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.2)',
+                                    borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)',
+                                    fontFamily: "'Microsoft JhengHei',sans-serif", outline: 'none' } }),
+                            React.createElement("span", { style: { fontSize: 12, color: 'var(--muted)' } }, "天（全部假別合計，0＝不限制）")),
+                        React.createElement("button", { onClick: () => saveLeaveSettings(leaveCapMorning, leaveCapNight, leaveCapMonthly), style: { marginTop: 8, width: '100%',
                                 background: 'linear-gradient(135deg,#6366F1,#818CF8)', border: 'none', borderRadius: 6,
                                 padding: '7px 0', fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer',
                                 fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\uD83D\uDCBE \u5132\u5B58\u4E0A\u9650\u81F3\u96F2\u7AEF"))),
@@ -4454,6 +4500,16 @@ function App() {
                                 return;
                             }
                             const dates = [...leaveForm.selectedDates].sort();
+                            if (leaveCapMonthly > 0) {
+                                const taken = 我的請假日期_(leaveRequests, currentUser.empId);
+                                const over = [...new Set(dates.map(x => x.slice(0, 7)))]
+                                    .map(ym => [ym, 月請假天數_(taken, dates, ym)])
+                                    .filter(([, n]) => n > leaveCapMonthly);
+                                if (over.length) {
+                                    showToast(`⚠️ 超過每人每月 ${leaveCapMonthly} 天上限（${over.map(([ym, n]) => parseInt(ym.slice(5), 10) + '月共' + n + '天').join('、')}）`, 'err');
+                                    return;
+                                }
+                            }
                             const req = {
                                 id: Date.now(),
                                 empId: currentUser.empId,
@@ -4481,7 +4537,12 @@ function App() {
                                     body.append('data', JSON.stringify(req));
                                     const res = await fetch(ACCOUNT_GAS_URL, { method: 'POST', body });
                                     const d = await res.json();
-                                    if (d.status !== 'ok') showToast('⚠️ 已送出，但雲端同步失敗，請稍後請組長手動重新整理', 'err');
+                                    if (d.code === 'MONTH_CAP') {
+                                        // 後端以試算表為準再算一次，超過上限就退件：把剛剛先放進清單的那筆拿掉
+                                        setLeaveRequests(prev => prev.filter(x => x.id !== req.id));
+                                        showToast('❌ 未送出：' + d.msg, 'err');
+                                    }
+                                    else if (d.status !== 'ok') showToast('⚠️ 已送出，但雲端同步失敗，請稍後請組長手動重新整理', 'err');
                                 } catch (e) {
                                     showToast('⚠️ 已送出，但網路異常，雲端同步失敗', 'err');
                                 }
