@@ -100,6 +100,7 @@ body{
 .cal-cell.past{opacity:.28; cursor:not-allowed;}
 .cal-cell.sel{background:linear-gradient(135deg,var(--gold3),var(--gold4)); color:var(--bg); font-weight:900; border-color:var(--gold2);}
 .cal-cell.today{border-color:var(--indigo);}
+.cal-cell.mine{border:1.5px dashed #4ADE80;}
 .cal-cell.full{background:rgba(248,113,113,.1); color:#F87171; cursor:not-allowed;}
 .cal-cell{position:relative;}
 .cal-cell .cnt{position:absolute; bottom:2px; left:0; right:0; text-align:center; font-size:8px; line-height:1; font-weight:700;}
@@ -238,9 +239,11 @@ body{
       <div class="cal-legend">
         <span><span class="dot" style="background:linear-gradient(135deg,var(--gold3),var(--gold4));"></span>已選</span>
         <span><span class="dot" style="background:rgba(248,113,113,.2);"></span>已滿</span>
+        <span><span class="dot" style="border:1.5px dashed #4ADE80;box-sizing:border-box;"></span>你已申請</span>
         <span>數字＝你班別當天人數/上限</span>
       </div>
       <div class="sel-count">已選 <b id="sel-count">0</b> 天</div>
+      <div class="sel-count" id="month-cap" style="margin-top:4px;display:none;"></div>
     </div>
 
     <div class="field">
@@ -285,6 +288,10 @@ var selectedDates = {};           // { 'YYYY-MM-DD': true }
 var CAP = { '早班':5, '晚班':3 };
 // 分早晚統計每日人數：dayCount['早班']['2026-07-04'] = 人數
 var dayCount = { '早班':{}, '晚班':{} };
+// 每人每月請假天數上限（2026-10-02 新增，全部假別合計，0＝不限制），從 GAS 系統設定讀取
+var CAP_MONTH = 3;
+// 自己已申請的日期（待審核＋已核准，已拒絕不算）：{ 'YYYY-MM-DD': true }
+var myTaken = {};
 var submitting = false;
 
 /* ── 工具 ── */
@@ -330,6 +337,7 @@ function loadSettings(){
     if(d && d.status==='ok'){
       if(typeof d.leaveCapMorning === 'number') CAP['早班'] = d.leaveCapMorning;
       if(typeof d.leaveCapNight   === 'number') CAP['晚班'] = d.leaveCapNight;
+      if(typeof d.leaveCapMonthly === 'number') CAP_MONTH = d.leaveCapMonthly;
     }
   }).catch(function(){ /* 失敗用預設 早5晚3 */ });
 }
@@ -339,9 +347,13 @@ function loadLeaveCounts(){
   var url = GAS_URL + '?action=getLeaveRequests';
   return fetch(url).then(function(r){ return r.json(); }).then(function(d){
     dayCount = { '早班':{}, '晚班':{} };
+    myTaken = {};
     if(d && d.status==='ok' && Array.isArray(d.list)){
       d.list.forEach(function(req){
         if(req.status === 'rejected') return;
+        if(String(req.empId) === String(ME.empId)){
+          (req.dates || []).forEach(function(dt){ if(dt) myTaken[dt] = true; });
+        }
         var sh = req.shift;
         if(sh !== '早班' && sh !== '晚班') return;  // 班別未知（帳號沒設定）：不計入任何一班，避免灌水
         var dates = req.dates || [];
@@ -350,7 +362,7 @@ function loadLeaveCounts(){
         });
       });
     }
-  }).catch(function(){ dayCount = { '早班':{}, '晚班':{} }; });
+  }).catch(function(){ dayCount = { '早班':{}, '晚班':{} }; myTaken = {}; });
 }
 
 function renderCal(){
@@ -384,12 +396,23 @@ function renderCal(){
     if(isSel) cls += ' sel';
     if(cur.getTime()===today.getTime()) cls += ' today';
     if(isFull && !isSel && !isPast) cls += ' full';
-    var canPick = !isPast && (!isFull || isSel);
+    if(myTaken[key] && !isSel && !isPast) cls += ' mine';  // 自己已申請過（待審核／已核准）
+    var canPick = !isPast && (!isFull || isSel || myTaken[key]);  // 自己申請過的要能點，才會跳「已申請過」提示
     var cntHtml = used>0 ? '<span class="cnt">'+used+'/'+myCap+'</span>' : '';
     html += '<div class="'+cls+'" data-key="'+key+'" '+(canPick?'onclick="toggleDay(this)"':'')+'>'+d+cntHtml+'</div>';
   }
   $('cal-body').innerHTML = html;
   updateCount();
+}
+
+// 某月（'YYYY-MM'）合計天數：已申請的＋目前選的，同一天只算一次
+// 規則跟 index.html 月請假天數_()、GAS checkMonthlyLeaveCap_() 一致
+function monthUsed(ym){
+  var all = {};
+  Object.keys(myTaken).concat(Object.keys(selectedDates)).forEach(function(k){
+    if(k.slice(0,7) === ym) all[k] = true;
+  });
+  return Object.keys(all).length;
 }
 
 function toggleDay(el){
@@ -398,8 +421,16 @@ function toggleDay(el){
   var myShift = (ME.shift === '早班') ? '早班' : '晚班';
   var myCap = CAP[myShift];
   var used = (dayCount[myShift] && dayCount[myShift][key]) || 0;
+  if(!isSel && myTaken[key]){
+    alert('⚠️ ' + key + ' 此日期已申請過');
+    return;
+  }
   if(used >= myCap && !isSel){
     alert('⚠️ ' + key + ' 當天「' + myShift + '」請假人數已滿（' + used + '/' + myCap + '）');
+    return;
+  }
+  if(!isSel && CAP_MONTH > 0 && monthUsed(key.slice(0,7)) >= CAP_MONTH){
+    alert('⚠️ 每人每月最多請 ' + CAP_MONTH + ' 天，' + parseInt(key.slice(5,7),10) + ' 月已申請 ' + monthUsed(key.slice(0,7)) + ' 天（含待審核）');
     return;
   }
   if(selectedDates[key]){ delete selectedDates[key]; el.classList.remove('sel'); }
@@ -409,6 +440,16 @@ function toggleDay(el){
 
 function updateCount(){
   $('sel-count').textContent = Object.keys(selectedDates).length;
+  var mc = $('month-cap');
+  if(CAP_MONTH > 0){
+    var ym = calRef.getFullYear() + '-' + pad2(calRef.getMonth()+1);
+    var n = monthUsed(ym);
+    mc.style.display = 'block';
+    mc.style.color = n >= CAP_MONTH ? '#F87171' : '';
+    mc.textContent = (calRef.getMonth()+1) + ' 月已申請 ' + n + '／' + CAP_MONTH + ' 天（含待審核與這次選的）';
+  } else {
+    mc.style.display = 'none';
+  }
 }
 
 function calPrev(){
