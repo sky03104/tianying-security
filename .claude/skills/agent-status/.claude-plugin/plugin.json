@@ -1,0 +1,1 @@
+{ "name": "agent-status", "version": "0.1.0", "description": "agent 工作狀態面板：海賊團角色跑步動畫顯示目前步驟、任務進度、最近步驟", "types": "./types/index.d.ts" }
