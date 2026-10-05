@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
-import type { On, RenderPropsOf } from 'claude-code'
+import type { CommandRunInput, On, RenderPropsOf } from 'claude-code'
 
 import { bar, elapsed, labelOf, phaseOf, stageSvg, taskIdFrom, todosFromTodoWrite } from './logic'
 
@@ -102,5 +102,27 @@ describe('面板', () => {
     expect(all).toContain('任務 1/2')
     expect(all).toContain('▶ B中')
     await ui.unmount()
+  })
+})
+
+describe('對話內狀態卡（手機／網頁沒有側邊面板）', () => {
+  test('/agent-status 在非全螢幕介面回傳狀態卡，輸出列畫成即時狀態卡', async ($, on) => {
+    準備(on)
+    on('tool.call', { tool: 'Bash' }, () => ({ deny: '測試用失敗' }))
+    await $.turn.start({ text: '', turnId: 't4' })
+    await $.tool.call({ tool: 'Bash', command: 'false', description: '故意失敗' })
+    const ran = await $.command.run({ command: 'agent-status' } as CommandRunInput)
+    expect(ran.text).toContain('喬巴急救中')
+    expect(ran.text).toContain('❌ Bash｜故意失敗')
+    for (const surface of ['mobile', 'desktop', 'terminal'] as const) {
+      const ui = await $.ui.mount({
+        plugin: 'agent-status', surface, component: 'CommandOutput',
+        props: { command: 'agent-status', args: '', text: ran.text ?? '', isErrored: false } as unknown as RenderPropsOf['CommandOutput'],
+      })
+      const all = (await ui.findAll({ type: 'Text' })).map(x => x.text).join('\n')
+      expect(all).toContain('喬巴急救中')
+      expect(all).toContain('🕘 最近步驟')
+      await ui.unmount()
+    }
   })
 })

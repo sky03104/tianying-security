@@ -1,12 +1,13 @@
 // agent 工作狀態面板：海賊團角色依 agent 正在做的事換人上場跑步
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register, RenderElement, RenderSurface } from 'claude-code'
 
 import type { AgentStatusActive, AgentStatusNow, AgentStatusPhase, AgentStatusStep, AgentStatusTodo } from '../types'
 import { CAST, bar, elapsed, isTodoTool, labelOf, miniSvg, phaseOf, stageSvg, taskIdFrom, todosFromTodoWrite } from './logic'
 
 const PANE = 'agent-status'
 const FAIL_MS = 5000
+const OPENED = '已開啟工作狀態面板。'
 
 const nowA = atom({ plugin: 'agent-status', key: 'now' } as const, { phase: 'idle', label: '', since: 0 } as AgentStatusNow)
 const activeA = atom({ plugin: 'agent-status', key: 'active' } as const, [] as AgentStatusActive[])
@@ -33,6 +34,67 @@ async function 換下一步($: EngineInterface, active: AgentStatusActive[]): Pr
   await update($, nowA, () => (top ? { phase: top.phase, label: top.label, since: top.since } : { phase: 'think', label: '', since: t }))
 }
 
+/** 純文字狀態卡：畫不出元件的地方（或模型讀到的那份）用這個 */
+async function 文字狀態卡($: EngineInterface): Promise<string> {
+  const st = await 目前狀態($)
+  const [turnSince, todos, recent, t] = await Promise.all([read($, turnA), read($, todosA), read($, recentA), $.clock.now()])
+  const done = todos.filter(x => x.status === 'completed').length
+  const 行 = [`**${CAST[st.phase].title}**`]
+  if (st.label !== '') 行.push(st.label)
+  if (turnSince > 0) 行.push(`⏱ 本輪 ${elapsed(t - turnSince)}`)
+  if (todos.length > 0) 行.push(`📋 任務 ${done}/${todos.length} ${bar(done, todos.length)}`)
+  for (const r of [...recent].reverse()) 行.push(`${r.isOk ? '✅' : '❌'} ${r.tool}｜${r.label}`)
+  return 行.join('\n\n')
+}
+
+/** 狀態卡畫面（側邊面板與對話內狀態卡共用） */
+async function 狀態卡($: EngineInterface, els: Elements[RenderSurface]): Promise<RenderElement> {
+  const { Box, Text } = els
+  await read($, tickA) // 讀 tick 讓計時器能觸發重畫
+  const st = await 目前狀態($)
+  const [turnSince, todos, recent, active, t] = await Promise.all([
+    read($, turnA), read($, todosA), read($, recentA), read($, activeA), $.clock.now(),
+  ])
+  const cast = CAST[st.phase]
+  const done = todos.filter(x => x.status === 'completed').length
+  const doing = todos.find(x => x.status === 'in_progress')
+  const 計時 = turnSince > 0
+    ? `本步 ${elapsed(t - st.since)}｜本輪 ${elapsed(t - turnSince)}${active.length > 1 ? `｜同時 ${active.length} 件` : ''}`
+    : ''
+
+  return (
+    <Box flexDirection="column">
+      {'Svg' in els && (
+        <els.Svg key="stage" source={stageSvg(st.phase)} alt={cast.title} width={320} height={120} isInteractive={true} />
+      )}
+      <Text key="title" bold color={cast.color}>{cast.title}</Text>
+      {st.label !== '' && <Text key="label" wrap="truncate-end">{st.label}</Text>}
+      {計時 !== '' && <Text key="time" dimColor>⏱ {計時}</Text>}
+      {todos.length > 0 && (
+        <Box key="todos" flexDirection="column" marginTop={1}>
+          <Text bold color="#FFD700">📋 任務 {done}/{todos.length} {bar(done, todos.length)}</Text>
+          {doing && <Text color="#FFD700" wrap="truncate-end">▶ {doing.title}</Text>}
+          {todos.slice(0, 10).map(x => (
+            <Text key={`t${x.id}`} dimColor={x.status === 'completed'} wrap="truncate-end">
+              {x.status === 'completed' ? '✅' : x.status === 'in_progress' ? '🏃' : '⬜'} {x.title}
+            </Text>
+          ))}
+        </Box>
+      )}
+      {recent.length > 0 && (
+        <Box key="recent" flexDirection="column" marginTop={1}>
+          <Text bold dimColor>🕘 最近步驟</Text>
+          {[...recent].reverse().map((r, i) => (
+            <Text key={`r${i}`} color={r.isOk ? undefined : '#F87171'} wrap="truncate-end">
+              {r.isOk ? '✅' : '❌'} {r.tool}｜{r.label}
+            </Text>
+          ))}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'agent-status', description: '開啟 agent 工作狀態面板（海賊團動畫）' })
@@ -47,9 +109,13 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'agent-status' }, async $ => {
-    await $.ui.open({ id: PANE, title: '⚓ 工作狀態', focus: true })
-    return { text: '已開啟工作狀態面板。' }
+  // 能停靠側邊面板的介面（終端機全螢幕）開面板；手機／網頁不支援面板，改在對話裡印狀態卡
+  on('command.run', { command: 'agent-status' }, async ($, e) => {
+    if (e.presentation?.isFullscreen === true) {
+      await $.ui.open({ id: PANE, title: '⚓ 工作狀態', focus: true })
+      return { text: OPENED }
+    }
+    return { text: await 文字狀態卡($) }
   })
 
   on('turn.start', async ($, e, next) => {
@@ -121,52 +187,12 @@ export const register: Register = on => {
   })
 
   // 側邊面板：大舞台＋任務清單＋最近步驟
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const els = $.ui.resolve(e)
-    const { Box, Text } = els
-    await read($, tickA) // 讀 tick 讓計時器能觸發重畫
-    const st = await 目前狀態($)
-    const [turnSince, todos, recent, active, t] = await Promise.all([
-      read($, turnA), read($, todosA), read($, recentA), read($, activeA), $.clock.now(),
-    ])
-    const cast = CAST[st.phase]
-    const done = todos.filter(x => x.status === 'completed').length
-    const doing = todos.find(x => x.status === 'in_progress')
-    const 計時 = turnSince > 0
-      ? `本步 ${elapsed(t - st.since)}｜本輪 ${elapsed(t - turnSince)}${active.length > 1 ? `｜同時 ${active.length} 件` : ''}`
-      : ''
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => 狀態卡($, $.ui.resolve(e)))
 
-    return (
-      <Box flexDirection="column">
-        {'Svg' in els && (
-          <els.Svg key="stage" source={stageSvg(st.phase)} alt={cast.title} width={320} height={120} isInteractive={true} />
-        )}
-        <Text key="title" bold color={cast.color}>{cast.title}</Text>
-        {st.label !== '' && <Text key="label" wrap="truncate-end">{st.label}</Text>}
-        {計時 !== '' && <Text key="time" dimColor>⏱ {計時}</Text>}
-        {todos.length > 0 && (
-          <Box key="todos" flexDirection="column" marginTop={1}>
-            <Text bold color="#FFD700">📋 任務 {done}/{todos.length} {bar(done, todos.length)}</Text>
-            {doing && <Text color="#FFD700" wrap="truncate-end">▶ {doing.title}</Text>}
-            {todos.slice(0, 10).map(x => (
-              <Text key={`t${x.id}`} dimColor={x.status === 'completed'} wrap="truncate-end">
-                {x.status === 'completed' ? '✅' : x.status === 'in_progress' ? '🏃' : '⬜'} {x.title}
-              </Text>
-            ))}
-          </Box>
-        )}
-        {recent.length > 0 && (
-          <Box key="recent" flexDirection="column" marginTop={1}>
-            <Text bold dimColor>🕘 最近步驟</Text>
-            {[...recent].reverse().map((r, i) => (
-              <Text key={`r${i}`} color={r.isOk ? undefined : '#F87171'} wrap="truncate-end">
-                {r.isOk ? '✅' : '❌'} {r.tool}｜{r.label}
-              </Text>
-            ))}
-          </Box>
-        )}
-      </Box>
-    )
+  // 對話內狀態卡：/agent-status 的輸出列直接畫成會即時更新的狀態卡（手機／網頁看這個）
+  on('ui.render', { component: 'CommandOutput', props: { command: 'agent-status' } }, async ($, e, next) => {
+    if (e.props.isErrored || e.props.text === OPENED) return next(e)
+    return 狀態卡($, $.ui.resolve(e))
   })
 
   // 輸入框上方狀態條：小角色＋一行字（手機一定看得到）
