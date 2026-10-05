@@ -1,0 +1,3 @@
+# Claude Code 載入 MOD 時自動產生的型別檔，不進版控
+tsconfig.json
+.claude-plugin/types/
