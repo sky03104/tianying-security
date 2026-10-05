@@ -100,6 +100,15 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
 .drop-zone.has-file .drop-icon-main{color:#22C55E;}
 .drop-title{font-size:14px;font-weight:600;color:#F5F5F5;margin-bottom:3px;}
 .drop-sub{font-size:12px;color:#4B5563;}
+.gd-q-row,.gd-pend-row{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-bottom:6px;}
+.gd-q-ico{font-size:20px;flex-shrink:0;}
+.gd-q-main{flex:1;min-width:0;}
+.gd-q-date{font-size:15px;font-weight:600;color:#F5F5F5;}
+.gd-q-file{font-size:12px;color:#9CA3AF;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gd-q-target{font-size:13px;color:#4ADE80;margin-top:2px;word-break:break-all;}
+.gd-q-target.err{color:#F87171;}
+.gd-pend-del{flex-shrink:0;min-height:40px;color:#F87171;}
+.gd-pend-empty{font-size:13px;color:#6B7280;padding:6px 2px;}
 .file-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:5px 14px;font-size:13px;color:#4ADE80;margin-top:8px;font-weight:500;}
 .type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem;}
 .type-card{border-radius:10px;padding:1rem;border:1px solid;}
@@ -282,7 +291,7 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
     <div class="home-btn hb-green" onclick="goTo('page-guard')">
       <div class="hb-icon"><i class="ti ti-shield-check"></i></div>
       <div class="hb-btn-title">哨表上傳</div>
-      <div class="hb-btn-sub">Excel 自動更新今日哨表<br>並存入歷史記錄</div>
+      <div class="hb-btn-sub">可一次上傳多天<br>每天 08:00 自動切換明日哨表</div>
     </div>
   </div>
   <div class="home-footer">© TIANYING SECURITY &nbsp;·&nbsp; INTERNAL SYSTEM</div>
@@ -506,7 +515,7 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
   <div class="inner-header">
     <div class="ih-left">
       <div class="ih-icon ih-green"><i class="ti ti-shield-check"></i></div>
-      <div><div class="ih-title">哨表上傳</div><div class="ih-sub">Excel → 今日哨表 + 歷史記錄</div></div>
+      <div><div class="ih-title">哨表上傳</div><div class="ih-sub">Excel → 今日/明日/待生效 + 歷史記錄</div></div>
     </div>
     <button class="btn-back" onclick="goTo('page-home')"><i class="ti ti-arrow-left" style="font-size:13px;"></i> 返回上頁</button>
   </div>
@@ -540,7 +549,7 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
       <div id="gd-dz-default">
         <i class="ti ti-file-upload" style="font-size:34px;color:#4ADE80;display:block;margin-bottom:8px;opacity:.8;"></i>
         <p class="drop-title">拖曳哨表 Excel 到這裡，或點擊選擇</p>
-        <p class="drop-sub">自動讀取日期，判定今日/明日，寫入對應分頁</p>
+        <p class="drop-sub">可一次選多天（一天一個檔）；今日/明日直接寫入，之後的日期先排入待生效，每天 08:00 自動切換</p>
       </div>
       <div id="gd-dz-file" style="display:none;">
         <i class="ti ti-file-upload" style="font-size:34px;color:#22C55E;display:block;margin-bottom:8px;"></i>
@@ -548,24 +557,15 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
         <p class="drop-sub" style="margin-top:8px;">點擊可重新選擇</p>
       </div>
     </div>
-    <input type="file" id="gd-file-input" accept=".xlsx,.xls" style="display:none;">
+    <input type="file" id="gd-file-input" accept=".xlsx,.xls" multiple style="display:none;">
 
-    <!-- 偵測資訊卡 -->
-    <div id="gd-info-card" style="display:none;" class="card" style="border-color:rgba(34,197,94,.2);">
+    <!-- 偵測結果：本批檔案清單（依日期排序） -->
+    <div id="gd-info-card" style="display:none;" class="card">
       <div class="row-between" style="margin-bottom:8px;">
         <div class="sec-label" style="margin:0;"><i class="ti ti-calendar-check" style="font-size:13px;"></i> 偵測結果</div>
-        <span id="gd-holiday-badge" style="font-size:11px;padding:3px 10px;border-radius:99px;font-weight:600;"></span>
+        <span id="gd-queue-count" style="font-size:12px;color:#9CA3AF;"></span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:10px;color:#4B5563;margin-bottom:4px;">檔案日期</div>
-          <div style="font-size:15px;font-weight:600;color:#F5F5F5;" id="gd-file-date">-</div>
-        </div>
-        <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:10px;color:#4B5563;margin-bottom:4px;">寫入目標</div>
-          <div style="font-size:15px;font-weight:600;color:#4ADE80;" id="gd-target-sheet">-</div>
-        </div>
-      </div>
+      <div id="gd-queue-list"></div>
     </div>
 
     <!-- 進度條 -->
@@ -618,6 +618,15 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
     <button class="btn btn-ghost" onclick="gdClearAll()" style="width:100%;padding:10px;margin-bottom:1rem;justify-content:center;">
       <i class="ti ti-refresh" style="font-size:14px;"></i> 重新選擇檔案
     </button>
+
+    <!-- 待生效清單 -->
+    <div class="card">
+      <div class="row-between" style="margin-bottom:8px;">
+        <div class="sec-label" style="margin:0;"><i class="ti ti-calendar-time" style="font-size:13px;"></i> 已排程（待生效）</div>
+        <button class="btn btn-ghost btn-sm" onclick="gdLoadPending()"><i class="ti ti-refresh" style="font-size:12px;"></i> 重新整理</button>
+      </div>
+      <div id="gd-pending-list"><div class="gd-pend-empty">讀取中…</div></div>
+    </div>
 
   </div></div>
 </div>
@@ -1148,7 +1157,6 @@ function schClearAll(){schFile=null;schFileB64=null;schFileId=null;document.getE
 
 // ===== 哨表工具 =====
 let gdFile=null, gdFileB64=null, gdUrlShowing=false;
-let gdFileDateStr='', gdTargetSheet='';
 
 const GD_SHEET_URL='https://docs.google.com/spreadsheets/d/1sIcdAhw0mz5iM3F5fulDNPOda2pv-t7xUhT6XXf9X7Q/edit';
 const GD_WEBAPP_DEFAULT='https://script.google.com/macros/s/AKfycbwl9hcbbuKBHWmleftzbbaiUihhsHVK4H0dKMd-LrCQwRE3aUPpIHlwWLcGZbhqugp_gg/exec';
@@ -1195,83 +1203,56 @@ function gdDz(e,t){
   else if(t==='leave'){z.style.borderColor='rgba(34,197,94,.35)';z.style.background='rgba(34,197,94,.03)';}
   else if(t==='drop'){
     z.style.borderColor='rgba(34,197,94,.35)';z.style.background='rgba(34,197,94,.03)';
-    if(e.dataTransfer.files[0])gdHandleFile(e.dataTransfer.files[0]);
+    if(e.dataTransfer.files.length)gdHandleFiles(e.dataTransfer.files);
   }
 }
-document.getElementById('gd-file-input').addEventListener('change',function(){if(this.files[0])gdHandleFile(this.files[0]);});
+document.getElementById('gd-file-input').addEventListener('change',function(){if(this.files.length)gdHandleFiles(this.files);});
 
-function gdHandleFile(file){
-  gdFile=file; gdFileB64=null;
-  document.getElementById('gd-success-banner').classList.remove('show');
-  document.getElementById('gd-err-banner').style.display='none';
-  document.getElementById('gd-info-card').style.display='none';
-  gdLog('info','讀取：'+file.name);
-  const z=document.getElementById('drop-zone-gd');
-  z.style.borderStyle='solid'; z.style.borderColor='rgba(34,197,94,.5)'; z.style.background='rgba(34,197,94,.05)';
-  document.getElementById('gd-dz-default').style.display='none';
-  document.getElementById('gd-dz-file').style.display='block';
-  document.getElementById('gd-file-name-txt').textContent=file.name;
+// 純文字跳脫（檔名會塞進 innerHTML）
+function gdEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function gdP2(n){return n<10?'0'+n:String(n);}
+function gdYmd(d){return d.getFullYear()+'-'+gdP2(d.getMonth()+1)+'-'+gdP2(d.getDate());}
 
-  const reader=new FileReader();
-  reader.onload=function(ev){
-    gdFileB64=ev.target.result.split(',')[1];
-    const wb=XLSX.read(ev.target.result.split(',')[1],{type:'base64'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-
-    // 從 D1(月) F1(日) H1(星期) 讀取日期
-    const month=ws['D1']?parseInt(String(ws['D1'].v).trim()):null;
-    const day=ws['F1']?parseInt(String(ws['F1'].v).trim()):null;
-    const weekday=ws['H1']?String(ws['H1'].v).trim():'';
-
-    if(!month||!day){gdLog('err','無法讀取檔案日期（D1、F1）');return;}
-
-    // 民國年從 A1 換算西元
-    const a1Cell=ws['A1'];
-    const a1Raw=a1Cell?String(a1Cell.v||'').trim():'';
-    const nengoNum=parseInt(a1Raw)||115;
-    const year=nengoNum+1911; // 115→2026
-
-    const fileDate=new Date(year, month-1, day);
-    fileDate.setHours(0,0,0,0);
-    // 台灣本地時間今日/明日
-    const now=new Date();
-    const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-    const tomorrow=new Date(today); tomorrow.setDate(today.getDate()+1);
-
-    let targetSheet='';
-    if(fileDate.getTime()===today.getTime()) targetSheet='今日哨表';
-    else if(fileDate.getTime()===tomorrow.getTime()) targetSheet='明日哨表';
-    else targetSheet='歷史（非今明日）';
-
-    gdFileDateStr=year+'/'+(month<10?'0'+month:month)+'/'+(day<10?'0'+day:day)+' 星期'+weekday;
-    gdTargetSheet=targetSheet;
-
-    document.getElementById('gd-file-date').textContent=gdFileDateStr;
-    document.getElementById('gd-target-sheet').textContent=targetSheet;
-    document.getElementById('gd-info-card').style.display='block';
-
-    gdLog('ok','檔案日期：'+gdFileDateStr);
-    gdLog('info','寫入目標：'+targetSheet);
-
-    // 自動觸發上傳
-    setTimeout(function(){gdStartUpload();},400);
-  };
-  reader.readAsDataURL(file);
+// 從哨表 Excel 讀日期：A1 民國年、D1 月、F1 日、H1 星期
+function gdParseDate(ws){
+  const month=ws['D1']?parseInt(String(ws['D1'].v).trim()):null;
+  const day=ws['F1']?parseInt(String(ws['F1'].v).trim()):null;
+  const weekday=ws['H1']?String(ws['H1'].v).trim():'';
+  if(!month||!day)return null;
+  const a1Raw=ws['A1']?String(ws['A1'].v||'').trim():'';
+  const nengoNum=parseInt(a1Raw)||115;
+  const year=nengoNum+1911; // 115→2026
+  return {year:year,month:month,day:day,weekday:weekday,ymd:year+'-'+gdP2(month)+'-'+gdP2(day)};
 }
 
-async function gdStartUpload(){
-  const url=document.getElementById('gd-webapp-url').value.trim();
-  if(!url||!url.startsWith('https://script.google.com')){gdLog('err','請填寫正確的 Web App 網址');return;}
-  if(!gdFileB64){gdLog('err','請先選擇 Excel 檔案');return;}
+// 預估寫入目標（只給畫面顯示用；實際以 GAS 回傳為準，GAS 會看 08:00 切換做完沒）
+// 規則同 哨表上傳_GAS_v6.gs planGuardTargets_，這裡用 08:00 當切換時間近似
+function gdPlanLabel(ymd,now){
+  now=now||new Date();
+  const today=gdYmd(now);
+  const t=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  const tmr=gdYmd(t);
+  const switched=now.getHours()>=8;
+  if(ymd<today)return '僅存歷史（過去日期）';
+  if(ymd===today)return '今日哨表';
+  if(ymd===tmr&&switched)return '明日哨表';
+  const p=ymd.split('-');
+  const act=new Date(+p[0],+p[1]-1,+p[2]-1);
+  return '待生效（'+(act.getMonth()+1)+'/'+act.getDate()+' 08:00 自動放入明日哨表）';
+}
 
-  document.getElementById('gd-success-banner').classList.remove('show');
-  document.getElementById('gd-err-banner').style.display='none';
-  gdSetProgress(10,'解析 Excel 資料…');
-  gdLog('info','解析中…');
+function gdReadB64(file){
+  return new Promise(function(resolve,reject){
+    const r=new FileReader();
+    r.onload=function(ev){resolve(ev.target.result.split(',')[1]);};
+    r.onerror=function(){reject(new Error('讀取檔案失敗'));};
+    r.readAsDataURL(file);
+  });
+}
 
-  try{
-    // 在瀏覽器端完整解析 Excel，再送資料給 GAS（避免 Drive API 轉換問題）
-    const wb=XLSX.read(gdFileB64,{type:'base64',cellStyles:true});
+// 在瀏覽器端完整解析 Excel，再送資料給 GAS（避免 Drive API 轉換問題）
+function gdBuildPayload(b64){
+    const wb=XLSX.read(b64,{type:'base64',cellStyles:true});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const ref=ws['!ref'];
     if(!ref) throw new Error('無法讀取 Excel 內容');
@@ -1343,58 +1324,174 @@ async function gdStartUpload(){
       colWidths.push(wpx);
     }
 
-    // 讀取年月日（民國換算已在 gdHandleFile 完成）
-    const a1Cell=ws['A1'];
-    const a1Raw=a1Cell?String(a1Cell.v||'').trim():'';
-    const nengoNum=parseInt(a1Raw)||115;
-    const year=nengoNum+1911;
-    const month=ws['D1']?parseInt(String(ws['D1'].v).trim()):0;
-    const day=ws['F1']?parseInt(String(ws['F1'].v).trim()):0;
-    const weekday=ws['H1']?String(ws['H1'].v).trim():'';
+    return {rows:rows,styles:{backgrounds,fontColors,fontWeights,fontSizes,hAligns,vAligns},merges:merges,colWidths:colWidths};
+}
 
-    // 假日判定（透過 GAS）
-    gdSetProgress(30,'傳送資料到 Google 試算表…');
-    gdLog('info','傳送中…');
+let gdQueue=[]; // [{file,b64,date,label,status,msg}]
+let gdBusy=false;
 
-    const res=await fetch(url,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({
-        action:'guardUpload',
-        targetSheet:gdTargetSheet,
-        year:year, month:month, day:day, weekday:weekday,
-        isHoliday:false, // GAS 端會再查詢假日 API
-        rows:rows,
-        styles:{backgrounds,fontColors,fontWeights,fontSizes,hAligns,vAligns},
-        merges:merges,
-        colWidths:colWidths
-      }),
-      redirect:'follow'
-    });
-    const text=await res.text();
-    let data;
-    try{data=JSON.parse(text);}catch(ex){throw new Error('回應格式錯誤：'+text.slice(0,100));}
-    if(!data.success)throw new Error(data.error||'未知錯誤');
+function gdRenderQueue(){
+  const box=document.getElementById('gd-queue-list');
+  const icon={wait:'<i class="ti ti-clock" style="color:#6B7280;"></i>',run:'<i class="ti ti-loader-2" style="color:#FFD700;"></i>',ok:'<i class="ti ti-circle-check" style="color:#4ADE80;"></i>',err:'<i class="ti ti-circle-x" style="color:#F87171;"></i>'};
+  box.innerHTML=gdQueue.map(function(q){
+    const d=q.date;
+    return '<div class="gd-q-row">'+
+      '<div class="gd-q-ico">'+icon[q.status]+'</div>'+
+      '<div class="gd-q-main"><div class="gd-q-date">'+d.year+'/'+gdP2(d.month)+'/'+gdP2(d.day)+' 星期'+gdEsc(d.weekday)+'</div>'+
+      '<div class="gd-q-file">'+gdEsc(q.file.name)+'</div>'+
+      '<div class="gd-q-target'+(q.status==='err'?' err':'')+'">'+gdEsc(q.status==='err'?q.msg:q.label)+'</div></div></div>';
+  }).join('');
+  document.getElementById('gd-info-card').style.display=gdQueue.length?'block':'none';
+  document.getElementById('gd-queue-count').textContent='共 '+gdQueue.length+' 份';
+}
 
-    gdSetProgress(100,'完成！');
-    document.getElementById('gd-success-title').textContent='哨表更新完成！';
-    document.getElementById('gd-success-sub').textContent=
-      '已寫入「'+gdTargetSheet+'」並建立歷史記錄（'+gdFileDateStr+'）';
-    document.getElementById('gd-success-banner').classList.add('show');
-    gdLog('ok','寫入完成：'+gdTargetSheet);
-    if(data.historySheet) gdLog('ok','歷史記錄：'+data.historySheet);
-    if(gdTargetSheet==='明日哨表'){
-      setTimeout(function(){gdShowPrintModal();},500);
-    } else {
-      setTimeout(function(){window.open(GD_SHEET_URL,'_blank');},800);
+// 一次選多個哨表檔（一天一個）：讀日期 → 同日期去重 → 依日期排序 → 逐一上傳
+async function gdHandleFiles(fileList){
+  if(gdBusy){gdLog('err','上一批還在上傳中，請稍候');return;}
+  const files=Array.prototype.filter.call(fileList,function(f){return /\.xlsx?$/i.test(f.name);});
+  document.getElementById('gd-file-input').value='';
+  if(!files.length){gdLog('err','請選擇 .xlsx / .xls 哨表檔');return;}
+  gdFile=null; gdFileB64=null;
+  document.getElementById('gd-success-banner').classList.remove('show');
+  document.getElementById('gd-err-banner').style.display='none';
+
+  const byDate={};
+  for(const file of files){
+    gdLog('info','讀取：'+gdEsc(file.name));
+    try{
+      const b64=await gdReadB64(file);
+      const wb=XLSX.read(b64,{type:'base64'});
+      const date=gdParseDate(wb.Sheets[wb.SheetNames[0]]);
+      if(!date){gdLog('err',gdEsc(file.name)+'：無法讀取檔案日期（D1、F1），已略過');continue;}
+      // 同一天選到兩個檔：以後選的為準，避免同一天被上傳兩次互蓋
+      if(byDate[date.ymd])gdLog('err',date.ymd+' 有兩個檔案，只上傳「'+gdEsc(file.name)+'」，略過「'+gdEsc(byDate[date.ymd].file.name)+'」');
+      byDate[date.ymd]={file:file,b64:b64,date:date,label:gdPlanLabel(date.ymd),status:'wait',msg:''};
+    }catch(e){gdLog('err',gdEsc(file.name)+'：'+gdEsc(e.message));}
+  }
+  gdQueue=Object.keys(byDate).sort().map(function(k){return byDate[k];});
+  if(!gdQueue.length){gdRenderQueue();return;}
+
+  const z=document.getElementById('drop-zone-gd');
+  z.style.borderStyle='solid';z.style.borderColor='rgba(34,197,94,.6)';z.style.background='rgba(34,197,94,.06)';
+  document.getElementById('gd-dz-default').style.display='none';
+  document.getElementById('gd-dz-file').style.display='block';
+  document.getElementById('gd-file-name-txt').textContent=gdQueue.length===1?gdQueue[0].file.name:('已選 '+gdQueue.length+' 個哨表檔');
+  gdRenderQueue();
+  setTimeout(function(){gdStartUpload();},400);
+}
+
+async function gdStartUpload(){
+  const url=document.getElementById('gd-webapp-url').value.trim();
+  if(!url||!url.startsWith('https://script.google.com')){gdLog('err','請填寫正確的 Web App 網址');return;}
+  if(!gdQueue.length){gdLog('err','請先選擇 Excel 檔案');return;}
+  if(gdBusy)return;
+  gdBusy=true;
+  document.getElementById('gd-success-banner').classList.remove('show');
+  document.getElementById('gd-err-banner').style.display='none';
+
+  let okN=0, errN=0, tomorrowItem=null, wroteSheet=false;
+  for(let i=0;i<gdQueue.length;i++){
+    const q=gdQueue[i];
+    if(q.status==='ok')continue;
+    q.status='run'; gdRenderQueue();
+    gdSetProgress(Math.max(5,Math.round(i/gdQueue.length*100)),'上傳 '+(i+1)+'/'+gdQueue.length+'：'+q.date.ymd);
+    try{
+      const p=gdBuildPayload(q.b64);
+      const d=q.date;
+      const res=await fetch(url,{
+        method:'POST',
+        headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({
+          action:'guardUpload',
+          targetSheet:q.label, // 新版 GAS 依日期自己判斷，這個只是參考
+          year:d.year, month:d.month, day:d.day, weekday:d.weekday,
+          isHoliday:false, // GAS 端會再查詢假日 API
+          rows:p.rows, styles:p.styles, merges:p.merges, colWidths:p.colWidths
+        }),
+        redirect:'follow'
+      });
+      const text=await res.text();
+      let data;
+      try{data=JSON.parse(text);}catch(ex){throw new Error('回應格式錯誤：'+text.slice(0,100));}
+      if(!data.success)throw new Error(data.error||'未知錯誤');
+      // 舊版 GAS 沒有 pending 欄位：後天以後的檔會被寫進奇怪的分頁，提醒更新
+      if(data.pending===undefined&&q.label.indexOf('待生效')===0)throw new Error('GAS 尚未更新到 v7，無法提前上傳，請先重新部署哨表上傳 GAS');
+      q.status='ok'; q.label=data.targetSheet||q.label; okN++;
+      if(data.sheets&&data.sheets.length)wroteSheet=true;
+      if(data.sheets&&data.sheets.indexOf('明日哨表')>-1)tomorrowItem=q;
+      gdLog('ok',d.ymd+' → '+gdEsc(q.label));
+    }catch(e){
+      q.status='err'; q.msg=e.message; errN++;
+      gdLog('err',q.date.ymd+' 失敗：'+gdEsc(e.message));
     }
-  }catch(e){
-    gdSetProgress(0,'');
+    gdRenderQueue();
+  }
+  gdBusy=false;
+  gdSetProgress(100,'完成！');
+  setTimeout(function(){gdSetProgress(0,'');},1200);
+
+  if(okN){
+    document.getElementById('gd-success-title').textContent=errN?('完成 '+okN+' 份，失敗 '+errN+' 份'):('哨表更新完成！共 '+okN+' 份');
+    document.getElementById('gd-success-sub').textContent='今日/明日的已直接寫入，之後日期的已排入待生效，每天 08:00 自動切換；歷史記錄已同步。';
+    document.getElementById('gd-success-banner').classList.add('show');
+  }
+  if(errN){
     document.getElementById('gd-err-banner').style.display='block';
-    document.getElementById('gd-err-msg').textContent=e.message;
-    gdLog('err',e.message);
+    document.getElementById('gd-err-msg').textContent=errN+' 份上傳失敗，請看下方清單與執行紀錄，可按「重新選擇檔案」再傳一次';
+  }
+  gdLoadPending();
+  if(tomorrowItem){
+    // 列印沿用原本流程：把明日那份設成目前檔案
+    gdFile=tomorrowItem.file; gdFileB64=tomorrowItem.b64;
+    setTimeout(function(){gdShowPrintModal();},500);
+  } else if(wroteSheet){
+    setTimeout(function(){window.open(GD_SHEET_URL,'_blank');},800);
   }
 }
+
+// ===== 待生效清單（已提前上傳、還沒輪到的哨表）=====
+async function gdPost(body){
+  const url=document.getElementById('gd-webapp-url').value.trim();
+  if(!url||!url.startsWith('https://script.google.com'))throw new Error('請先設定 Web App 網址');
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body),redirect:'follow'});
+  const data=JSON.parse(await res.text());
+  if(!data.success)throw new Error(data.error||'未知錯誤');
+  return data;
+}
+function gdRenderPending(list,msg){
+  const box=document.getElementById('gd-pending-list');
+  if(msg){box.innerHTML='<div class="gd-pend-empty">'+gdEsc(msg)+'</div>';return;}
+  if(!list.length){box.innerHTML='<div class="gd-pend-empty">目前沒有排程中的哨表</div>';return;}
+  const wk='日一二三四五六';
+  box.innerHTML=list.map(function(it){
+    const p=it.date.split('-'), a=it.activateOn.split('-');
+    const w=wk[new Date(+p[0],+p[1]-1,+p[2]).getDay()];
+    return '<div class="gd-pend-row"><div class="gd-q-main"><div class="gd-q-date">'+(+p[1])+'/'+(+p[2])+'（'+w+'）的哨表</div>'+
+      '<div class="gd-q-file">'+(+a[1])+'/'+(+a[2])+' 08:00 自動放入明日哨表</div></div>'+
+      '<button class="btn btn-ghost btn-sm gd-pend-del" onclick="gdDeletePending(\''+gdEsc(it.date)+'\')"><i class="ti ti-trash"></i> 取消</button></div>';
+  }).join('');
+}
+async function gdLoadPending(){
+  try{
+    const data=await gdPost({action:'listPending'});
+    gdRenderPending(data.pending||[]);
+  }catch(e){
+    gdRenderPending([],/未知 action/.test(e.message)?'哨表上傳 GAS 尚未更新到 v7，請先重新部署才能提前上傳':('讀取失敗：'+e.message));
+  }
+}
+async function gdDeletePending(date){
+  if(gdBusy)return;
+  if(!confirm('確定取消 '+date+' 的待生效哨表？\n（歷史記錄裡這天的排班也會一併刪除）'))return;
+  try{
+    const data=await gdPost({action:'deletePending',date:date});
+    gdRenderPending(data.pending||[]);
+    gdLog('ok','已取消 '+date+' 的待生效哨表');
+  }catch(e){
+    gdLog('err','取消失敗：'+gdEsc(e.message));
+    alert('取消失敗：'+e.message);
+  }
+}
+window.addEventListener('load',function(){gdLoadPending();});
 
 function gdSetProgress(pct,label){
   const w=document.getElementById('gd-prog-wrap');
@@ -1412,7 +1509,9 @@ function gdLog(type,msg){
   box.appendChild(d); box.scrollTop=box.scrollHeight;
 }
 function gdClearAll(){
-  gdFile=null; gdFileB64=null;
+  if(gdBusy){gdLog('err','上傳中，請等這批完成');return;}
+  gdFile=null; gdFileB64=null; gdQueue=[];
+  document.getElementById('gd-queue-list').innerHTML='';
   document.getElementById('gd-info-card').style.display='none';
   document.getElementById('gd-success-banner').classList.remove('show');
   document.getElementById('gd-err-banner').style.display='none';

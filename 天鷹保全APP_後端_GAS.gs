@@ -3900,25 +3900,95 @@ function replyFullPost_(replyToken) {
   }
 }
 
-// 每日08:00：把當時的 明日哨表 內容原地覆寫進 今日哨表（保留分頁gid不變，完全靜默無推播）
+// 每日08:00：把當時的 明日哨表 內容原地覆寫進 今日哨表（保留分頁gid不變，完全靜默無推播），
+// 接著把提前上傳的「明天」待生效哨表放進明日哨表（promotePendingPost_）。
+// 兩步放同一個排程、固定先快照再補明天——順序反過來，明天的哨表會被當成今日哨表。
 function snapshotTodayPostScheduled_() {
+  var ss;
   try {
-    var ss = SpreadsheetApp.openById(POST_SHEET_ID);
+    ss = SpreadsheetApp.openById(POST_SHEET_ID);
+  } catch (err) {
+    console.error('snapshotTodayPostScheduled_ 開啟試算表失敗：' + err.toString());
+    return;
+  }
+  try {
     var src = ss.getSheetByName(POST_SHEET_NAME);
     var dst = ss.getSheetByName(POST_TODAY_SHEET_NAME);
-    if (!src) { console.error('快照今日哨表失敗：找不到分頁 ' + POST_SHEET_NAME); return; }
-    if (!dst) { console.error('快照今日哨表失敗：找不到分頁 ' + POST_TODAY_SHEET_NAME + '（請確認試算表分頁存在）'); return; }
-    // dst.clear() 不會拆掉既有合併儲存格——前一天殘留的合併範圍如果跟今天
-    // 來源的合併形狀對不上，會讓 copyTo 貼進去的值被舊合併範圍吃掉或錯位
-    // （2026-07-14 踩坑：晚班表頭「晚班人員：20:00~08:00」複製後變成只剩
-    // 「人員：20:00~08:00」，導致 buildColBlockMap_ 找不到「晚班」文字，
-    // 整個晚班區塊被判定成沒資料）。先拆合併再清空，才能保證是乾淨貼上。
-    dst.getDataRange().breakApart();
-    dst.clear();
-    var srcRange = src.getDataRange();
-    srcRange.copyTo(dst.getRange(1, 1, srcRange.getNumRows(), srcRange.getNumColumns()));
+    if (!src) console.error('快照今日哨表失敗：找不到分頁 ' + POST_SHEET_NAME);
+    else if (!dst) console.error('快照今日哨表失敗：找不到分頁 ' + POST_TODAY_SHEET_NAME + '（請確認試算表分頁存在）');
+    else {
+      // dst.clear() 不會拆掉既有合併儲存格——前一天殘留的合併範圍如果跟今天
+      // 來源的合併形狀對不上，會讓 copyTo 貼進去的值被舊合併範圍吃掉或錯位
+      // （2026-07-14 踩坑：晚班表頭「晚班人員：20:00~08:00」複製後變成只剩
+      // 「人員：20:00~08:00」，導致 buildColBlockMap_ 找不到「晚班」文字，
+      // 整個晚班區塊被判定成沒資料）。先拆合併再清空，才能保證是乾淨貼上。
+      dst.getDataRange().breakApart();
+      dst.clear();
+      var srcRange = src.getDataRange();
+      srcRange.copyTo(dst.getRange(1, 1, srcRange.getNumRows(), srcRange.getNumColumns()));
+    }
   } catch (err) {
     console.error('snapshotTodayPostScheduled_ 失敗：' + err.toString());
+  }
+  // 快照失敗也照樣補明天：明日哨表若沒更新，明天的 08:00 會快照到舊的
+  try {
+    SpreadsheetApp.flush();
+    promotePendingPost_(ss);
+  } catch (err) {
+    console.error('promotePendingPost_ 失敗：' + err.toString());
+  }
+  // 標記「今天已切換」：觸發器 atHour(8) 實際是 08:00~09:00 間任一分鐘才跑，
+  // 哨表上傳 GAS 靠這個標記判斷切換做完沒，決定明天的哨表要直接寫還是先排待生效
+  try {
+    setPostSwitchMarker_(ss, Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd'));
+  } catch (err) {
+    console.error('寫入哨表切換標記失敗：' + err.toString());
+  }
+}
+
+// 哨表切換標記（試算表層級 DeveloperMetadata，哨表上傳 GAS 讀同一個 key）
+var POST_SWITCH_META_KEY = 'postSwitchDate';
+function setPostSwitchMarker_(ss, dateStr) {
+  var found = ss.createDeveloperMetadataFinder().withKey(POST_SWITCH_META_KEY).find();
+  if (found.length) {
+    found[0].setValue(dateStr);
+    for (var i = 1; i < found.length; i++) found[i].remove();
+  } else {
+    ss.addDeveloperMetadata(POST_SWITCH_META_KEY, dateStr);
+  }
+}
+
+// 待生效哨表：哨表上傳 GAS（哨表上傳_GAS_v6.gs v7）把後天以後的哨表先存成
+// 隱藏分頁「_待生效_yyyy-MM-dd」；這裡每天 08:00 快照後，把日期＝明天的那份
+// 寫進明日哨表（只寫值，格式沿用明日哨表，跟直接上傳一樣），寫完刪掉該分頁。
+// ⚠️ 前綴必須跟哨表上傳 GAS 的 PENDING_PREFIX 一模一樣。
+var POST_PENDING_PREFIX = '_待生效_';
+function promotePendingPost_(ss) {
+  var now = new Date();
+  var todayStr = Utilities.formatDate(now, 'Asia/Taipei', 'yyyy-MM-dd');
+  var tmrStr = Utilities.formatDate(new Date(now.getTime() + 86400000), 'Asia/Taipei', 'yyyy-MM-dd');
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    var sh = sheets[i];
+    var name = sh.getName();
+    if (name.indexOf(POST_PENDING_PREFIX) !== 0) continue;
+    var d = name.slice(POST_PENDING_PREFIX.length);
+    var target = null;
+    if (d === tmrStr) target = POST_SHEET_NAME;
+    // 昨天的排程沒跑成（觸發器故障等）留下的「今天」那份：補進今日哨表，不讓今天顯示舊哨表
+    else if (d === todayStr) target = POST_TODAY_SHEET_NAME;
+    else if (d > tmrStr) continue; // 還沒輪到
+    if (target) {
+      var dst = ss.getSheetByName(target);
+      if (!dst) { console.error('待生效哨表 ' + d + ' 放入失敗：找不到分頁 ' + target); continue; }
+      var values = sh.getDataRange().getValues();
+      dst.getRange(1, 1, values.length, values[0].length).setValues(values);
+      console.log('待生效哨表 ' + d + ' 已放入「' + target + '」');
+    } else {
+      // 比今天還舊：已經過期沒有意義，歷史哨表上傳當下就寫過了，直接清掉避免分頁累積
+      console.warn('待生效哨表 ' + d + ' 已過期，刪除');
+    }
+    ss.deleteSheet(sh);
   }
 }
 
@@ -3989,7 +4059,7 @@ function runSetupTodaySnapshotTrigger() {
 
 function runSnapshotTodayPostNow() {
   snapshotTodayPostScheduled_();
-  Logger.log('已手動快照今日哨表');
+  Logger.log('已手動快照今日哨表（並放入明天的待生效哨表，若有）');
 }
 
 // ════════════════════════════════════════════════════════════

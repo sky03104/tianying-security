@@ -1120,7 +1120,8 @@ function GenerateTab({ postConfig }) {
       })
     }).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
     setUploading(false);
-    if (r.success) showToast('已上傳至「' + targetSheet + '」', 'ok');
+    // 新版哨表上傳 GAS 依日期自己決定寫哪（今日/明日/待生效），以回傳為準
+    if (r.success) showToast('已上傳至「' + (r.targetSheet || targetSheet) + '」', 'ok');
     else showToast(r.error || '上傳失敗', 'err');
   }
 
