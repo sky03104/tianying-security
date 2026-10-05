@@ -20,8 +20,23 @@
 
 動畫是 SVG＋SMIL（`isInteractive`），終端機沒有 Svg 元素，只顯示文字。
 
+## 怎麼載入（⚠️ 放在 repo 裡不會自己載入）
+2026-10-05 實測：雲端 session 開場**沒有**載入這個 MOD，打 `/agent-status` 會顯示「沒有這個指令」。
+官方文件說專案的 `.claude/skills/<name>` 會自動載入外掛，但除錯紀錄顯示：雲端 workspace 是「未受信任」狀態
+（同一份 `.claude/settings.json` 的 `permissions.allow` 也被略過），專案層的這個資料夾根本沒被掃描。
+所以要用下面兩種方式之一：
+
+1. **每個新 session 自動載入（建議）**：雲端環境設定（session 標題列的環境選單 → Edit）加一個環境變數
+   `CLAUDE_CODE_PLUGIN_DIRS=/home/user/tianying-security/.claude/skills/agent-status`
+   Claude Code 啟動時會把這個路徑當成外掛資料夾載入，改完要**開新 session** 才生效。
+   ⚠️ 這個變數只認「行程環境變數」或使用者層 `~/.claude/settings.json`，**不讀專案的 `.claude/settings.json`**，所以不能寫進 repo 解決。
+2. **只救目前這個 session**：叫 Claude 載入 `plugin-authoring` 技能，把本資料夾複製到它指定的 dev-mods 資料夾，
+   畫面跳出「Enable hot reloading for this session?」選 **Enable for this session**，該輪結束後就能用。關掉 session 就沒了。
+
+本機終端機則可直接 `claude --plugin-dir .claude/skills/agent-status`。
+
 ## 限制
-- MOD 只看得到**自己所在的 session**，看不到別的 session；所以放進 repo，讓每個 session 各自載入、各自顯示。
+- MOD 只看得到**自己所在的 session**，看不到別的 session；每個 session 要各自載入（見上一節）。
 - 每張 SVG 上限約 13 萬字元；角色圖已壓到每位 8～15KB。
 
 ## 檔案
