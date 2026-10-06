@@ -3631,28 +3631,58 @@ function checkDateMatch_(dateInfo, offsetDays) {
   return { match: (dateInfo.month === m && dateInfo.day === d), label: (m + '/' + d) };
 }
 
-function getTomorrowPost(e) {
+// 2026-10-06 加快：今/明日哨表每次都要開哨表試算表＋整張讀＋拆合併格＋開主試算表讀帳號表
+// （＋偶爾整張讀 3000 多列的歷史哨表），再加上這支 GAS 本身很大、冷啟動慢，手機上要轉好幾秒。
+// 解析結果其實只有哨表內容變了才會變，所以用「哨表試算表最後修改時間＋今天日期」當快取鍵：
+//   ・上傳新哨表、08:00 切換、手動改試算表 → 修改時間變了 → 自動重算，不會看到舊資料
+//   ・跨日 → 日期變了 → 重算（「是不是今天/明天」的判斷跟日期有關）
+// 讀 Drive 修改時間只要一次輕量呼叫，比整套解析快很多。快取 30 分鐘（帳號綁定等異動最晚 30 分鐘反映）。
+var POST_CACHE_SEC_ = 1800;
+function postCacheKey_(sheetName) {
+  var upd = DriveApp.getFileById(POST_SHEET_ID).getLastUpdated().getTime();
+  var today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
+  return 'post_' + (sheetName === POST_SHEET_NAME ? 'tmr' : 'today') + '_' + today + '_' + upd;
+}
+function cachedPostRes_(sheetName, build) {
+  var cache = CacheService.getScriptCache(), key = null;
   try {
-    var full = parsePostFullList_(POST_SHEET_NAME);
-    if (full.error) return jsonRes({ status: 'notyet', msg: full.error, early: [], late: [] });
-    var dm = checkDateMatch_(full.dateInfo, 1);
-    if (!dm.match) return jsonRes({ status: 'notyet', msg: '明日哨表尚未更新', date: full.dateInfo.label, early: [], late: [] });
-    return jsonRes({ status: 'ok', date: full.dateInfo.label, early: full.early, late: full.late });
-  } catch (err) {
-    return jsonRes({ status: 'err', msg: err.toString(), early: [], late: [] });
+    key = postCacheKey_(sheetName);
+    var hit = cache.get(key);
+    if (hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
+  } catch (e) { key = null; } // 讀不到修改時間就不快取，照常重算
+  var obj = build();
+  if (key && obj && (obj.status === 'ok' || obj.status === 'notyet')) {
+    try { cache.put(key, JSON.stringify(obj), POST_CACHE_SEC_); } catch (e) {} // 超過 100KB 等失敗不影響回應
   }
+  return jsonRes(obj);
+}
+
+function getTomorrowPost(e) {
+  return cachedPostRes_(POST_SHEET_NAME, function () {
+    try {
+      var full = parsePostFullList_(POST_SHEET_NAME);
+      if (full.error) return { status: 'notyet', msg: full.error, early: [], late: [] };
+      var dm = checkDateMatch_(full.dateInfo, 1);
+      if (!dm.match) return { status: 'notyet', msg: '明日哨表尚未更新', date: full.dateInfo.label, early: [], late: [] };
+      return { status: 'ok', date: full.dateInfo.label, early: full.early, late: full.late };
+    } catch (err) {
+      return { status: 'err', msg: err.toString(), early: [], late: [] };
+    }
+  });
 }
 
 function getTodayPost(e) {
-  try {
-    var full = parsePostFullList_(POST_TODAY_SHEET_NAME);
-    if (full.error) return jsonRes({ status: 'notyet', msg: '今日哨表尚未產生', early: [], late: [] });
-    var dm = checkDateMatch_(full.dateInfo, 0);
-    if (!dm.match) return jsonRes({ status: 'notyet', msg: '今日哨表尚未更新', date: full.dateInfo.label, early: [], late: [] });
-    return jsonRes({ status: 'ok', date: full.dateInfo.label, early: full.early, late: full.late });
-  } catch (err) {
-    return jsonRes({ status: 'err', msg: err.toString(), early: [], late: [] });
-  }
+  return cachedPostRes_(POST_TODAY_SHEET_NAME, function () {
+    try {
+      var full = parsePostFullList_(POST_TODAY_SHEET_NAME);
+      if (full.error) return { status: 'notyet', msg: '今日哨表尚未產生', early: [], late: [] };
+      var dm = checkDateMatch_(full.dateInfo, 0);
+      if (!dm.match) return { status: 'notyet', msg: '今日哨表尚未更新', date: full.dateInfo.label, early: [], late: [] };
+      return { status: 'ok', date: full.dateInfo.label, early: full.early, late: full.late };
+    } catch (err) {
+      return { status: 'err', msg: err.toString(), early: [], late: [] };
+    }
+  });
 }
 
 function buildTomorrowPostFlex_(name, dateLabel, posts, titlePrefix) {
