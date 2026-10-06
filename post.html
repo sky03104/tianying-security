@@ -183,31 +183,63 @@ function renderRows(list, cls){
   return html;
 }
 
+/* 2026-10-06 加快：先把上次讀到的哨表（本機快取）立刻畫出來，背景再向雲端要最新的，
+   回來有變再換掉——點進來不用盯著轉圈圈等 GAS。快取只留 36 小時，太舊的不拿出來用；
+   標題右上角的日期就是那份資料的日期，所以就算一瞬間顯示到舊的也看得出來。 */
+var POST_CACHE_PREFIX = 'tianying_post_cache_';
+var POST_CACHE_MAX_MS = 36 * 3600 * 1000;
+function readPostCache(view){
+  try {
+    var c = JSON.parse(localStorage.getItem(POST_CACHE_PREFIX + view) || 'null');
+    if (c && c.res && (Date.now() - c.at) < POST_CACHE_MAX_MS) return c.res;
+  } catch (e) {}
+  return null;
+}
+function writePostCache(view, res){
+  try { localStorage.setItem(POST_CACHE_PREFIX + view, JSON.stringify({ at: Date.now(), res: res })); } catch (e) {}
+}
+function renderRes(res, view){
+  if(res && res.status==='ok'){
+    $('tb-date').textContent = res.date || '';
+    $('early-cnt').textContent = (res.early||[]).length + ' 人';
+    $('late-cnt').textContent = (res.late||[]).length + ' 人';
+    $('early-body').innerHTML = renderRows(res.early, 'early');
+    $('late-body').innerHTML = renderRows(res.late, 'late');
+    showState('content');
+    return true;
+  }
+  if (res && res.status==='notyet') {
+    $('tb-date').textContent = res.date || '';
+    $('empty-msg').textContent = res.msg || (VIEW_INFO[view].label + '尚未更新');
+    showState('empty');
+    return true;
+  }
+  return false;
+}
+
 function loadPost(){
   var view = currentView;
-  showState('loading');
-  $('loading-msg').textContent = '載入' + VIEW_INFO[view].label + '中…';
+  var cached = readPostCache(view);
+  if (!(cached && renderRes(cached, view))) {
+    showState('loading');
+    $('loading-msg').textContent = '載入' + VIEW_INFO[view].label + '中…';
+  }
+  $('tb-date').style.opacity = cached ? '.55' : '1'; // 背景更新中：日期淡一點
   if(GAS_URL==='GAS_URL_PH'){ $('error-msg').textContent='系統尚未設定 GAS 網址，請聯絡管理員。'; showState('error'); return; }
   fetch(GAS_URL + '?action=' + VIEW_INFO[view].action)
     .then(function(r){ return r.json(); })
     .then(function(res){
       if (view !== currentView) return; // 切換分頁時，忽略舊分頁的回應
-      if(res && res.status==='ok'){
-        $('tb-date').textContent = res.date || '';
-        $('early-cnt').textContent = (res.early||[]).length + ' 人';
-        $('late-cnt').textContent = (res.late||[]).length + ' 人';
-        $('early-body').innerHTML = renderRows(res.early, 'early');
-        $('late-body').innerHTML = renderRows(res.late, 'late');
-        showState('content');
-      } else if (res && res.status==='notyet') {
-        $('tb-date').textContent = res.date || '';
-        $('empty-msg').textContent = res.msg || (VIEW_INFO[view].label + '尚未更新');
-        showState('empty');
-      } else {
-        throw new Error((res && res.msg) || '讀取失敗');
-      }
+      $('tb-date').style.opacity = '1';
+      if (renderRes(res, view)) { writePostCache(view, res); return; }
+      throw new Error((res && res.msg) || '讀取失敗');
     })
-    .catch(function(err){ if (view === currentView) { $('error-msg').textContent='載入失敗：'+err.message; showState('error'); } });
+    .catch(function(err){
+      if (view !== currentView) return;
+      if (cached) return; // 已經有上次的資料在畫面上，就別蓋成錯誤畫面（日期維持淡色，表示沒更新成功）
+      $('tb-date').style.opacity = '1';
+      $('error-msg').textContent='載入失敗：'+err.message; showState('error');
+    });
 }
 
 window.addEventListener('load', function(){
