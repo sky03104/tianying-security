@@ -121,7 +121,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '61.34';
+const APP_VERSION = '62.34';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -1235,6 +1235,37 @@ function ok(obj) {
             if (acc && acc.status === 'active') return ROLE_MAP[acc.role] || fallbackRole;
             return fallbackRole;
         };
+        /* 2026-10-06：職稱一律以 APP 帳號設定為準，對不到帳號才用班表 A 欄手寫的職稱。
+           原本每次讀班表都拿 A 欄（ROLE_XL[row.roleStr]）蓋過去，只有工號對照還是空的第一次
+           （autoFillStaffEmpIds_）才校正一次，Excel 沒改就永遠顯示舊職稱（例：謝志遠帳號是隊長，
+           班表 Excel 寫副隊長）。比對規則同 autoFillStaffEmpIds_：先用工號，對不到再用姓名比對
+           「啟用中」帳號且同名只有 1 筆才採用。帳號是 admin（管理員）時照用班表職稱——管理員是
+           系統權限、不是現場職稱，否則有管理權限的人會被顯示成「管理員」。 */
+        const 帳號職務_ = (name, empId, sheetRole) => {
+            if (!userDb) return sheetRole;
+            let acc = empId ? userDb[empId] : null;
+            if (!acc || acc.status !== 'active') {
+                const hits = Object.values(userDb).filter(a => a && a.name === name && a.status === 'active');
+                acc = hits.length === 1 ? hits[0] : null;
+            }
+            if (!acc || acc.status !== 'active' || acc.role === 'admin') return sheetRole;
+            return ROLE_MAP[acc.role] || sheetRole;
+        };
+        /* 帳號資料（userDb）比班表晚到、之後有改、或切換班別換了一份名單時，重算職稱；沒變就不動 state */
+        useEffect(() => {
+            if (!userDb) return;
+            setStaff(prev => {
+                let changed = false;
+                const next = prev.map(st => {
+                    const base = st.sheetRole || st.role;
+                    const r = 帳號職務_(st.name, st.empId || staffEmpIdMapRef.current[st.name] || '', base);
+                    if (r === st.role && st.sheetRole) return st;
+                    changed = true;
+                    return { ...st, role: r, sheetRole: base };
+                });
+                return changed ? next : prev;
+            });
+        }, [userDb, staff]); /* staff 也要：切換早／晚／案場會從各自快取換一份名單進來；沒變化就回傳 prev，不會無限重畫 */
         /* 2026-08-28新增：只給「顯示用」，不能拿來覆蓋s.shift（s.shift是靠人實際排在
            哪份試算表判斷分組/篩選，改了會讓人在單一班別檢視下消失，見咖哩與AI的討論）。
            純粹讓管理員一眼看到帳號設定跟班表現況班別對不對得起來。 */
@@ -1305,12 +1336,12 @@ function ok(obj) {
                 if (matches.length !== 1) return;
                 map[s.name] = matches[0].empId;
                 filled++;
-                const mappedRole = ROLE_MAP[matches[0].role];
+                const mappedRole = matches[0].role === 'admin' ? null : ROLE_MAP[matches[0].role]; /* 管理員是系統權限不是現場職稱，見 帳號職務_ */
                 if (mappedRole && mappedRole !== s.role) { roleUpdates[s.name] = mappedRole; roleFixed++; }
             });
             if (!filled) return;
             staffEmpIdMapRef.current = map;
-            const corrected = staffList.map(s => ({ ...s, empId: map[s.name] || s.empId || '', role: roleUpdates[s.name] || s.role }));
+            const corrected = staffList.map(s => ({ ...s, empId: map[s.name] || s.empId || '', sheetRole: s.sheetRole || s.role, role: roleUpdates[s.name] || s.role }));
             setStaff(corrected);
             syncStaffEmpIds(corrected.map(s => ({ name: s.name, empId: s.empId || '' })));
             if (roleFixed) {
@@ -1361,20 +1392,21 @@ function ok(obj) {
                         }
                     });
                     let m = nStaff.find(s => s.name === name);
-                    const role = ROLE_XL[String(row.roleStr || '').trim()] || (m ? m.role : 'staff');
+                    const sheetRole = ROLE_XL[String(row.roleStr || '').trim()] || (m ? (m.sheetRole || m.role) : 'staff');
                     // 該筆資料是從 shKey 那份線上班表讀到的，所在班表分頁才是「班別」唯一依據，
                     // 每次同步都以此校正 shift，避免舊快取殘留的錯誤班別一直不會自動修正
                     const shiftHere = shKey === 'morning' ? '早班' : '晚班';
                     const empId = staffEmpIdMapRef.current[name] || (m ? m.empId : '') || '';
+                    const role = 帳號職務_(name, empId, sheetRole);
                     if (!m) {
                         const id = ++_nid;
-                        m = { id: id, name: name, role: role, shift: shiftHere, empId: empId };
+                        m = { id: id, name: name, role: role, sheetRole: sheetRole, shift: shiftHere, empId: empId };
                         nStaff.push(m);
                         nSc[m.id] = {};
                     }
                     else {
                         const i2 = nStaff.findIndex(s => s.id === m.id);
-                        nStaff[i2] = { ...nStaff[i2], role: role, shift: shiftHere, empId: empId };
+                        nStaff[i2] = { ...nStaff[i2], role: role, sheetRole: sheetRole, shift: shiftHere, empId: empId };
                     }
                     nSc[m.id] = { ...nSc[m.id], ...shifts };
                     cnt++;
@@ -1572,16 +1604,17 @@ function ok(obj) {
                     }
                 });
                 let m = nStaff.find(s => s.name === name);
-                const role = ROLE_XL[String(row.roleStr || '').trim()] || (m ? m.role : 'staff');
+                const sheetRole = ROLE_XL[String(row.roleStr || '').trim()] || (m ? (m.sheetRole || m.role) : 'staff');
+                const role = 帳號職務_(name, (m && m.empId) || staffEmpIdMapRef.current[name] || '', sheetRole);
                 if (!m) {
                     const id = ++_nid;
-                    m = { id: id, name: name, role: role, shift: '晚班' };
+                    m = { id: id, name: name, role: role, sheetRole: sheetRole, shift: '晚班' };
                     nStaff.push(m);
                     nSc[m.id] = {};
                 }
                 else {
                     const i2 = nStaff.findIndex(s => s.id === m.id);
-                    nStaff[i2] = { ...nStaff[i2], role: role, shift: '晚班' };
+                    nStaff[i2] = { ...nStaff[i2], role: role, sheetRole: sheetRole, shift: '晚班' };
                 }
                 nSc[m.id] = { ...nSc[m.id], ...shifts };
                 cnt++;
@@ -2025,7 +2058,17 @@ function ok(obj) {
         }
         /* ── StaffView ── */
         function StaffView() {
+            /* 2026-10-06：班表 Excel A 欄職稱跟 APP 帳號不一致的人（畫面已依帳號顯示，這裡提醒回頭修 Excel） */
+            const roleDiff = staff.filter(s => s.sheetRole && s.sheetRole !== s.role);
             return (React.createElement("div", { style: { padding: "13px 13px" } },
+                roleDiff.length > 0 && React.createElement("div", { style: { marginBottom: 14, padding: "11px 13px", borderRadius: 10, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.4)" } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#FB923C", marginBottom: 6 } }, `⚠️ 班表職稱與帳號不一致（${roleDiff.length} 人）`),
+                    roleDiff.map(s => React.createElement("div", { key: s.id, style: { fontSize: 13, color: C.text, lineHeight: 1.7 } },
+                        s.name + "：班表寫 ",
+                        React.createElement("span", { style: { color: C.textMute } }, ROLES[s.sheetRole] || s.sheetRole),
+                        " → 帳號為 ",
+                        React.createElement("span", { style: { color: C.goldBri, fontWeight: 700 } }, ROLES[s.role] || s.role))),
+                    React.createElement("div", { style: { fontSize: 11, color: C.textMute, marginTop: 6, lineHeight: 1.6 } }, "畫面已依 APP 帳號顯示；要根除請修正月班表 Excel 第一欄（職務）。")),
                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
                     React.createElement("span", { style: { fontSize: 15, fontWeight: 900, color: C.text } }, "\u54E1\u5DE5\u7BA1\u7406"),
                     React.createElement("button", { style: { ...gBtn, padding: "8px 14px", fontSize: 13 }, onClick: () => { setStFrm({ name: "", role: "staff", shift: "晚班", empId: "" }); setStMod("add"); } }, "\uFF0B \u65B0\u589E\u54E1\u5DE5")),
