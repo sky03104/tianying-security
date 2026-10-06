@@ -1,12 +1,15 @@
 # 產生 agent-status 面板用的跑步序列幀：python3 tools/mk_sprites.py → 直接覆寫 hooks/sprites.ts
 # 需要 Pillow（pip install pillow）；素材來源是 repo 根目錄 brain_map_img/run_*_f*.png
+# ⚠️ 角色一律輸出成純向量格子（<path>），不能用 <image href="data:...">：
+#    桌面版面板會把 SVG 裡的 <image> 洗掉，角色整個消失只剩地板（2026-10-06 實測）
 import sys, base64, io, json
 from collections import deque
 from PIL import Image
 import os
 SRC=os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../../brain_map_img/')
 CH={'luffy':6,'robin':6,'franky':12,'zoro':12,'chopper':12,'nami':12,'usopp':12}
-H=80; COLORS=64
+H=48; COLORS=16   # 格子解析度；調高會超過面板每張 SVG 13 萬字元上限（索隆＋喬巴同台最大）
+DISPLAY_H=80      # 面板上的顯示高度（px），向量縮放過去
 
 def widest_cols(im):
     """依「整欄透明」切段，只留最寬那段（去掉左右邊緣的隔壁格殘影）"""
@@ -66,17 +69,32 @@ for name,n in CH.items():
     for i,f in enumerate(frames):
         g=f.resize((max(1,round(f.width*s)),max(1,round(f.height*s))),Image.LANCZOS)
         sheet.paste(g,(i*w+(w-g.width)//2,H-g.height))   # 底部置中對齊
-    q=sheet.quantize(colors=COLORS,method=Image.FASTOCTREE,dither=Image.NONE)
-    buf=io.BytesIO(); q.save(buf,'PNG',optimize=True); b=buf.getvalue()
-    out[name]={'w':w,'h':H,'n':len(frames),'b64':base64.b64encode(b).decode()}
-    print(name,(w,H),len(frames),'b64',len(out[name]['b64']))
+    a=sheet.getchannel('A').load()
+    q=sheet.convert('RGB').quantize(colors=COLORS,method=Image.MEDIANCUT,dither=Image.NONE)
+    pal=q.getpalette(); px=q.load(); svgs=[]
+    for f in range(len(frames)):
+        runs={}   # 色號 → 同色水平連續格子
+        for y in range(H):
+            x=0
+            while x<w:
+                X=f*w+x
+                if a[X,y]<=100: x+=1; continue
+                c=px[X,y]; x2=x
+                while x2+1<w and a[f*w+x2+1,y]>100 and px[f*w+x2+1,y]==c: x2+=1
+                runs.setdefault(c,[]).append(f'M{x} {y}h{x2-x+1}v1h-{x2-x+1}z')
+                x=x2+1
+        svgs.append(''.join(f'<path fill="#{pal[3*c]:02x}{pal[3*c+1]:02x}{pal[3*c+2]:02x}" d="{"".join(r)}"/>' for c,r in runs.items()))
+    k=DISPLAY_H/H
+    out[name]={'w':round(w*k,2),'h':DISPLAY_H,'n':len(frames),'s':round(k,4),'frames':svgs}
+    print(name,(w,H),len(frames),'chars',sum(map(len,svgs)))
 HERE=os.path.dirname(os.path.abspath(__file__))
-lines=['// 由 brain_map_img/run_*_f*.png 壓縮產生的跑步序列幀（高 80px、6 幀橫排、64 色 PNG）',
-'// 重新產生：python3 tools/mk_sprites.py，不要手改 base64',
-'export type Sprite = { w: number; h: number; n: number; b64: string }',
+lines=['// 由 brain_map_img/run_*_f*.png 產生的跑步序列幀（純向量格子：每幀一串 <path>，座標單位＝格子）',
+'// 重新產生：python3 tools/mk_sprites.py，不要手改',
+'// w/h：面板上顯示的寬高（px）；s：格子 → 顯示 px 的縮放；frames：每幀的 SVG 片段',
+'export type Sprite = { w: number; h: number; n: number; s: number; frames: string[] }',
 'export const SPRITES: Record<string, Sprite> = {']
 for k,v in out.items():
-    lines.append(f"  {k}: {{ w: {v['w']}, h: {v['h']}, n: {v['n']}, b64: '{v['b64']}' }},")
+    lines.append(f"  {k}: {{ w: {v['w']}, h: {v['h']}, n: {v['n']}, s: {v['s']}, frames: {json.dumps(v['frames'],ensure_ascii=False)} }},")
 lines.append('}')
 open(os.path.join(HERE,'..','hooks','sprites.ts'),'w').write('\n'.join(lines)+'\n')
 print('已寫入 hooks/sprites.ts')
