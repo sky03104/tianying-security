@@ -49,9 +49,15 @@ describe('純邏輯', () => {
       const s = stageSvg(p)
       expect(s.length).toBeLessThan(131072)
       expect(s.startsWith('<svg')).toBe(true)
+      // 桌面版面板會洗掉 <image>，角色必須是純向量
+      expect(s).not.toContain('<image')
+      expect(s).not.toContain('data:')
     }
     expect(stageSvg('run')).toContain('animateTransform')
-    expect(stageSvg('agent').match(/data:image\/png/g)?.length).toBe(2)
+    // 子代理：索隆＋小喬巴兩個角色同台
+    expect(stageSvg('agent').match(/shape-rendering="crispEdges"/g)?.length).toBe(2)
+    // 跑動中的角色逐格切換
+    expect(stageSvg('run')).toContain('calcMode="discrete"')
   })
 })
 

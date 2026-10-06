@@ -92,17 +92,19 @@ export function bar(done: number, total: number, width = 10): string {
   return '▰'.repeat(n) + '▱'.repeat(width - n)
 }
 
-/** 一個角色的跑步序列幀（SMIL 逐格切換） */
+/** 一個角色的跑步序列幀（SMIL 逐格切換）
+ *  ⚠️ 角色是純向量格子，不能改回 <image href="data:...">：桌面版面板會洗掉 <image>，角色會整個消失 */
 function spriteSvg(name: string, x: number, y: number, scale: number, isMoving: boolean, dur = 0.66): string {
   const sp = SPRITES[name]
   if (!sp) return ''
-  const w = sp.w, h = sp.h
-  const steps = Array.from({ length: sp.n }, (_, i) => `${-i * w} 0`).join(';')
-  const anim = isMoving
-    ? `<animateTransform attributeName="transform" type="translate" values="${steps}" calcMode="discrete" dur="${dur}s" repeatCount="indefinite"/>`
-    : ''
-  return `<svg x="${x}" y="${y}" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w} ${h}" overflow="hidden">`
-    + `<image href="data:image/png;base64,${sp.b64}" width="${w * sp.n}" height="${h}" style="image-rendering:pixelated">${anim}</image></svg>`
+  const 幀 = isMoving
+    ? sp.frames.map((f, i) => {
+        // 第 i 幀只在自己那一格時間顯示
+        const 透明度 = sp.frames.map((_, j) => (j === i ? 1 : 0)).join(';')
+        return `<g opacity="${i === 0 ? 1 : 0}">${f}<animate attributeName="opacity" values="${透明度}" calcMode="discrete" dur="${dur}s" repeatCount="indefinite"/></g>`
+      }).join('')
+    : sp.frames[0]
+  return `<g transform="translate(${x} ${y}) scale(${+(sp.s * scale).toFixed(4)})" shape-rendering="crispEdges">${幀}</g>`
 }
 
 /** 各狀態的特效（SMIL 動畫） */

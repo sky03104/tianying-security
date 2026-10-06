@@ -37,7 +37,8 @@
 
 ## 限制
 - MOD 只看得到**自己所在的 session**，看不到別的 session；每個 session 要各自載入（見上一節）。
-- 每張 SVG 上限約 13 萬字元；角色圖已壓到每位 8～15KB。
+- 每張 SVG 上限約 13 萬字元；角色是 48 格高、16 色的純向量格子（`<path>`），最大一張（索隆＋喬巴同台）約 8.6 萬字元。
+- ⚠️ **角色不能用 `<image href="data:...">` 內嵌 PNG**：桌面版面板會把 SVG 裡的 `<image>` 洗掉，只剩地板和速度線、角色整個不見（2026-10-06 實測）。`tools/mk_sprites.py` 已改成輸出純向量。
 
 ## 檔案
 - `hooks/register.tsx`：事件掛鉤（tool.call / turn.start / turn.complete）與畫面
