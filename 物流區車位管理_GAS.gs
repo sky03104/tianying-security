@@ -19,7 +19,7 @@
 // 主鍵：純數字流水號（既有最大ID+1），寫入時上 LockService，避免兩人同時新增撞號。
 // 日期一律存 yyyy-MM-dd 文字（欄位格式設 @），不讓 Sheets 自動轉成日期物件。
 //
-// 權限：使用與編輯＝正職以上（fulltime/leader/vicecaptain/captain/executive/admin，不含兼職）；
+// 權限：使用與編輯＝依主控台工具權限面板（toolPerms 的 id25；沒設定時預設正職以上）；
 //   刪除車格＝組長以上。三層把關——index.html DEFAULT_PERMS → tool_parking.html 前端 →
 //   本檔每個 action 驗 token+角色（前兩層都在瀏覽器裡改得掉，後端這層才是真的）。
 //
@@ -166,6 +166,45 @@ function verifyAuthToken_(token) {
 }
 
 
+// 使用權限以主控台「工具權限」面板為準（主 App 試算表「系統設定」分頁的 toolPerms，
+// 格式 {角色:[工具id]}）。2026-10-06 咖哩在面板開了兼職卻進不去——這裡原本寫死正職以上。
+// 讀不到設定才退回預設的正職以上；管理員永遠可用。刪除車格仍固定組長以上（不看面板）。
+var PARKING_TOOL_ID_ = 25;
+var TOOL_PERMS_CACHE_SEC_ = 300; // 面板改完最多 5 分鐘生效
+function readToolPerms_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('toolPerms');
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  var perms = null;
+  try {
+    var sh = SpreadsheetApp.openById(MAIN_APP_SHEET_ID_).getSheetByName('系統設定');
+    if (sh) {
+      var data = sh.getDataRange().getValues();
+      for (var r = 1; r < data.length; r++) {
+        if (String(data[r][0]).trim() !== 'toolPerms') continue;
+        var p = JSON.parse(String(data[r][1] || ''));
+        if (p && typeof p === 'object') perms = p;
+        break;
+      }
+    }
+  } catch (e) { perms = null; }
+  if (perms) { try { cache.put('toolPerms', JSON.stringify(perms), TOOL_PERMS_CACHE_SEC_); } catch (e) {} }
+  return perms;
+}
+function canUseTool_(role, perms) {
+  if (role === 'admin') return true;
+  if (perms && Object.prototype.toString.call(perms[role]) === '[object Array]') {
+    return perms[role].indexOf(PARKING_TOOL_ID_) >= 0 || perms[role].indexOf(String(PARKING_TOOL_ID_)) >= 0;
+  }
+  return STAFF_PLUS_ROLES_.indexOf(role) >= 0;
+}
+function requireToolUser_(token) {
+  var user = verifyAuthToken_(token);
+  if (!user) return null;
+  if (!canUseTool_(user.role, readToolPerms_())) { lastAuthErr_ = 'ROLE'; return null; }
+  return user;
+}
+
 function requireRole_(token, roles) {
   var user = verifyAuthToken_(token);
   if (!user) return null;
@@ -179,7 +218,7 @@ function authFailRes_(roleMsg) {
     return jsonRes_({ status: 'error', code: 'SERVER', msg: '伺服器暫時忙碌，無法確認登入狀態，請稍後再試（不用重新登入）' });
   }
   if (lastAuthErr_ === 'ROLE') {
-    return jsonRes_({ status: 'error', code: 'ROLE', msg: roleMsg || '權限不足：本工具僅限正職以上使用' });
+    return jsonRes_({ status: 'error', code: 'ROLE', msg: roleMsg || '權限不足：您的職務目前沒有開放本工具，請洽主管' });
   }
   return jsonRes_({ status: 'error', code: 'INVALID', msg: '登入已失效，請回天鷹保全 App 重新登入' });
 }
@@ -358,7 +397,7 @@ function doGet(e) {
   var token = (e && e.parameter) ? e.parameter.token : '';
 
   if (action === 'getAll') {
-    var user = requireRole_(token, STAFF_PLUS_ROLES_);
+    var user = requireToolUser_(token);
     if (!user) return authFailRes_();
     try {
       var slots = readSlots_().rows.map(function (s) {
@@ -382,7 +421,7 @@ function doGet(e) {
   }
 
   if (action === 'getHistory') {
-    var u3 = requireRole_(token, STAFF_PLUS_ROLES_);
+    var u3 = requireToolUser_(token);
     if (!u3) return authFailRes_();
     try {
       var sid = Number((e.parameter && e.parameter.slotId) || 0);
@@ -398,7 +437,7 @@ function doGet(e) {
   }
 
   if (action === 'getLogs') {
-    var u2 = requireRole_(token, STAFF_PLUS_ROLES_);
+    var u2 = requireToolUser_(token);
     if (!u2) return authFailRes_();
     try {
       var slotId = Number((e.parameter && e.parameter.slotId) || 0);
@@ -436,7 +475,7 @@ function doPost(e) {
     // 刪除車格要組長以上，其餘正職以上
     var user = action === 'deleteSlot'
       ? requireRole_(token, LEADER_PLUS_ROLES_)
-      : requireRole_(token, STAFF_PLUS_ROLES_);
+      : requireToolUser_(token);
     if (!user) return authFailRes_(action === 'deleteSlot' ? '權限不足：刪除車格僅限組長以上' : '');
 
     var lock = LockService.getScriptLock();
@@ -708,3 +747,6 @@ function forceAuth() {
   var secret = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
   console.log(secret ? 'SESSION_SECRET 已設定：走本機驗證（快）' : '⚠ 尚未設定 SESSION_SECRET：走備援驗證（問主 App，較慢）');
 }
+
+// node 測試用（GAS 環境沒有 module，不影響執行）
+if (typeof module !== 'undefined') module.exports = Object.assign(module.exports || {}, { canUseTool_: canUseTool_ });
