@@ -477,11 +477,23 @@ function showNoPerm(msg){
     '<div class="errbox" style="max-width:360px"><i class="ti ti-lock"></i><div>'+esc(msg)+'</div></div>'+
     '<a class="back" href="'+esc(backHref)+'"><i class="ti ti-arrow-left"></i>返回主選單</a></div>';
 }
+/* 使用權限以主控台「工具權限」面板為準（2026-10-06：咖哩開了兼職權限卻進不去，因為這裡原本寫死正職以上）。
+   面板設定存在同網域 localStorage「tianying_perms」＝{角色:[工具id]}；讀不到才退回預設的正職以上。
+   GAS 端 canUseTool_ 同規則（讀雲端系統設定 toolPerms），刪除車格仍固定組長以上。 */
+var PARKING_TOOL_ID = 25;
+function 有使用權限(role){
+  if(role === 'admin') return true;
+  try{
+    var p = JSON.parse(localStorage.getItem('tianying_perms') || 'null');
+    if(p && Array.isArray(p[role])) return p[role].indexOf(PARKING_TOOL_ID) >= 0;
+  }catch(e){}
+  return STAFF_PLUS_ROLES.indexOf(role) >= 0;
+}
 function checkPermission(){
   var u = getSessionUser();
   if(!u || !u.empId){ showNoPerm('請從天鷹保全 App 登入後開啟本工具'); return false; }
   if(!getAuthToken()){ showNoPerm('登入已失效，請重新從天鷹保全 App 登入'); return false; }
-  if(STAFF_PLUS_ROLES.indexOf(u.role) === -1){ showNoPerm('此工具僅限正職以上使用，如有需要請洽主管'); return false; }
+  if(!有使用權限(u.role)){ showNoPerm('您的職務目前沒有開放本工具，如有需要請洽主管'); return false; }
   return true;
 }
 
