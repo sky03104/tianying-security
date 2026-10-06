@@ -109,7 +109,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '60.34';
+const APP_VERSION = '61.34';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -1072,7 +1072,14 @@ function ok(obj) {
             } catch (e) { }
         });
         const [shiftVer, setShiftVer] = useState(0);
-        const [selSt, setSelSt] = useState(null);
+        /* 2026-10-06：月班表點姓名改成彈出個人月曆（原本是把大表過濾成只剩那個人） */
+        const [calSt, setCalSt] = useState(null);
+        useEffect(() => {
+            if (!calSt) return;
+            const onKey = e => { if (e.key === 'Escape') setCalSt(null); };
+            window.addEventListener('keydown', onKey);
+            return () => window.removeEventListener('keydown', onKey);
+        }, [calSt]);
         const [editC, setEditC] = useState(null);
         const [stMod, setStMod] = useState(null);
         const [stFrm, setStFrm] = useState({ name: "", role: "staff", shift: "晚班", empId: "" });
@@ -1834,7 +1841,7 @@ function ok(obj) {
         /* ── MonthView ── */
         function MonthView() {
             const [staffSearch, setStaffSearch] = useState('');
-            const list = selSt ? staff.filter(s => s.id === selSt) : filtered;
+            const list = filtered;
             const cols = Array.from({ length: DAYS }, (_, i) => i + 1);
             const monthScrollEl = useRef(null);
             /* 掛載時（含雲端資料回填造成的重新掛載）復原上次捲動位置。
@@ -1858,14 +1865,14 @@ function ok(obj) {
                         staffSearch && (React.createElement("button", { onClick: () => setStaffSearch(''), style: { position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
                                 background: "none", border: "none", color: C.textMute, cursor: "pointer", fontSize: 16 } }, "\u2715"))),
                     React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } },
-                        React.createElement("button", { style: { ...S.chip, background: !selSt ? "rgba(212,168,0,0.18)" : C.card,
-                                color: !selSt ? C.goldBri : C.textDim, borderColor: !selSt ? C.gold : C.cardBd }, onClick: () => { setSelSt(null); setStaffSearch(''); } }, "\u5168\u54E1"),
+                        React.createElement("button", { style: { ...S.chip, background: !staffSearch ? "rgba(212,168,0,0.18)" : C.card,
+                                color: !staffSearch ? C.goldBri : C.textDim, borderColor: !staffSearch ? C.gold : C.cardBd }, onClick: () => setStaffSearch('') }, "\u5168\u54E1"),
                         staff
                             .filter(s => !staffSearch || s.name.includes(staffSearch))
                             .map(s => (React.createElement("button", { key: s.id, style: { ...S.chip,
-                                background: selSt === s.id ? "rgba(212,168,0,0.18)" : C.card,
-                                color: selSt === s.id ? C.goldBri : C.textDim,
-                                borderColor: selSt === s.id ? C.gold : C.cardBd }, onClick: () => setSelSt(selSt === s.id ? null : s.id) }, s.name))),
+                                background: calSt === s.id ? "rgba(212,168,0,0.18)" : C.card,
+                                color: calSt === s.id ? C.goldBri : C.textDim,
+                                borderColor: calSt === s.id ? C.gold : C.cardBd }, onClick: () => setCalSt(s.id) }, s.name))),
                         staffSearch && staff.filter(s => s.name.includes(staffSearch)).length === 0 && (React.createElement("span", { style: { fontSize: 12, color: C.textMute, padding: "5px 8px" } },
                             "\u627E\u4E0D\u5230\u300C",
                             staffSearch,
@@ -2162,6 +2169,47 @@ function ok(obj) {
                         React.createElement("button", { style: { ...gBtn, flex: 1, padding: "13px", fontSize: 14 }, onClick: saveSt }, isA ? "確認新增" : "儲存修改"),
                         !isA && React.createElement("button", { style: { ...dBtn, padding: "13px 16px", fontSize: 13 }, onClick: () => delSt(stMod) }, "\u522A\u9664")))));
         }
+        /* ── 個人月曆小視窗（月班表點姓名開啟；點外面空白／右上 X／Esc 關閉）── */
+        function CalModal() {
+            if (!calSt)
+                return null;
+            const s = staff.find(x => x.id === calSt);
+            if (!s)
+                return null;
+            const sc = sched[calSt] || {};
+            const close = () => setCalSt(null);
+            const lead = getDow(1);
+            const cells = [];
+            for (let i = 0; i < lead; i++)
+                cells.push(React.createElement("div", { key: "b" + i }));
+            for (let d = 1; d <= DAYS; d++) {
+                const code = String(sc[d] == null ? '' : sc[d]).trim();
+                const has = code && code !== '-';
+                const def = has ? SHIFT_TYPES[code] : null;
+                const tod = d === TODAY, wk = isWk(d);
+                /* 時間拆兩行（20:00 / 08:00）窄格才放得下；休假類沒有時間就顯示名稱 */
+                const tm = def ? (def.time && def.time !== "—" ? def.time.split('-') : [def.label]) : [];
+                cells.push(React.createElement("div", { key: d, style: { minHeight: 62, borderRadius: 8, padding: "4px 2px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                        background: tod ? "rgba(212,168,0,0.10)" : C.card, border: `1px solid ${tod ? C.gold : C.cardBd}`, boxSizing: "border-box", minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: wk ? C.error : C.textDim, lineHeight: 1.1 } }, d),
+                    has && React.createElement("div", { style: { fontSize: 13, fontWeight: 800, lineHeight: 1.2, padding: "1px 4px", borderRadius: 4, color: def ? def.color : C.textMute, background: def ? def.bg : "transparent", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, code),
+                    tm.map((t, i) => React.createElement("div", { key: i, style: { fontSize: 9, color: C.textMute, lineHeight: 1.15, whiteSpace: "nowrap" } }, t))));
+            }
+            return (React.createElement("div", { style: { ...S.ov, alignItems: "center", padding: 12, boxSizing: "border-box" }, onClick: close },
+                React.createElement("div", { role: "dialog", "aria-label": s.name + " 的月班表", style: { position: "relative", background: C.bg2, borderRadius: 16, padding: "16px 12px 14px", width: "100%", maxWidth: 420, maxHeight: "90vh", overflowY: "auto",
+                        border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 12px 40px rgba(0,0,0,0.5)", boxSizing: "border-box" }, onClick: e => e.stopPropagation() },
+                    React.createElement("button", { onClick: close, "aria-label": "關閉", style: { position: "absolute", top: 8, right: 8, width: 40, height: 40, borderRadius: 10, border: `1px solid ${C.cardBd}`, background: C.card, color: C.textDim, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" } },
+                        "\u2715"),
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingRight: 48 } },
+                        React.createElement("div", { style: { width: 38, height: 38, borderRadius: 10, background: `linear-gradient(135deg,${rBg(s.role)},${rBg(s.role)}88)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16, flexShrink: 0 } }, (ROLES[s.role] || "保")[0]),
+                        React.createElement("div", { style: { minWidth: 0 } },
+                            React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.goldBri } }, s.name),
+                            React.createElement("div", { style: { fontSize: 12, color: C.textDim, marginTop: 2 } },
+                                (ROLES[s.role] || "保全") + "・" + (s.shift || "") + "・" + Y + "年" + M + "月"))),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 4, marginBottom: 4 } },
+                        ["日", "一", "二", "三", "四", "五", "六"].map((w, i) => React.createElement("div", { key: w, style: { textAlign: "center", fontSize: 11, fontWeight: 700, color: (i === 0 || i === 6) ? C.error : C.textMute, padding: "2px 0" } }, w))),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 4 } }, cells))));
+        }
         function CfmDlg() {
             if (!cfm)
                 return null;
@@ -2224,6 +2272,7 @@ function ok(obj) {
                 view === "shiftSettings" && canCaptain && React.createElement(ShiftSettingsView, null)),
             React.createElement(EditModal, null),
             React.createElement(StMod, null),
+            React.createElement(CalModal, null),
             React.createElement(CfmDlg, null),
             toast && React.createElement("div", { style: { position: "fixed", bottom: 68, left: "50%", transform: "translateX(-50%)", padding: "10px 18px", borderRadius: 9, fontSize: 13, fontWeight: 700, zIndex: 9999, whiteSpace: "nowrap", background: toast.type === "err" ? "rgba(127,29,29,0.95)" : "rgba(6,78,59,0.95)", border: `1px solid ${toast.type === "err" ? C.error : C.success}`, color: C.text, boxShadow: "0 4px 20px rgba(0,0,0,0.5)" } },
                 toast.type === "err" ? "✗ " : "✓ ",
