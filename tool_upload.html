@@ -442,7 +442,7 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
       <div id="sch-dz-default">
         <i class="ti ti-table-import drop-icon-blue"></i>
         <p class="drop-title">拖曳班表 Excel 到這裡，或點擊選擇</p>
-        <p class="drop-sub" id="sch-drop-sub">讀取「晚班班表」分頁的 A4:AG30、C2:AG3、Z1</p>
+        <p class="drop-sub" id="sch-drop-sub">讀取「晚班班表」分頁的人員（第4列到「代號說明」上一列）、C2:AG3、Z1</p>
       </div>
       <div id="sch-dz-file" style="display:none;">
         <i class="ti ti-table-import drop-icon-blue"></i>
@@ -458,14 +458,14 @@ input[type=text]:focus{border-color:rgba(212,168,0,.5);box-shadow:0 0 0 3px rgba
           <div id="sch-month-badge" class="month-badge"><i class="ti ti-calendar-month" style="font-size:14px;"></i><span id="sch-month-text">-</span></div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
-          <span class="range-badge"><i class="ti ti-table" style="font-size:10px;"></i> A4:AG30 主班表</span>
+          <span class="range-badge"><i class="ti ti-table" style="font-size:10px;"></i> <span id="sch-main-range-badge">A4~代號說明 主班表</span></span>
           <span class="range-badge"><i class="ti ti-table" style="font-size:10px;"></i> C2:AG3 標題列</span>
           <span class="range-badge range-badge-gold"><i class="ti ti-calendar" style="font-size:10px;"></i> Z1 月份</span>
         </div>
       </div>
       <div class="sch-preview-outer">
         <div class="sch-preview-header-bar">
-          <div class="sch-preview-title"><i class="ti ti-table" style="font-size:13px;"></i> 主班表預覽 A4:AG30</div>
+          <div class="sch-preview-title"><i class="ti ti-table" style="font-size:13px;"></i> <span id="sch-main-range-title">主班表預覽</span></div>
           <span style="font-size:11px;color:#4B5563;">前10列</span>
         </div>
         <div class="sch-preview-scroll"><table class="sch-table" id="sch-preview-main"></table></div>
@@ -944,7 +944,7 @@ function schSetShift(s){
   document.getElementById('sch-shift-night').style.cssText=(s==='night')?on:off;
   document.getElementById('sch-shift-morning').style.cssText=(s==='morning')?on:off;
   document.getElementById('sch-shift-hint').textContent='目前班別：'+SCH_SHIFTS[s].label+' → 寫入'+SCH_SHIFTS[s].label+'線上班表';
-  document.getElementById('sch-drop-sub').textContent='讀取「'+SCH_SHIFTS[s].sheetName+'」分頁的 A4:AG30、C2:AG3、Z1';
+  document.getElementById('sch-drop-sub').textContent='讀取「'+SCH_SHIFTS[s].sheetName+'」分頁的人員（第4列到「代號說明」上一列）、C2:AG3、Z1';
   schLog('info','已切換為「'+SCH_SHIFTS[s].label+'」上傳模式');
   if(schFile)schHandleFile(schFile); /* 已選檔案時依新班別重新解析預覽 */
 }
@@ -1010,7 +1010,7 @@ function schResolveSheet(wb){
 }
 // 2026-08-02 新增：比對已核准請假 vs 上傳班表——同一人同一天，請假已核准，但班表格子填的不是
 // 請假類代號（排休/休/病/事），代表班表上傳時漏掉了這筆假，跳出提醒（不強制擋，比照內容防呆的做法）。
-// mainData：schMainRows（A4:AG30，B欄姓名、C~AG欄對應1~31日代號）；monthNum：Z1讀到的月份；year：上傳年份。
+// mainData：schMainRows（人員區塊 A4:AG?，B欄姓名、C~AG欄對應1~31日代號）；monthNum：Z1讀到的月份；year：上傳年份。
 // 已知限制：只在「選檔案當下」查一次已核准請假，不是即時檢查——如果選檔之後、按下「更新線上班表」
 // 之前，主管才剛核准一筆新的假，這次比對不到，需要重新選檔一次才會抓到。
 async function checkLeaveConflicts_(mainData, monthNum, year){
@@ -1051,6 +1051,17 @@ async function checkLeaveConflicts_(mainData, monthNum, year){
   });
   return conflicts;
 }
+// 人員區塊：第4列起，到 A 欄「代號說明」的上一列（早班目前到30、晚班到25）。
+// 規則同 班表管理_後端_GAS 的 班表人員結尾列_，找不到頁尾退回舊的第30列。
+function schMainRange(ws){
+  const ref=ws['!ref'];
+  const lastRow=ref?Math.min(XLSX.utils.decode_range(ref).e.r+1,300):30;
+  for(let r=4;r<=lastRow;r++){
+    const c=ws['A'+r];
+    if(c&&String(c.v).replace(/[\s　]/g,'')==='代號說明')return 'A4:AG'+Math.max(r-1,4);
+  }
+  return 'A4:AG30';
+}
 function schSetMask(url){const m=document.getElementById('sch-url-mask');if(!url){m.textContent='尚未設定';return;}m.textContent=url.length>40?url.slice(0,18)+'••••••'+url.slice(-10):url;}
 function schToggleUrl(){schUrlShowing=!schUrlShowing;document.getElementById('sch-url-view').style.display=schUrlShowing?'none':'flex';document.getElementById('sch-url-edit').style.display=schUrlShowing?'block':'none';document.getElementById('sch-btn-toggle-url').innerHTML=schUrlShowing?'<i class="ti ti-eye-off"></i> 隱藏網址':'<i class="ti ti-eye"></i> 顯示網址';}
 function schSaveUrl(){const url=document.getElementById('sch-webapp-url').value.trim();if(!url)return;try{localStorage.setItem('sch_webapp_url',url);schSetMask(url);document.getElementById('sch-saved-indicator').style.display='flex';schUrlShowing=false;document.getElementById('sch-url-view').style.display='flex';document.getElementById('sch-url-edit').style.display='none';document.getElementById('sch-btn-toggle-url').innerHTML='<i class="ti ti-eye"></i> 顯示網址';schLog('ok','網址已儲存');}catch(e){schLog('err','儲存失敗');}}
@@ -1076,7 +1087,12 @@ function schHandleFile(file){
     const z1=ws['Z1'];const monthVal=z1?z1.v:'';const monthNum=Number(monthVal);
     const monthFormatted=(monthNum>=1&&monthNum<=12)?(new Date().getFullYear())+'/'+String(monthNum).padStart(2,'0'):'（無法讀取）';
     document.getElementById('sch-month-text').textContent=monthFormatted;schLog('ok','Z1 月份：'+monthVal+' → '+monthFormatted);
-    const mainData=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',range:'A4:AG30'});schMainRows=mainData;schMonthNum=(monthNum>=1&&monthNum<=12)?monthNum:null;buildSchPreview('sch-preview-main',mainData,10);schLog('ok','A4:AG30 讀取完成，共 '+mainData.length+' 列');
+    const mainRange=schMainRange(ws);
+    const mainData=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:true,range:mainRange});schMainRows=mainData;schMonthNum=(monthNum>=1&&monthNum<=12)?monthNum:null;buildSchPreview('sch-preview-main',mainData,10);
+    const staffN=mainData.filter(function(r){return String(r[1]||'').trim();}).length;
+    schLog('ok',mainRange+' 讀取完成，共 '+staffN+' 人');
+    document.getElementById('sch-main-range-badge').textContent=mainRange+' 主班表';
+    document.getElementById('sch-main-range-title').textContent='主班表預覽 '+mainRange;
     const headerData=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',range:'C2:AG3'});
     const headerPreview=headerData.map(function(row,idx){return schFormatHeaderRow_(row,idx===1);});
     buildSchPreview('sch-preview-header-range',headerPreview,3);schLog('ok','C2:AG3 讀取完成');
@@ -1141,7 +1157,7 @@ async function schStartUpdate(){
     // ── 班表上傳成功，清除本機快取讓其他裝置重拉最新班表 ──
     try { localStorage.removeItem('tianying_sched_v1'); localStorage.removeItem('tianying_sched_m1'); schLog('ok','已清除本機班表快取'); } catch(e) {}
     const banner=document.getElementById('sch-success-banner');
-    document.getElementById('sch-success-sub').textContent='已成功寫入'+SCH_SHIFTS[schShift].label+'線上班表 A4:AG30、C2:AG3、Z1 三個範圍的資料與格式。';
+    document.getElementById('sch-success-sub').textContent='已成功寫入'+SCH_SHIFTS[schShift].label+'線上班表（人員區塊、C2:AG3、Z1）的資料與格式。';
     const tgtUrl=SCH_SHIFTS[schShift].url;
     document.getElementById('sch-open-link').href=tgtUrl;banner.classList.add('show');
     setTimeout(function(){window.open(tgtUrl,'_blank');},800);

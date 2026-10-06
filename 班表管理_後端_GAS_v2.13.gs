@@ -3,6 +3,18 @@
 // 部署網址：https://script.google.com/macros/s/AKfycbzs56InZLeaHiRJhy1alNfQwDyH0mXEV9t_WJxzfjTjIhf68DHgMiWVQvVG6vKrRZ2x1w/exec
 // （早班晚班共用同一支，透過 SHIFT_CONFIG / payload.shift 分流，非天鷹保全APP帳號系統那支）
 //
+// 版本：2.19 修正（2026-10-05，人數不再寫死 27 人）：
+//   - 原本早晚班都固定只認 A4:AG30（第4~30列＝最多27人），早班已滿27人，
+//     在 Excel 第31列加人不會報錯、但那個人整列不會被上傳，班表管理/請款/
+//     排哨/LINE 全都找不到他。改成依 A 欄「代號說明」那列自動判斷人員區塊到
+//     哪一列為止（見 班表人員結尾列_），找不到就退回舊的第30列。
+//   - 上傳/換月複製範圍改成 max(30, 來源頁尾列, 線上頁尾列)，連同「代號說明」
+//     那列一起複製，線上班表的頁尾位置才會跟著 Excel 移動；人數變少時舊的
+//     多出來那幾列也會被蓋掉，不會殘留已離開的人。
+//   - 上傳後比對異動推播改成「依姓名」比對：原本依列號比對，中間插入一個人
+//     後面每個人都會被當成整個月異動（而且列數變了會直接當掉）。
+//   - 手動新增員工遇到沒有空白列，改成在最後一個人下面插入一列，不再默默略過。
+//
 // 版本：2.16 新增（2026-08-27，效能優化+補同步缺口）：
 //   - getSchedule 加一層1小時短時間快取（CacheService，定義於
 //     班表管理_SQL讀取層.gs的getScheduleData_含快取），緩解Apps Script平台
@@ -317,7 +329,7 @@ function handleUpdate(payload) {
 
     if (isStagingUpload) {
       var stagingSheet = getStagingSheet_(cfg);
-      copyRangeWithFormat(srcSheet, stagingSheet, 'A4:AG30');
+      copyRangeWithFormat(srcSheet, stagingSheet, 班表複製範圍_(srcSheet, stagingSheet));
       copyRangeWithFormat(srcSheet, stagingSheet, 'C2:AG3');
       stagingSheet.getRange('Z1').setValue(newYm);
       SpreadsheetApp.flush();
@@ -329,8 +341,9 @@ function handleUpdate(payload) {
 
     var oldVals, oldColors;
     if (!isMonthSwitch) {
-      oldVals   = tgtSheet.getRange('A4:AG30').getValues();
-      oldColors = tgtSheet.getRange('A4:AG30').getFontColors();
+      var oldRng = tgtSheet.getRange(班表人員範圍_(tgtSheet));
+      oldVals   = oldRng.getValues();
+      oldColors = oldRng.getFontColors();
     }
 
     // v2.14：SQL遷移階段5——不再於換月時複製整分頁當備份。
@@ -339,33 +352,14 @@ function handleUpdate(payload) {
     // 否則隱藏分頁只會一直往上疊，長期會撐爆 Google Sheets 分頁數上限（TODO-31/36）。
     // 舊的 _備份_ 分頁維持不動（不主動刪除），只是不再產生新的。
 
-    copyRangeWithFormat(srcSheet, tgtSheet, 'A4:AG30');
+    copyRangeWithFormat(srcSheet, tgtSheet, 班表複製範圍_(srcSheet, tgtSheet));
 
     if (isMonthSwitch) {
       notifyMonthScheduleReleased_(notifyShiftType, newYm);
     } else {
-      var newVals   = tgtSheet.getRange('A4:AG30').getValues();
-      var newColors = tgtSheet.getRange('A4:AG30').getFontColors();
-
-      var allDiffs = [];
-
-      for (var r = 0; r < newVals.length; r++) {
-        var name = String(newVals[r][1] || '').trim();
-        if (!name) continue;
-
-        var diffDays = [];
-        for (var c = 2; c <= 31; c++) {
-          var oldCode = parseShiftCode_(oldVals[r][c], oldColors[r][c]);
-          var newCode = parseShiftCode_(newVals[r][c], newColors[r][c]);
-          if (oldCode !== newCode) {
-            diffDays.push({ day: c - 1, code: newCode });
-          }
-        }
-
-        if (diffDays.length > 0) {
-          allDiffs.push({ name: name, shiftType: notifyShiftType, days: diffDays });
-        }
-      }
+      var newRng    = tgtSheet.getRange(班表人員範圍_(tgtSheet));
+      // v2.19：依姓名比對（原本依列號，中間插入一個人後面全部會被當成異動）
+      var allDiffs = 依姓名比對班表異動_(oldVals, oldColors, newRng.getValues(), newRng.getFontColors(), notifyShiftType);
 
       // 2026-08-02：一次異動達門檻（換月、整批調整）改群組發一則，個位數的一般小異動
       // 仍走個人化推播（讓當事人清楚知道自己哪幾天改了），兩種情境門檻分開處理。
@@ -447,12 +441,77 @@ function copyRangeWithFormat(srcSheet, tgtSheet, rangeA1) {
 }
 
 // ============================
+// v2.19：人員區塊範圍（不再寫死 A4:AG30）
+// 班表格式：第4列起是人員，人員下面固定接「代號說明」（A欄，與B欄合併）＋
+// 檢核/可休人數等頁尾。早班目前人員到第30列、晚班到第25列。
+// ============================
+var 班表起始列_ = 4;
+var 班表舊結尾列_ = 30;          // 舊版固定範圍，找不到頁尾時退回這個
+var 班表頁尾標記_ = '代號說明';
+var 班表掃描上限列_ = 300;        // 防呆：最多往下找這麼多列
+
+// 回傳「代號說明」所在列號，找不到回 0
+function 班表頁尾列_(sh) {
+  var last = Math.min(sh.getLastRow(), 班表掃描上限列_);
+  if (last < 班表起始列_) return 0;
+  var a = sh.getRange(班表起始列_, 1, last - 班表起始列_ + 1, 1).getDisplayValues();
+  for (var i = 0; i < a.length; i++) {
+    if (String(a[i][0]).replace(/[\s　]/g, '') === 班表頁尾標記_) return 班表起始列_ + i;
+  }
+  return 0;
+}
+
+// 人員區塊最後一列（頁尾上一列）；找不到頁尾退回第30列
+function 班表人員結尾列_(sh) {
+  var f = 班表頁尾列_(sh);
+  return f ? Math.max(f - 1, 班表起始列_) : 班表舊結尾列_;
+}
+
+// 人員區塊 A1 範圍，例如 'A4:AG31'
+function 班表人員範圍_(sh) {
+  return 'A' + 班表起始列_ + ':AG' + 班表人員結尾列_(sh);
+}
+
+// 從 src 複製班表主體到 tgt 時的範圍：至少到第30列（舊行為），並涵蓋兩邊的
+// 「代號說明」列——把來源的頁尾標記一起帶過去，線上班表的人員區塊結尾才會
+// 跟著 Excel 變；涵蓋線上原本的頁尾列，人數變少時多出來的舊列才會被蓋掉。
+function 班表複製範圍_(srcSheet, tgtSheet) {
+  var end = Math.max(班表舊結尾列_, 班表頁尾列_(srcSheet), 班表頁尾列_(tgtSheet));
+  if (tgtSheet.getMaxRows() < end) tgtSheet.insertRowsAfter(tgtSheet.getMaxRows(), end - tgtSheet.getMaxRows());
+  return 'A' + 班表起始列_ + ':AG' + end;
+}
+
+// 依姓名比對新舊班表，回傳有異動的人與日期（給 LINE 推播用）
+// oldVals/newVals 為 getValues()（A~AG），colors 為 getFontColors()；新出現的人跟空白比
+function 依姓名比對班表異動_(oldVals, oldColors, newVals, newColors, shiftType) {
+  var oldByName = {};
+  for (var r0 = 0; r0 < oldVals.length; r0++) {
+    var on = String(oldVals[r0][1] || '').trim();
+    if (on && !oldByName[on]) oldByName[on] = r0;
+  }
+  var diffs = [];
+  for (var r = 0; r < newVals.length; r++) {
+    var name = String(newVals[r][1] || '').trim();
+    if (!name) continue;
+    var orow = oldByName.hasOwnProperty(name) ? oldByName[name] : -1;
+    var days = [];
+    for (var c = 2; c <= 32; c++) {
+      var oldCode = orow >= 0 ? parseShiftCode_(oldVals[orow][c], oldColors[orow][c]) : parseShiftCode_('', '');
+      var newCode = parseShiftCode_(newVals[r][c], newColors[r][c]);
+      if (oldCode !== newCode) days.push({ day: c - 1, code: newCode });
+    }
+    if (days.length > 0) diffs.push({ name: name, shiftType: shiftType, days: days });
+  }
+  return diffs;
+}
+
+// ============================
 // 班表管理工具：讀取線上班表
 // ============================
 /* v2.13：把「把一個班表分頁讀成 rows」抽出來，線上班表與歷史備份共用同一套解析，
    免得兩邊各寫一份、日後改了一邊忘了另一邊（本 repo 已經因為這種寫法出過 bug）。 */
 function 讀班表分頁_(sh) {
-  var rng = sh.getRange('A4:AG30');
+  var rng = sh.getRange(班表人員範圍_(sh));
   var data = rng.getValues();
   var colors = rng.getFontColors();
   var rows = [];
@@ -661,7 +720,7 @@ function checkAndSwitchMonth_() {
       // v2.14：不再複製整分頁備份，理由同 handleUpdate 那處——完整歷史已由
       // 同步目前線上班表到Supabase_() 保存在 Supabase，不需要 Sheets 再留一份。
 
-      copyRangeWithFormat(stagingSheet, tgtSheet, 'A4:AG30');
+      copyRangeWithFormat(stagingSheet, tgtSheet, 班表複製範圍_(stagingSheet, tgtSheet));
       copyRangeWithFormat(stagingSheet, tgtSheet, 'C2:AG3');
       tgtSheet.getRange('Z1').setValue(stagingYm);
       SpreadsheetApp.flush();
@@ -722,7 +781,7 @@ function handleUpdateSchedule(payload) {
 
     var notifyShiftType = (payload.shift === 'morning') ? 'early' : 'late';
 
-    var grid = sh.getRange('A4:AG30').getValues();
+    var grid = sh.getRange(班表人員範圍_(sh)).getValues();
     var list = payload.data || [];
     var updated = 0, added = 0, skipped = 0;
     var allDiffs = []; // v2.17：跟 handleImportSchedule 共用門檻邏輯，不逐人即時推播
@@ -740,7 +799,15 @@ function handleUpdateSchedule(payload) {
       var targetRow = foundRow;
       var isNew = false;
       if (targetRow === -1) {
-        if (emptyRow === -1) { skipped++; continue; } // 沒有空白列可用，需人工到試算表擴充範圍
+        if (emptyRow === -1) {
+          // v2.19：人員區塊滿了 → 在最後一個人下面插一列（格式跟著上一列），
+          // 頁尾「代號說明」自動往下推，下次讀取範圍就會包含這一列
+          sh.insertRowAfter(班表起始列_ + grid.length - 1);
+          var blank = [];
+          for (var bc = 0; bc < 33; bc++) blank.push('');
+          grid.push(blank);
+          emptyRow = grid.length - 1;
+        }
         targetRow = emptyRow;
         isNew = true;
       }
@@ -818,7 +885,7 @@ function handleUpdateSchedule(payload) {
 }
 
 // ============================
-// v2.12：刪除員工 — 清空該列（不刪實體列，避免破壞 A4:AG30 固定範圍/格式/合併儲存格）
+// v2.12：刪除員工 — 清空該列（不刪實體列，避免破壞人員區塊格式/合併儲存格）
 // ============================
 function handleDeleteStaff(payload) {
   try {
@@ -827,7 +894,7 @@ function handleDeleteStaff(payload) {
     var nm = String(payload.name || '').trim();
     if (!nm) return respond({ success: false, error: '缺少姓名' });
 
-    var grid = sh.getRange('A4:AG30').getValues();
+    var grid = sh.getRange(班表人員範圍_(sh)).getValues();
     var targetRow = -1;
     for (var r = 0; r < grid.length; r++) {
       if (String(grid[r][1] || '').trim() === nm) { targetRow = r; break; }
