@@ -3911,6 +3911,13 @@ function snapshotTodayPostScheduled_() {
     console.error('snapshotTodayPostScheduled_ 開啟試算表失敗：' + err.toString());
     return;
   }
+  // 一天只切換一次：手動補跑 runSnapshotTodayPostNow 之後觸發器才晚到，再切一次會把
+  // 已放進明日哨表的「明天」快照成今日哨表（2026-10-06 觸發器沒跑、需手動補跑時想到的）
+  var todayStr_ = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+  if (getPostSwitchMarker_(ss) === todayStr_) {
+    console.log('今天（' + todayStr_ + '）已切換過哨表，略過');
+    return;
+  }
   try {
     var src = ss.getSheetByName(POST_SHEET_NAME);
     var dst = ss.getSheetByName(POST_TODAY_SHEET_NAME);
@@ -3940,7 +3947,7 @@ function snapshotTodayPostScheduled_() {
   // 標記「今天已切換」：觸發器 atHour(8) 實際是 08:00~09:00 間任一分鐘才跑，
   // 哨表上傳 GAS 靠這個標記判斷切換做完沒，決定明天的哨表要直接寫還是先排待生效
   try {
-    setPostSwitchMarker_(ss, Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd'));
+    setPostSwitchMarker_(ss, todayStr_);
   } catch (err) {
     console.error('寫入哨表切換標記失敗：' + err.toString());
   }
@@ -3948,6 +3955,12 @@ function snapshotTodayPostScheduled_() {
 
 // 哨表切換標記（試算表層級 DeveloperMetadata，哨表上傳 GAS 讀同一個 key）
 var POST_SWITCH_META_KEY = 'postSwitchDate';
+function getPostSwitchMarker_(ss) {
+  try {
+    var found = ss.createDeveloperMetadataFinder().withKey(POST_SWITCH_META_KEY).find();
+    return found.length ? String(found[0].getValue() || '') : '';
+  } catch (e) { return ''; }
+}
 function setPostSwitchMarker_(ss, dateStr) {
   var found = ss.createDeveloperMetadataFinder().withKey(POST_SWITCH_META_KEY).find();
   if (found.length) {
