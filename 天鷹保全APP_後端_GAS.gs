@@ -118,6 +118,7 @@ function doPost(e) {
     if (action === 'login')              return login(e);
     if (action === 'verifySession')      return verifySession(e);
     if (action === 'changePassword')     return changePassword(e);
+    if (action === 'getMyNotices')       return getMyNotices(e);
 
     if (action === 'submitApplication')  return submitApplication(e);
     if (action === 'reviewApplication')  return reviewApplication(e);
@@ -2127,6 +2128,12 @@ function notifyLeaveSubmitted_(d) {
     var supervisors = getShiftLeaveSupervisors_(d.dept || '', d.shift || '');
     if (supervisors.length === 0) return;
 
+    // 站內通知（2026-10-09）：審核主管每人一筆，點進去直接開請假審核；沒綁 LINE 也收得到
+    addNotices_(supervisors.map(function (sv) {
+      return { empId: sv.empId, type: 'leaveNew', title: '請假待審核：' + (d.name || '') + (d.shift ? '（' + d.shift + '）' : ''),
+        body: leaveNoticeBody_(d) };
+    }));
+
     var flex = buildLeaveApprovalFlex_(d);
     var altText = '📋 ' + d.name + ' 送出' + (d.type || '請假') + '申請，請審核';
 
@@ -2139,8 +2146,19 @@ function notifyLeaveSubmitted_(d) {
   }
 }
 
+// 請假站內通知的內容：假別｜期間｜天數（＋事由）
+function leaveNoticeBody_(d) {
+  var period = (d.startDate || '') + (d.endDate && d.endDate !== d.startDate ? ' ~ ' + d.endDate : '');
+  var lines = [(d.type || '請假') + '　' + period + (d.days ? '（' + d.days + ' 天）' : '')];
+  if (d.reason) lines.push('事由：' + d.reason);
+  return lines.join('\n');
+}
+
 function notifyLeaveResult_(leaveInfo, decision) {
   try {
+    // 站內通知（2026-10-09）：申請人一定收得到審核結果，沒綁 LINE 也一樣
+    addNotices_([{ empId: leaveInfo.empId, type: 'leaveResult',
+      title: '請假' + (decision === 'approved' ? '已核准 ✅' : '已駁回 ❌'), body: leaveNoticeBody_(leaveInfo) }]);
     var lineUserId = getLineUserIdByEmpId_(leaveInfo.empId);
     if (!lineUserId) return;
 
@@ -2478,12 +2496,129 @@ function getScheduleQueueSheet_() {
   return sh;
 }
 
+// ════════════════════════════════════════════════════════════
+// 【站內通知】2026-10-09：班表異動除了 LINE 之外，另外寫一份到「站內通知」分頁，
+//   APP 首頁右上角📢的紅點會一起算進去。LINE 免費額度用完、或沒綁 LINE 的人，
+//   都還是看得到自己哪幾天班表改了（站內不花 LINE 額度）。
+//   欄位：ID（純數字流水號）｜時間｜工號（或 ALL＝全員）｜類型｜標題｜內容
+// ════════════════════════════════════════════════════════════
+var NOTICE_SHEET_NAME_ = '站內通知';
+var NOTICE_MAX_ROWS_ = 3000;   // 超過就刪最舊的，分頁不會一直長大
+var NOTICE_KEEP_DAYS_ = 60;    // getMyNotices 只回最近 60 天
+var NOTICE_LIMIT_ = 50;        // 每次最多回 50 筆
+
+function getNoticeSheet_() {
+  var ss = ss_();
+  var sh = ss.getSheetByName(NOTICE_SHEET_NAME_);
+  if (!sh) {
+    sh = ss.insertSheet(NOTICE_SHEET_NAME_);
+    sh.appendRow(['ID', '時間', '工號', '類型', '標題', '內容']);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, 6).setBackground('#D4A800').setFontColor('#0A0C10').setFontWeight('bold');
+    sh.getRange('C:C').setNumberFormat('@'); // 工號存純文字，避免前導 0 被吃掉
+  }
+  return sh;
+}
+
+/** 整批寫入站內通知。rows：[{empId, type, title, body}]；失敗只記 log，不影響 LINE 推播 */
+function addNotices_(rows) {
+  if (!rows || !rows.length) return 0;
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    var sh = getNoticeSheet_();
+    var last = sh.getLastRow();
+    var maxId = 0;
+    if (last > 1) {
+      var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        var n = Number(ids[i][0]);
+        if (isFinite(n) && n > maxId && n < 1e9) maxId = n;
+      }
+    }
+    var now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm:ss');
+    var out = rows.map(function (r, k) {
+      return [maxId + k + 1, now, String(r.empId || ''), String(r.type || ''), String(r.title || ''), String(r.body || '')];
+    });
+    sh.getRange(last + 1, 1, out.length, 6).setValues(out);
+    var total = sh.getLastRow() - 1;
+    if (total > NOTICE_MAX_ROWS_) sh.deleteRows(2, total - NOTICE_MAX_ROWS_);
+    return out.length;
+  } catch (err) {
+    console.error('addNotices_ 失敗：' + err.toString());
+    return 0;
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/** 一個人的班表異動 → 逐日文字（跟 LINE 推播同一種寫法） */
+function scheduleChangeLines_(days, month) {
+  var nums = [], codeMap = {};
+  for (var i = 0; i < days.length; i++) {
+    var n = Number(days[i].day);
+    nums.push(n); codeMap[n] = days[i].code;
+  }
+  nums.sort(function (a, b) { return a - b; });
+  return nums.map(function (d) {
+    var info = SHIFT_INFO_[codeMap[d]] || SHIFT_INFO_['-'];
+    return month + '/' + (d < 10 ? '0' + d : d) + '　' + info.label + (info.time !== '—' ? '（' + info.time + '）' : '');
+  });
+}
+
+/** 班表異動清單 [{name, shiftType, days}] → 站內通知（每人一筆；查無帳號的人略過，沒綁 LINE 照寫） */
+function scheduleChangeNotices_(items) {
+  var today = getTaipeiToday_();
+  var rows = [];
+  for (var i = 0; i < (items || []).length; i++) {
+    var it = items[i];
+    if (!it || !it.name || !it.days || !it.days.length) continue;
+    var emp = getEmpInfoByName_(it.name);
+    if (!emp) continue;
+    var cfg = SCHEDULE_SHEETS_[it.shiftType];
+    rows.push({ empId: emp.empId, type: 'schedule', title: '班表異動：' + (cfg ? cfg.label : '') + '班表',
+      body: scheduleChangeLines_(it.days, today.month).join('\n') });
+  }
+  return rows;
+}
+
+/**
+ * 【action: getMyNotices】登入者自己的站內通知＋全員通知（最近 60 天、最多 50 筆、新的在前）
+ * 收：data={ token }；身分由通行證決定，看不到別人的通知
+ */
+function getMyNotices(e) {
+  try {
+    var d = JSON.parse((e.parameter && e.parameter.data) || '{}');
+    var u = verifyToken_(d.token);
+    if (!u) return jsonRes({status:'err', code:'INVALID', msg:'登入已失效，請重新登入'});
+    var sh = ss_().getSheetByName(NOTICE_SHEET_NAME_);
+    if (!sh || sh.getLastRow() < 2) return jsonRes({status:'ok', rows: []});
+    var data = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+    var cutoff = new Date().getTime() - NOTICE_KEEP_DAYS_ * 86400000;
+    var me = String(u.empId);
+    var out = [];
+    for (var r = data.length - 1; r >= 0 && out.length < NOTICE_LIMIT_; r--) {
+      var to = String(data[r][2]);
+      if (to !== me && to !== 'ALL') continue;
+      var t = data[r][1];
+      var tStr = (t instanceof Date) ? Utilities.formatDate(t, 'Asia/Taipei', 'yyyy/MM/dd HH:mm:ss') : String(t);
+      var tMs = (t instanceof Date) ? t.getTime() : new Date(tStr.replace(/-/g, '/')).getTime();
+      if (tMs && tMs < cutoff) break; // 往回掃，碰到太舊的就停（資料依時間往下追加）
+      out.push({ id: Number(data[r][0]) || 0, time: tStr, type: String(data[r][3]), title: String(data[r][4]), body: String(data[r][5]) });
+    }
+    return jsonRes({status:'ok', rows: out});
+  } catch (err) {
+    return jsonRes({status:'err', code:'SERVER', msg: err.toString()});
+  }
+}
+
 function notifyScheduleChangeAction_(e) {
   try {
     var d = JSON.parse(e.parameter.data);
     if (!d.name || !d.shiftType || !d.days || !d.days.length) {
       return jsonRes({status:'ok', skipped:true}); // 無變動，靜默忽略
     }
+    addNotices_(scheduleChangeNotices_([d])); // 站內通知（沒綁 LINE 的人也看得到）
 
     // ── 即時推播一次（不再寫入佇列、不靠5分鐘輪詢，避免重複推播）──
     var empInfo = getEmpInfoByName_(d.name);
@@ -2601,6 +2736,7 @@ function notifyScheduleChangeBatchAction_(e) {
       if (it && it.name && it.shiftType && it.days && it.days.length) valid.push(it);
     }
     if (!valid.length) return jsonRes({status:'ok', skipped:true});
+    var noticed = addNotices_(scheduleChangeNotices_(valid)); // 站內通知（沒綁 LINE 的人也看得到）
 
     var today = getTaipeiToday_();
     var pushed = 0;
@@ -2635,7 +2771,7 @@ function notifyScheduleChangeBatchAction_(e) {
       if (pushed % 10 === 0) Utilities.sleep(150);
     }
 
-    return jsonRes({status:'ok', pushed: pushed});
+    return jsonRes({status:'ok', pushed: pushed, noticed: noticed});
   } catch (err) {
     return jsonRes({status:'err', msg:err.toString()});
   }
@@ -2653,6 +2789,13 @@ function notifyScheduleChangeBulkAction_(e) {
     var cfg = SCHEDULE_SHEETS_[shiftType];
 
     var msg = '🔔 ' + (cfg ? cfg.label : '') + '班表大幅更新（本次共 ' + count + ' 人異動），請至 APP 或輸入「本月班表」查詢您的最新班表。';
+
+    // 站內通知：LINE 為了省額度只發一則群組訊息，站內不花額度，就逐人寫清楚哪幾天改了
+    //（班表管理 GAS v2.20 起會帶 items；舊版沒帶就只寫全員那一筆）
+    var noticeRows = scheduleChangeNotices_(d.items || []);
+    noticeRows.push({ empId: 'ALL', type: 'scheduleBulk', title: (cfg ? cfg.label : '') + '班表大幅更新',
+      body: '本次共 ' + count + ' 人異動，請至班表管理查看最新班表。' });
+    addNotices_(noticeRows);
 
     var groupId = readSettingStr_('tomorrowPostGroupId', '');
     if (!groupId) return jsonRes({status:'err', msg:'尚未設定群組ID，請先把機器人加入群組'});
@@ -2676,6 +2819,7 @@ function monthScheduleReleasedAction_(e) {
     if (!cfg) return jsonRes({status:'err', msg:'未知班別:' + shiftType});
 
     var msg = '📅 ' + ym + ' 班表已發佈，輸入「本月班表」即可查詢完整內容。';
+    addNotices_([{ empId: 'ALL', type: 'monthRelease', title: ym + ' ' + cfg.label + '班表已發佈', body: '請至班表管理查看完整月班表。' }]);
 
     var groupId = readSettingStr_('tomorrowPostGroupId', '');
     if (!groupId) return jsonRes({status:'err', msg:'尚未設定群組ID，請先把機器人加入群組'});

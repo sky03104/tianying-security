@@ -33,6 +33,17 @@
   .tyCal-x:hover{transform:rotate(90deg)}
   .tyCal-today rect{fill:none;stroke:#FFD700;stroke-width:2;stroke-dasharray:22 120;stroke-linecap:round;filter:drop-shadow(0 0 4px #FFD700);animation:tyCalDash 1.8s linear infinite}
   @media (prefers-reduced-motion:reduce){.tyCal-card,.tyCal-cell,.tyCal-bar,.tyCal-today rect{animation:none}}
+  /* ── 首頁📢／公佈欄🔔 動態圖示（2026-10-09）：有未讀時搖鈴＋放大＋聲波，沒有未讀時偶爾輕晃一下 ── */
+  @keyframes tyRing{0%,55%,100%{transform:rotate(0) scale(1)}4%{transform:rotate(-18deg) scale(1.15)}8%{transform:rotate(16deg) scale(1.15)}12%{transform:rotate(-14deg) scale(1.12)}16%{transform:rotate(12deg) scale(1.1)}20%{transform:rotate(-8deg) scale(1.05)}24%{transform:rotate(6deg)}28%{transform:rotate(0)}}
+  @keyframes tySway{0%,85%,100%{transform:rotate(0)}89%{transform:rotate(-8deg)}93%{transform:rotate(7deg)}97%{transform:rotate(-3deg)}}
+  @keyframes tyWave{0%{opacity:.9;transform:translate(0,-50%) scale(.6)}100%{opacity:0;transform:translate(6px,-50%) scale(1.25)}}
+  .ty-ring{display:inline-block;transform-origin:50% 15%;animation:tyRing 2.6s ease-in-out infinite}
+  .ty-sway{display:inline-block;transform-origin:50% 15%;animation:tySway 6s ease-in-out infinite}
+  .ty-horn{position:relative;display:inline-block}
+  .ty-horn.on::after{content:"";position:absolute;right:-7px;top:50%;width:8px;height:12px;border:2px solid #FFD700;border-left:none;border-radius:0 10px 10px 0;animation:tyWave 1.3s ease-out infinite;pointer-events:none}
+  .ty-notice{transition:transform .15s,background .15s}
+  .ty-notice:active{transform:scale(.98)}
+  @media (prefers-reduced-motion:reduce){.ty-ring,.ty-sway,.ty-horn.on::after{animation:none}}
   </style>
 </head>
 <body>
@@ -121,7 +132,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '63.35';
+const APP_VERSION = '66.37';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -1024,7 +1035,7 @@ function ok(obj) {
                     borderRight: h === "right" ? "1.5px solid #D4A800" : "none" } }))),
             React.createElement(EagleSVG, { w: Math.round(s * 0.65) })));
     }
-    const calBus = { open: null };
+    const calBus = { open: null, pendingName: null }; /* pendingName：首頁點班表通知進來時，要自動彈出誰的月曆 */
     /* ── 個人月曆小視窗（月班表點姓名開啟；點外面空白／右上 ✕／Esc 關閉）
        ⚠️ 開關狀態刻意放在這個獨立元件裡、不放 ScheduleApp：放在 ScheduleApp 時，每次開關都會讓
        整個班表重畫（MonthView 是巢狀函式會被整個重建 45人×31天大表），手機上開關要卡約 1 秒。
@@ -1035,6 +1046,14 @@ function ok(obj) {
     function CalHost({ staff, sched }) {
         const [calSt, setCalSt] = useState(null);
         useEffect(() => { calBus.open = setCalSt; return () => { if (calBus.open === setCalSt) calBus.open = null; }; }, []);
+        /* 從通知點進來：名單載到這個人就自動彈出他的月曆（20 秒內有效，避免之後莫名其妙彈出） */
+        useEffect(() => {
+            const p = calBus.pendingName;
+            if (!p) return;
+            if (Date.now() - p.at > 20000) { calBus.pendingName = null; return; }
+            const me = staff.find(x => x.name === p.name);
+            if (me) { calBus.pendingName = null; setCalSt(me.id); }
+        }, [staff]);
         useEffect(() => {
             if (!calSt) return;
             const onKey = e => { if (e.key === 'Escape') setCalSt(null); };
@@ -2377,6 +2396,7 @@ function ok(obj) {
         hd: { width: 36, height: 4, background: C.cardBd, borderRadius: 2, margin: "0 auto 14px" },
         input: { width: "100%", background: C.bg, border: `1px solid ${C.cardBd}`, borderRadius: 8, padding: "11px 12px", color: C.text, fontSize: 13, boxSizing: "border-box", outline: "none" },
     };
+    ScheduleApp.calBus = calBus; /* 給主程式設定 pendingName 用（點班表通知自動彈出自己的月曆） */
     return ScheduleApp;
 })();
 // ── UsersTab: 帳號資料庫（獨立元件，避免 Hooks in IIFE）──────────────
@@ -2859,6 +2879,10 @@ function App() {
     }, [currentUser]);
     const [showBulletin, setShowBulletin] = useState(false);
     const [bulletinSearch, setBulletinSearch] = useState('');
+    /* 2026-10-09 站內通知（班表異動等）：跟公告共用右上角📢紅點，打開公佈欄最上方顯示「我的通知」 */
+    const [notices, setNotices] = useState([]);
+    const [noticeReadId, setNoticeReadId] = useState(0);
+    const [noticeShowAll, setNoticeShowAll] = useState(false);
     const [annReadId, setAnnReadId] = useState(0); // 已讀到的最大公告ID（依工號記錄，用於算未讀數）
     const [announcements, setAnnouncements] = useState(() => {
         /* 公告持久化載入：重開不再消失（無儲存值時帶入預設歡迎公告） */
@@ -3092,6 +3116,15 @@ function App() {
     // 開啟公告欄：同時把目前最新公告ID記為「已讀」，右上角未讀數歸零
     const openBulletin = () => {
         setShowBulletin(true);
+        setNoticeShowAll(false);
+        setNoticeUnreadSnap(noticeReadId);
+        if (notices.length) {
+            const maxN = notices.reduce((m, n) => Math.max(m, Number(n.id) || 0), 0);
+            if (maxN > noticeReadId) {
+                setNoticeReadId(maxN);
+                try { if (currentUser) localStorage.setItem('tianying_notice_read_' + currentUser.empId, String(maxN)); } catch (e) { }
+            }
+        }
         if (announcements.length) {
             const maxId = announcements.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0);
             setAnnReadId(maxId);
@@ -3100,7 +3133,42 @@ function App() {
             } catch (e) { }
         }
     };
-    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length;
+    /* ── 站內通知：讀自己的通知（含全員通知），身分由登入通行證決定；失敗就沿用本機快取，不打擾使用者 ── */
+    const noticeCacheKey = currentUser ? 'tianying_notices_' + currentUser.empId : '';
+    const loadNotices = async () => {
+        if (!ACCOUNT_GAS_URL || !currentUser) return;
+        const token = getAuthToken();
+        if (!token) return;
+        try {
+            const res = await fetch(ACCOUNT_GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=getMyNotices&data=' + encodeURIComponent(JSON.stringify({ token: token })) });
+            const d = await res.json();
+            if (d && d.status === 'ok' && Array.isArray(d.rows)) {
+                setNotices(d.rows);
+                try { localStorage.setItem(noticeCacheKey, JSON.stringify(d.rows)); } catch (e) { }
+            }
+        } catch (e) { /* 離線／GAS 還沒部署新版 → 沿用快取 */ }
+    };
+    useEffect(() => {
+        if (!currentUser) { setNotices([]); setNoticeReadId(0); return; }
+        try {
+            const c = JSON.parse(localStorage.getItem('tianying_notices_' + currentUser.empId) || '[]');
+            setNotices(Array.isArray(c) ? c : []);
+            const v = parseInt(localStorage.getItem('tianying_notice_read_' + currentUser.empId) || '0', 10);
+            setNoticeReadId(isNaN(v) ? 0 : v);
+        } catch (e) { setNotices([]); setNoticeReadId(0); }
+        loadNotices();
+    }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
+    /* 跟公告同節奏：回到首頁刷新、每 2 分鐘（App 在前景時）刷新 */
+    useEffect(() => { if (tab === 'home' && currentUser) loadNotices(); }, [tab]);
+    useEffect(() => {
+        const timer = setInterval(() => { if (document.visibilityState === 'visible') loadNotices(); }, 120000);
+        return () => clearInterval(timer);
+    }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
+    const unreadNoticeCount = notices.filter(n => (Number(n.id) || 0) > noticeReadId).length;
+    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length + unreadNoticeCount;
+    /* 打開公佈欄當下「哪些通知是新的」要先記住，標記已讀後畫面上的金邊才不會瞬間消失 */
+    const [noticeUnreadSnap, setNoticeUnreadSnap] = useState(0);
     // 載入已儲存的權限設定（v6：儲存值為權威，含「移除」的工具不再被預設值蓋回；
     //  僅針對「儲存後系統才新增的工具」自動補上預設權限，靠 perms_known 已知工具清單判斷）
     const PERMS_VER = 'v6';
@@ -3762,6 +3830,33 @@ function App() {
         }
         return true;
     }) : [];
+    /* 2026-10-09：點通知跳到對應頁面。依通知類型對到工具（以後新增通知類型在這裡加一行）；
+       沒有該工具權限就不顯示「前往」、點了也不動。班表類通知開班表管理後自動彈出自己的個人月曆。 */
+    const NOTICE_LINKS = {
+        schedule:     { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true },
+        scheduleBulk: { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true },
+        monthRelease: { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true },
+        leaveNew:     { toolNum: 99, leave: true, label: '前往審核' },
+        leaveResult:  { toolNum: 99, leave: true, label: '查看我的請假' }
+    };
+    const noticeLink = (n) => {
+        const L = NOTICE_LINKS[n && n.type];
+        return (L && userTools.includes(L.toolNum)) ? L : null;
+    };
+    const openNotice = (n) => {
+        const L = noticeLink(n);
+        if (!L) return;
+        if (L.myCal && currentUser && ScheduleApp.calBus) ScheduleApp.calBus.pendingName = { name: currentUser.name, at: Date.now() };
+        setShowBulletin(false);
+        setEditingAnn(null);
+        if (L.leave) {
+            /* 請假申請不是 iframe 工具，是主程式裡的面板；開法跟從工具選單點「請假申請」一樣 */
+            setShowLeave(true);
+            if (CAN_MANAGE_ROLES.includes(currentUser && currentUser.role)) loadLeaveFromCloud(true);
+            return;
+        }
+        setActiveToolId(L.toolId);
+    };
     const CAN_MANAGE_ROLES = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
     // Image upload helper for bulletin board
     const readImgAsBase64 = (file) => new Promise((res, rej) => {
@@ -4327,6 +4422,7 @@ function App() {
         if (tab !== 'home' || activeToolId) return;
         return Promise.all([
             loadAnnouncementsCloud(),
+            loadNotices(),
             loadDirectivesCloud(),
             ['executive', 'admin'].includes(currentUser && currentUser.role) ? loadReviewCounts() : null
         ]);
@@ -4365,7 +4461,8 @@ function App() {
                 React.createElement("button", { onClick: () => openBulletin(), style: { position: 'relative', background: 'rgba(212,168,0,.12)', border: '1px solid rgba(212,168,0,.25)',
                         borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                         color: 'var(--gold2)', fontSize: 12, fontFamily: "'Microsoft JhengHei',sans-serif" } },
-                    "\uD83D\uDCE2",
+                    React.createElement("span", { className: "ty-horn" + (unreadAnnCount > 0 ? " on" : "") },
+                        React.createElement("span", { className: unreadAnnCount > 0 ? "ty-ring" : "ty-sway" }, "\uD83D\uDCE2")),
                     unreadAnnCount > 0 && (React.createElement("span", { className: "fx-pulse", style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
                             borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex',
                             alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, unreadAnnCount > 9 ? '9+' : unreadAnnCount))),
@@ -5063,6 +5160,30 @@ function App() {
                         React.createElement("button", { onClick: () => setEditingAnn(null), style: { background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)',
                                 borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--muted)',
                                 cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\u53D6\u6D88")))),
+                !editingAnn && notices.length > 0 && (React.createElement("div", { style: { marginBottom: 16 } },
+                    React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 } },
+                        React.createElement("div", { style: { fontSize: 14, fontWeight: 900, color: 'var(--gold2)' } },
+                            React.createElement("span", { className: notices.some(n => (Number(n.id) || 0) > noticeUnreadSnap) ? "ty-ring" : "ty-sway" }, "🔔"), " 我的通知"),
+                        React.createElement("div", { style: { fontSize: 11, color: 'var(--muted)' } }, "最近 60 天")),
+                    (noticeShowAll ? notices : notices.slice(0, 5)).map(n => {
+                        const isNew = (Number(n.id) || 0) > noticeUnreadSnap;
+                        const link = noticeLink(n);
+                        return (React.createElement("div", { key: n.id, className: "ty-notice", role: link ? "button" : undefined, onClick: link ? () => openNotice(n) : undefined,
+                            style: { background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', borderLeft: `3px solid ${isNew ? 'var(--gold)' : 'rgba(255,255,255,.09)'}`,
+                                borderRadius: 10, padding: '10px 12px', marginBottom: 8, cursor: link ? 'pointer' : 'default' } },
+                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
+                                React.createElement("span", { style: { fontSize: 14, fontWeight: 800, color: 'var(--text)', flex: 1, minWidth: 0 } }, n.title),
+                                isNew && React.createElement("span", { style: { fontSize: 10, fontWeight: 800, color: '#0A0C10', background: 'var(--gold)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 } }, "新")),
+                            React.createElement("div", { style: { fontSize: 13, color: 'var(--text2, #D1D5DB)', whiteSpace: 'pre-line', lineHeight: 1.6 } }, n.body),
+                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 } },
+                                React.createElement("span", { style: { fontSize: 11, color: 'var(--muted)' } }, n.time),
+                                link && React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: 'var(--gold2)' } }, link.label + " ›"))));
+                    }),
+                    notices.length > 5 && (React.createElement("button", { onClick: () => setNoticeShowAll(v => !v), style: { width: '100%', minHeight: 40, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)',
+                            borderRadius: 8, color: 'var(--muted)', fontSize: 13, cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } },
+                        noticeShowAll ? '收合' : `顯示全部（${notices.length} 則）`)),
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 900, color: 'var(--gold2)', margin: '14px 0 8px' } },
+                        React.createElement("span", { className: "ty-sway" }, "📢"), " 公告"))),
                 React.createElement("div", { style: { position: 'relative', marginBottom: 14 } },
                     React.createElement("span", { style: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
                             fontSize: 14, color: 'var(--muted)', pointerEvents: 'none' } }, "\uD83D\uDD0D"),
