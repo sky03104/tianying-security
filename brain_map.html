@@ -292,7 +292,7 @@ const NODES = [
 
   // ── 東海／後端 GAS ──
   { id: 13, title: '事故/表揚 GAS v3.1', topic: 'backend', pos: [1.6891, 1.2961, 0.0], note: 'action 分流 report/feedback/updateStatus/deleteRow/getReports/getFeedback；狀態/處置欄；新資料自動轉發LINE推播給主管/管理員' },
-  { id: 14, title: '帳號/請假 GAS', topic: 'backend', pos: [0.8592, 1.9478, 0.6421], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核；getDirectives/saveDirectives 讀寫宣導事項試算表(id66)' },
+  { id: 14, title: '帳號/請假 GAS', topic: 'backend', pos: [0.8592, 1.9478, 0.6421], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核；getDirectives/saveDirectives 讀寫宣導事項試算表(id66)；2026-10-09 站內通知：班表異動 4 個 notify action 先寫「站內通知」分頁(ID/時間/工號或ALL/類型/標題/內容，超過3000列刪最舊)再照舊推 LINE（沒綁 LINE 也收得到；大量異動站內逐人寫明），新增 getMyNotices(驗通行證，回自己＋ALL 近60天最多50筆)，首頁📢紅點＝未讀公告＋未讀通知' },
   { id: 15, title: '打烊/開店 GAS', topic: 'backend', pos: [0.5627, 1.138, 1.9043], note: '進出記錄 + _SharedDB（廠商/監工/檢查者即時同步）；2026-07-06 開店 GAS 補 updateRow/deleteRow（今日頁編輯刪除，先前漏接一律失敗）。2026-08-27 SQL遷移：「進出資料表」權威改為Supabase(closing_gate_logs/opening_gate_logs，見id18/19)，一般登錄/updateExitTime/updateRow/deleteRow全改走Supabase(id定位，取代原本不穩健的列號定位)；Sheets版「進出資料表」改為按需刷新的快取——切換預覽分頁或exportDailyExcel前才從Supabase整批刷新回來，讓「打烊後/開店前」即時核對報表的公式維持正常運作；PR #259已合併，尚缺每日備份' },
   { id: 16, title: '照片上傳處理', topic: 'backend', pos: [1.0723, 1.8817, -0.8901], note: 'saveImages_；公告夾不可寫退回執行帳號夾；setSharing 非致命' },
 
@@ -355,7 +355,7 @@ const NODES = [
   { id: 43, title: '交接事項 GAS', topic: 'backend', pos: [1.1915, 2.2311, -0.1222], note: '帶班交接_GAS.gs（獨立部署）；add/update/delete/getAll；建立人+建立時間、最後修改人+時間伺服器端蓋章，主鍵 max(ID)+1' },
   { id: 44, title: '哨表產生 GAS', topic: 'backend', pos: [1.8958, 1.2979, 1.1353], note: '哨表產生_GAS.gs（獨立部署）；getEmployeeNames/getGuardPostConfig/saveGuardPostConfig/getMonthlyRoster；讀早晚班月班表算當日在職名單、讀寫哨點設定分頁；上傳寫入哨表另沿用哨表上傳_GAS_v6.gs' },
   { id: 45, title: '缺班調班紀錄 GAS', topic: 'backend', pos: [0.5772, 2.099, 1.4062], note: '缺班調班紀錄_GAS.gs（獨立部署）；getRecords/addRecord/deleteRecord；每個 action 都驗登入通行證＋角色需隊長以上(captain/executive/admin)，才向主 App 打 verifySession；主鍵 max(ID)+1' },
-  { id: 46, title: '班表管理 GAS', topic: 'backend', pos: [1.6916, 1.0127, -1.7242], note: '班表管理_後端_GAS_v2.13.gs（早晚班共用一支，靠 SHIFT_CONFIG / payload.shift 分流）。upload/update/updateSchedule/updateShiftSettings/deleteStaff（POST）＋ getSchedule/getScheduleByMonth/listScheduleMonths/getShiftSettings（GET）。線上班表分頁固定只有一份（早班班表／晚班班表），下月班表先進「_待生效」，每日00:00~01:00排程 checkAndSwitchMonth_ 於1號自動切換。⚠️2026-08-09 前切換時直接覆蓋、舊月班表永久消失；v2.13 起兩個覆蓋點（排程換月、上傳換月）覆蓋前先備份成隱藏分頁 _備份_{分頁名}_{yyyy-MM}——只新增不刪除、同月已存在則跳過保留最早那份、備份失敗只記log不中斷換月。備份僅對部署後的月份有效，部署當下需手動跑一次 手動備份目前班表()。2026-08-27起此隱藏備份機制已由Supabase(id85)取代並停用，見id20。getSchedule日常查詢實測Sheets較快(18-25ms vs Supabase 750-1800ms)維持讀Sheets優先＋1小時快取，Supabase當備援；getScheduleByMonth/listScheduleMonths(歷史月份，會持續成長)改為Supabase優先。v2.18(2026-09-25)新增 getScheduleBundle：主控台開啟班表管理一次拿齊晚班＋早班＋工號對照＋班別設定（原本4次請求且前兩段串行），讀失敗的班表結果不再被快取1小時。v2.19(2026-10-05)人數不再寫死27人：人員區塊改依A欄「代號說明」自動判斷結尾(找不到退回第30列)，上傳/換月複製範圍連頁尾一起帶；異動推播改依姓名比對；APP新增員工區塊滿時自動插列' },
+  { id: 46, title: '班表管理 GAS', topic: 'backend', pos: [1.6916, 1.0127, -1.7242], note: '班表管理_後端_GAS_v2.13.gs（早晚班共用一支，靠 SHIFT_CONFIG / payload.shift 分流）。upload/update/updateSchedule/updateShiftSettings/deleteStaff（POST）＋ getSchedule/getScheduleByMonth/listScheduleMonths/getShiftSettings（GET）。線上班表分頁固定只有一份（早班班表／晚班班表），下月班表先進「_待生效」，每日00:00~01:00排程 checkAndSwitchMonth_ 於1號自動切換。⚠️2026-08-09 前切換時直接覆蓋、舊月班表永久消失；v2.13 起兩個覆蓋點（排程換月、上傳換月）覆蓋前先備份成隱藏分頁 _備份_{分頁名}_{yyyy-MM}——只新增不刪除、同月已存在則跳過保留最早那份、備份失敗只記log不中斷換月。備份僅對部署後的月份有效，部署當下需手動跑一次 手動備份目前班表()。2026-08-27起此隱藏備份機制已由Supabase(id85)取代並停用，見id20。getSchedule日常查詢實測Sheets較快(18-25ms vs Supabase 750-1800ms)維持讀Sheets優先＋1小時快取，Supabase當備援；getScheduleByMonth/listScheduleMonths(歷史月份，會持續成長)改為Supabase優先。v2.18(2026-09-25)新增 getScheduleBundle：主控台開啟班表管理一次拿齊晚班＋早班＋工號對照＋班別設定（原本4次請求且前兩段串行），讀失敗的班表結果不再被快取1小時。v2.19(2026-10-05)人數不再寫死27人：人員區塊改依A欄「代號說明」自動判斷結尾(找不到退回第30列)，上傳/換月複製範圍連頁尾一起帶；異動推播改依姓名比對；APP新增員工區塊滿時自動插列。v2.20(2026-10-09)大量異動通知多帶 items，主 App 逐人寫站內通知' },
   { id: 47, title: '施工單管理 GAS', topic: 'backend', pos: [1.8028, 1.916, -0.2784], note: '施工單時間修正_完整修正版.gs；2026-08-27 SQL遷移：construction_orders/fire_permits 兩表，dedupe_key 唯一鍵取代原本記憶體 Set 去重（一次解決過去3次去重bug根因）；getOrders 改讀含備援(Supabase失敗退回Sheets)；新增 getWorkOrders action 給 tool_work.html 搜尋/歷史查詢用（active/date/search 三種模式，回傳格式比照gviz table讓前端零改動，TODO-38）；上傳/新增仍雙寫Sheets（tool_work.html尚未完全停用Sheets）；報到換證另一支獨立GAS(施工單_報到換證_GAS.gs)寫入後PATCH同步checked_in_at' },
   { id: 48, title: '空節點 #48', topic: 'backend', pos: [2.2774, 0.6941, 1.2103], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
   { id: 49, title: '空節點 #49', topic: 'backend', pos: [0.8967, 1.686, 1.902], note: '預留節點，未來新增功能可直接替換此節點的 title/note/pos 重新啟用' },
@@ -485,6 +485,7 @@ const NODES = [
 ];
 
 const EDGES = [
+  [46, 14], // 班表管理 GAS → 主 App GAS（班表異動通知：LINE＋站內通知，2026-10-09）
   [10, 42], // 資料上傳工具 → 哨表試算表（今日/明日/待生效，2026-10-05）
   // 主控台內部
   [0, 1], [0, 2],

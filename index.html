@@ -121,7 +121,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '63.35';
+const APP_VERSION = '64.36';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -2859,6 +2859,10 @@ function App() {
     }, [currentUser]);
     const [showBulletin, setShowBulletin] = useState(false);
     const [bulletinSearch, setBulletinSearch] = useState('');
+    /* 2026-10-09 站內通知（班表異動等）：跟公告共用右上角📢紅點，打開公佈欄最上方顯示「我的通知」 */
+    const [notices, setNotices] = useState([]);
+    const [noticeReadId, setNoticeReadId] = useState(0);
+    const [noticeShowAll, setNoticeShowAll] = useState(false);
     const [annReadId, setAnnReadId] = useState(0); // 已讀到的最大公告ID（依工號記錄，用於算未讀數）
     const [announcements, setAnnouncements] = useState(() => {
         /* 公告持久化載入：重開不再消失（無儲存值時帶入預設歡迎公告） */
@@ -3092,6 +3096,15 @@ function App() {
     // 開啟公告欄：同時把目前最新公告ID記為「已讀」，右上角未讀數歸零
     const openBulletin = () => {
         setShowBulletin(true);
+        setNoticeShowAll(false);
+        setNoticeUnreadSnap(noticeReadId);
+        if (notices.length) {
+            const maxN = notices.reduce((m, n) => Math.max(m, Number(n.id) || 0), 0);
+            if (maxN > noticeReadId) {
+                setNoticeReadId(maxN);
+                try { if (currentUser) localStorage.setItem('tianying_notice_read_' + currentUser.empId, String(maxN)); } catch (e) { }
+            }
+        }
         if (announcements.length) {
             const maxId = announcements.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0);
             setAnnReadId(maxId);
@@ -3100,7 +3113,42 @@ function App() {
             } catch (e) { }
         }
     };
-    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length;
+    /* ── 站內通知：讀自己的通知（含全員通知），身分由登入通行證決定；失敗就沿用本機快取，不打擾使用者 ── */
+    const noticeCacheKey = currentUser ? 'tianying_notices_' + currentUser.empId : '';
+    const loadNotices = async () => {
+        if (!ACCOUNT_GAS_URL || !currentUser) return;
+        const token = getAuthToken();
+        if (!token) return;
+        try {
+            const res = await fetch(ACCOUNT_GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=getMyNotices&data=' + encodeURIComponent(JSON.stringify({ token: token })) });
+            const d = await res.json();
+            if (d && d.status === 'ok' && Array.isArray(d.rows)) {
+                setNotices(d.rows);
+                try { localStorage.setItem(noticeCacheKey, JSON.stringify(d.rows)); } catch (e) { }
+            }
+        } catch (e) { /* 離線／GAS 還沒部署新版 → 沿用快取 */ }
+    };
+    useEffect(() => {
+        if (!currentUser) { setNotices([]); setNoticeReadId(0); return; }
+        try {
+            const c = JSON.parse(localStorage.getItem('tianying_notices_' + currentUser.empId) || '[]');
+            setNotices(Array.isArray(c) ? c : []);
+            const v = parseInt(localStorage.getItem('tianying_notice_read_' + currentUser.empId) || '0', 10);
+            setNoticeReadId(isNaN(v) ? 0 : v);
+        } catch (e) { setNotices([]); setNoticeReadId(0); }
+        loadNotices();
+    }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
+    /* 跟公告同節奏：回到首頁刷新、每 2 分鐘（App 在前景時）刷新 */
+    useEffect(() => { if (tab === 'home' && currentUser) loadNotices(); }, [tab]);
+    useEffect(() => {
+        const timer = setInterval(() => { if (document.visibilityState === 'visible') loadNotices(); }, 120000);
+        return () => clearInterval(timer);
+    }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
+    const unreadNoticeCount = notices.filter(n => (Number(n.id) || 0) > noticeReadId).length;
+    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length + unreadNoticeCount;
+    /* 打開公佈欄當下「哪些通知是新的」要先記住，標記已讀後畫面上的金邊才不會瞬間消失 */
+    const [noticeUnreadSnap, setNoticeUnreadSnap] = useState(0);
     // 載入已儲存的權限設定（v6：儲存值為權威，含「移除」的工具不再被預設值蓋回；
     //  僅針對「儲存後系統才新增的工具」自動補上預設權限，靠 perms_known 已知工具清單判斷）
     const PERMS_VER = 'v6';
@@ -4327,6 +4375,7 @@ function App() {
         if (tab !== 'home' || activeToolId) return;
         return Promise.all([
             loadAnnouncementsCloud(),
+            loadNotices(),
             loadDirectivesCloud(),
             ['executive', 'admin'].includes(currentUser && currentUser.role) ? loadReviewCounts() : null
         ]);
@@ -5063,6 +5112,24 @@ function App() {
                         React.createElement("button", { onClick: () => setEditingAnn(null), style: { background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)',
                                 borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--muted)',
                                 cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\u53D6\u6D88")))),
+                !editingAnn && notices.length > 0 && (React.createElement("div", { style: { marginBottom: 16 } },
+                    React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 } },
+                        React.createElement("div", { style: { fontSize: 14, fontWeight: 900, color: 'var(--gold2)' } }, "🔔 我的通知"),
+                        React.createElement("div", { style: { fontSize: 11, color: 'var(--muted)' } }, "最近 60 天")),
+                    (noticeShowAll ? notices : notices.slice(0, 5)).map(n => {
+                        const isNew = (Number(n.id) || 0) > noticeUnreadSnap;
+                        return (React.createElement("div", { key: n.id, style: { background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', borderLeft: `3px solid ${isNew ? 'var(--gold)' : 'rgba(255,255,255,.09)'}`,
+                                borderRadius: 10, padding: '10px 12px', marginBottom: 8 } },
+                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
+                                React.createElement("span", { style: { fontSize: 14, fontWeight: 800, color: 'var(--text)', flex: 1, minWidth: 0 } }, n.title),
+                                isNew && React.createElement("span", { style: { fontSize: 10, fontWeight: 800, color: '#0A0C10', background: 'var(--gold)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 } }, "新")),
+                            React.createElement("div", { style: { fontSize: 13, color: 'var(--text2, #D1D5DB)', whiteSpace: 'pre-line', lineHeight: 1.6 } }, n.body),
+                            React.createElement("div", { style: { fontSize: 11, color: 'var(--muted)', marginTop: 4 } }, n.time)));
+                    }),
+                    notices.length > 5 && (React.createElement("button", { onClick: () => setNoticeShowAll(v => !v), style: { width: '100%', minHeight: 40, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)',
+                            borderRadius: 8, color: 'var(--muted)', fontSize: 13, cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } },
+                        noticeShowAll ? '收合' : `顯示全部（${notices.length} 則）`)),
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 900, color: 'var(--gold2)', margin: '14px 0 8px' } }, "📢 公告"))),
                 React.createElement("div", { style: { position: 'relative', marginBottom: 14 } },
                     React.createElement("span", { style: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
                             fontSize: 14, color: 'var(--muted)', pointerEvents: 'none' } }, "\uD83D\uDD0D"),

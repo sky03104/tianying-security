@@ -3,6 +3,8 @@
 // 部署網址：https://script.google.com/macros/s/AKfycbzs56InZLeaHiRJhy1alNfQwDyH0mXEV9t_WJxzfjTjIhf68DHgMiWVQvVG6vKrRZ2x1w/exec
 // （早班晚班共用同一支，透過 SHIFT_CONFIG / payload.shift 分流，非天鷹保全APP帳號系統那支）
 //
+// 版本：2.20（2026-10-09）：大量異動通知多帶 items，主 App 逐人寫站內通知（APP 首頁📢紅點）。
+//
 // 版本：2.19 修正（2026-10-05，人數不再寫死 27 人）：
 //   - 原本早晚班都固定只認 A4:AG30（第4~30列＝最多27人），早班已滿27人，
 //     在 Excel 第31列加人不會報錯、但那個人整列不會被上傳，班表管理/請款/
@@ -365,7 +367,7 @@ function handleUpdate(payload) {
       // 仍走個人化推播（讓當事人清楚知道自己哪幾天改了），兩種情境門檻分開處理。
       var BULK_DIFF_THRESHOLD = 10;
       if (allDiffs.length >= BULK_DIFF_THRESHOLD) {
-        notifyScheduleChangeBulkToLine_(notifyShiftType, allDiffs.length);
+        notifyScheduleChangeBulkToLine_(notifyShiftType, allDiffs.length, allDiffs);
       } else if (allDiffs.length > 0) {
         notifyScheduleChangeBatchToLine_(allDiffs);
       }
@@ -662,14 +664,15 @@ function notifyScheduleChangeBatchToLine_(items) {
 
 // 2026-08-02 新增：一次異動人數太多（例如換月整批班表一起改）改群組發一則，不逐人各發一則，
 // 避免像 8/1 換月那次一天燒掉149則個人推播、把當月免費額度吃光。
-function notifyScheduleChangeBulkToLine_(shiftType, count) {
+// v2.20（2026-10-09）：多帶 items（每人哪幾天改了），主 App 用來逐人寫站內通知；LINE 仍只發一則群組訊息
+function notifyScheduleChangeBulkToLine_(shiftType, count, items) {
   try {
     if (!NOTIFY_GAS_URL || NOTIFY_GAS_URL.indexOf('請填入') === 0) return;
     UrlFetchApp.fetch(NOTIFY_GAS_URL, {
       method: 'post',
       payload: {
         action: 'notifyScheduleChangeBulk',
-        data: JSON.stringify({ shiftType: shiftType, count: count })
+        data: JSON.stringify({ shiftType: shiftType, count: count, items: items || [] })
       },
       muteHttpExceptions: true
     });
@@ -864,7 +867,7 @@ function handleUpdateSchedule(payload) {
     // 手動存檔這條路徑當時漏補，才會又發生3天內燒掉187則的事。
     var BULK_DIFF_THRESHOLD = 10;
     if (allDiffs.length >= BULK_DIFF_THRESHOLD) {
-      notifyScheduleChangeBulkToLine_(notifyShiftType, allDiffs.length);
+      notifyScheduleChangeBulkToLine_(notifyShiftType, allDiffs.length, allDiffs);
     } else if (allDiffs.length > 0) {
       notifyScheduleChangeBatchToLine_(allDiffs);
     }
