@@ -2128,6 +2128,12 @@ function notifyLeaveSubmitted_(d) {
     var supervisors = getShiftLeaveSupervisors_(d.dept || '', d.shift || '');
     if (supervisors.length === 0) return;
 
+    // 站內通知（2026-10-09）：審核主管每人一筆，點進去直接開請假審核；沒綁 LINE 也收得到
+    addNotices_(supervisors.map(function (sv) {
+      return { empId: sv.empId, type: 'leaveNew', title: '請假待審核：' + (d.name || '') + (d.shift ? '（' + d.shift + '）' : ''),
+        body: leaveNoticeBody_(d) };
+    }));
+
     var flex = buildLeaveApprovalFlex_(d);
     var altText = '📋 ' + d.name + ' 送出' + (d.type || '請假') + '申請，請審核';
 
@@ -2140,8 +2146,19 @@ function notifyLeaveSubmitted_(d) {
   }
 }
 
+// 請假站內通知的內容：假別｜期間｜天數（＋事由）
+function leaveNoticeBody_(d) {
+  var period = (d.startDate || '') + (d.endDate && d.endDate !== d.startDate ? ' ~ ' + d.endDate : '');
+  var lines = [(d.type || '請假') + '　' + period + (d.days ? '（' + d.days + ' 天）' : '')];
+  if (d.reason) lines.push('事由：' + d.reason);
+  return lines.join('\n');
+}
+
 function notifyLeaveResult_(leaveInfo, decision) {
   try {
+    // 站內通知（2026-10-09）：申請人一定收得到審核結果，沒綁 LINE 也一樣
+    addNotices_([{ empId: leaveInfo.empId, type: 'leaveResult',
+      title: '請假' + (decision === 'approved' ? '已核准 ✅' : '已駁回 ❌'), body: leaveNoticeBody_(leaveInfo) }]);
     var lineUserId = getLineUserIdByEmpId_(leaveInfo.empId);
     if (!lineUserId) return;
 

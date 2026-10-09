@@ -132,7 +132,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '65.36';
+const APP_VERSION = '66.37';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -3835,7 +3835,9 @@ function App() {
     const NOTICE_LINKS = {
         schedule:     { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true },
         scheduleBulk: { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true },
-        monthRelease: { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true }
+        monthRelease: { toolNum: 1, toolId: 'schedule', label: '查看我的班表', myCal: true },
+        leaveNew:     { toolNum: 99, leave: true, label: '前往審核' },
+        leaveResult:  { toolNum: 99, leave: true, label: '查看我的請假' }
     };
     const noticeLink = (n) => {
         const L = NOTICE_LINKS[n && n.type];
@@ -3847,6 +3849,12 @@ function App() {
         if (L.myCal && currentUser && ScheduleApp.calBus) ScheduleApp.calBus.pendingName = { name: currentUser.name, at: Date.now() };
         setShowBulletin(false);
         setEditingAnn(null);
+        if (L.leave) {
+            /* 請假申請不是 iframe 工具，是主程式裡的面板；開法跟從工具選單點「請假申請」一樣 */
+            setShowLeave(true);
+            if (CAN_MANAGE_ROLES.includes(currentUser && currentUser.role)) loadLeaveFromCloud(true);
+            return;
+        }
         setActiveToolId(L.toolId);
     };
     const CAN_MANAGE_ROLES = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];
