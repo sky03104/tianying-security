@@ -292,7 +292,7 @@ const NODES = [
 
   // ── 東海／後端 GAS ──
   { id: 13, title: '事故/表揚 GAS v3.1', topic: 'backend', pos: [1.6891, 1.2961, 0.0], note: 'action 分流 report/feedback/updateStatus/deleteRow/getReports/getFeedback；狀態/處置欄；新資料自動轉發LINE推播給主管/管理員' },
-  { id: 14, title: '帳號/請假 GAS', topic: 'backend', pos: [0.8592, 1.9478, 0.6421], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核；getDirectives/saveDirectives 讀寫宣導事項試算表(id66)；2026-10-09 站內通知：班表異動 4 個 notify action 先寫「站內通知」分頁(ID/時間/工號或ALL/類型/標題/內容，超過3000列刪最舊)再照舊推 LINE（沒綁 LINE 也收得到；大量異動站內逐人寫明），新增 getMyNotices(驗通行證，回自己＋ALL 近60天最多50筆)，首頁📢紅點＝未讀公告＋未讀通知；請假送出→審核主管、審核結果→申請人也寫站內通知(leaveNew/leaveResult)' },
+  { id: 14, title: '帳號/請假 GAS', topic: 'backend', pos: [0.8592, 1.9478, 0.6421], note: 'ACCOUNT_GAS_URL；登入/帳號申請/請假審核；getDirectives/saveDirectives 讀寫宣導事項試算表(id66)；2026-10-09 站內通知：班表異動 4 個 notify action 先寫「站內通知」分頁(ID/時間/工號或ALL/類型/標題/內容，超過3000列刪最舊)再照舊推 LINE（沒綁 LINE 也收得到；大量異動站內逐人寫明），新增 getMyNotices(驗通行證，回自己＋ALL 近60天最多50筆)，首頁📢＝公告、🔔＝通知（獨立下拉面板，不放公佈欄）；請假送出→審核主管、審核結果→申請人也寫站內通知(leaveNew/leaveResult)' },
   { id: 15, title: '打烊/開店 GAS', topic: 'backend', pos: [0.5627, 1.138, 1.9043], note: '進出記錄 + _SharedDB（廠商/監工/檢查者即時同步）；2026-07-06 開店 GAS 補 updateRow/deleteRow（今日頁編輯刪除，先前漏接一律失敗）。2026-08-27 SQL遷移：「進出資料表」權威改為Supabase(closing_gate_logs/opening_gate_logs，見id18/19)，一般登錄/updateExitTime/updateRow/deleteRow全改走Supabase(id定位，取代原本不穩健的列號定位)；Sheets版「進出資料表」改為按需刷新的快取——切換預覽分頁或exportDailyExcel前才從Supabase整批刷新回來，讓「打烊後/開店前」即時核對報表的公式維持正常運作；PR #259已合併，尚缺每日備份' },
   { id: 16, title: '照片上傳處理', topic: 'backend', pos: [1.0723, 1.8817, -0.8901], note: 'saveImages_；公告夾不可寫退回執行帳號夾；setSharing 非致命' },
 

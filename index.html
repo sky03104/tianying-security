@@ -42,8 +42,10 @@
   .ty-horn{position:relative;display:inline-block}
   .ty-horn.on::after{content:"";position:absolute;right:-7px;top:50%;width:8px;height:12px;border:2px solid #FFD700;border-left:none;border-radius:0 10px 10px 0;animation:tyWave 1.3s ease-out infinite;pointer-events:none}
   .ty-notice{transition:transform .15s,background .15s}
+  @keyframes tyDrop{0%{opacity:0;transform:translateY(-8px)}100%{opacity:1;transform:none}}
+  .ty-notice-panel{animation:tyDrop .22s ease-out both}
   .ty-notice:active{transform:scale(.98)}
-  @media (prefers-reduced-motion:reduce){.ty-ring,.ty-sway,.ty-horn.on::after{animation:none}}
+  @media (prefers-reduced-motion:reduce){.ty-ring,.ty-sway,.ty-horn.on::after,.ty-notice-panel{animation:none}}
   </style>
 </head>
 <body>
@@ -132,7 +134,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '66.37';
+const APP_VERSION = '67.37';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -2882,7 +2884,7 @@ function App() {
     /* 2026-10-09 站內通知（班表異動等）：跟公告共用右上角📢紅點，打開公佈欄最上方顯示「我的通知」 */
     const [notices, setNotices] = useState([]);
     const [noticeReadId, setNoticeReadId] = useState(0);
-    const [noticeShowAll, setNoticeShowAll] = useState(false);
+    const [showNotices, setShowNotices] = useState(false); /* 2026-10-09：通知獨立成頂欄🔔下拉面板，不放公佈欄 */
     const [annReadId, setAnnReadId] = useState(0); // 已讀到的最大公告ID（依工號記錄，用於算未讀數）
     const [announcements, setAnnouncements] = useState(() => {
         /* 公告持久化載入：重開不再消失（無儲存值時帶入預設歡迎公告） */
@@ -3114,9 +3116,9 @@ function App() {
         } catch (e) { setAnnReadId(0); }
     }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
     // 開啟公告欄：同時把目前最新公告ID記為「已讀」，右上角未讀數歸零
-    const openBulletin = () => {
-        setShowBulletin(true);
-        setNoticeShowAll(false);
+    /* 開啟🔔通知面板：全部標記已讀（先記住開啟前的已讀位置，開著時新通知的金邊不會瞬間消失） */
+    const openNotices = () => {
+        setShowNotices(true);
         setNoticeUnreadSnap(noticeReadId);
         if (notices.length) {
             const maxN = notices.reduce((m, n) => Math.max(m, Number(n.id) || 0), 0);
@@ -3125,6 +3127,9 @@ function App() {
                 try { if (currentUser) localStorage.setItem('tianying_notice_read_' + currentUser.empId, String(maxN)); } catch (e) { }
             }
         }
+    };
+    const openBulletin = () => {
+        setShowBulletin(true);
         if (announcements.length) {
             const maxId = announcements.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0);
             setAnnReadId(maxId);
@@ -3166,7 +3171,7 @@ function App() {
         return () => clearInterval(timer);
     }, [currentUser === null || currentUser === void 0 ? void 0 : currentUser.empId]);
     const unreadNoticeCount = notices.filter(n => (Number(n.id) || 0) > noticeReadId).length;
-    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length + unreadNoticeCount;
+    const unreadAnnCount = announcements.filter(a => (Number(a.id) || 0) > annReadId).length;
     /* 打開公佈欄當下「哪些通知是新的」要先記住，標記已讀後畫面上的金邊才不會瞬間消失 */
     const [noticeUnreadSnap, setNoticeUnreadSnap] = useState(0);
     // 載入已儲存的權限設定（v6：儲存值為權威，含「移除」的工具不再被預設值蓋回；
@@ -3847,8 +3852,7 @@ function App() {
         const L = noticeLink(n);
         if (!L) return;
         if (L.myCal && currentUser && ScheduleApp.calBus) ScheduleApp.calBus.pendingName = { name: currentUser.name, at: Date.now() };
-        setShowBulletin(false);
-        setEditingAnn(null);
+        setShowNotices(false);
         if (L.leave) {
             /* 請假申請不是 iframe 工具，是主程式裡的面板；開法跟從工具選單點「請假申請」一樣 */
             setShowLeave(true);
@@ -4466,6 +4470,13 @@ function App() {
                     unreadAnnCount > 0 && (React.createElement("span", { className: "fx-pulse", style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
                             borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex',
                             alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, unreadAnnCount > 9 ? '9+' : unreadAnnCount))),
+                React.createElement("button", { onClick: () => openNotices(), "aria-label": "我的通知", style: { position: 'relative', background: 'rgba(212,168,0,.12)', border: '1px solid rgba(212,168,0,.25)',
+                        borderRadius: 20, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                        color: 'var(--gold2)', fontSize: 12, fontFamily: "'Microsoft JhengHei',sans-serif" } },
+                    React.createElement("span", { className: unreadNoticeCount > 0 ? "ty-ring" : "ty-sway" }, "🔔"),
+                    unreadNoticeCount > 0 && (React.createElement("span", { className: "fx-pulse", style: { position: 'absolute', top: -3, right: -3, background: 'var(--error)', color: '#fff',
+                            borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', fontWeight: 700 } }, unreadNoticeCount > 9 ? '9+' : unreadNoticeCount))),
                 React.createElement("div", { className: "avatar", onClick: () => setTab("profile") }, currentUser === null || currentUser === void 0 ? void 0 : currentUser.name[0]))),
         React.createElement("div", { key: "fx-page-" + tab, className: "fx-page", style: { "--fx-dx": (function () {
                 const ids = NAV.map(n => n.id), cur = ids.indexOf(tab), prev = ids.indexOf(prevTabRef.current);
@@ -5048,6 +5059,32 @@ function App() {
                             style: { flex: 1, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)',
                                 borderRadius: 8, padding: 11, fontSize: 13, fontWeight: 700, color: 'var(--muted)',
                                 cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, '取消'))))),
+        showNotices && (React.createElement("div", { onClick: () => setShowNotices(false), style: { position: 'fixed', inset: 0, zIndex: 320, background: 'rgba(0,0,0,.55)',
+                display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', padding: '64px 12px 12px', boxSizing: 'border-box', fontFamily: "'Microsoft JhengHei',sans-serif" } },
+            React.createElement("div", { role: "dialog", "aria-label": "我的通知", className: "ty-notice-panel", onClick: e => e.stopPropagation(), style: { width: '100%', maxWidth: 420, maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+                    background: 'rgba(17,19,26,.97)', border: '1px solid rgba(212,168,0,.3)', borderRadius: 14, boxShadow: '0 16px 40px rgba(0,0,0,.6)', overflow: 'hidden' } },
+                React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 12px 10px 16px', borderBottom: '1px solid rgba(255,255,255,.08)', flexShrink: 0 } },
+                    React.createElement("div", { style: { flex: 1, fontSize: 15, fontWeight: 900, color: 'var(--gold2)' } },
+                        React.createElement("span", { className: notices.some(n => (Number(n.id) || 0) > noticeUnreadSnap) ? "ty-ring" : "ty-sway" }, "🔔"), " 我的通知"),
+                    React.createElement("span", { style: { fontSize: 11, color: 'var(--muted)' } }, "最近 60 天"),
+                    React.createElement("button", { onClick: () => setShowNotices(false), "aria-label": "關閉", style: { width: 36, height: 36, borderRadius: '50%', border: '1px solid rgba(255,255,255,.14)', background: 'rgba(255,255,255,.06)',
+                            color: '#F5F5F5', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, "\u2715")),
+                React.createElement("div", { style: { overflowY: 'auto', padding: 12 } },
+                    notices.length === 0 ? (React.createElement("div", { style: { textAlign: 'center', padding: '36px 0', color: 'var(--muted)', fontSize: 14 } }, "目前沒有通知 🎉")) : (
+                    notices.map(n => {
+                        const isNew = (Number(n.id) || 0) > noticeUnreadSnap;
+                        const link = noticeLink(n);
+                        return (React.createElement("div", { key: n.id, className: "ty-notice", role: link ? "button" : undefined, onClick: link ? () => openNotice(n) : undefined,
+                            style: { background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', borderLeft: `3px solid ${isNew ? 'var(--gold)' : 'rgba(255,255,255,.09)'}`,
+                                borderRadius: 10, padding: '10px 12px', marginBottom: 8, cursor: link ? 'pointer' : 'default' } },
+                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
+                                React.createElement("span", { style: { fontSize: 14, fontWeight: 800, color: 'var(--text)', flex: 1, minWidth: 0 } }, n.title),
+                                isNew && React.createElement("span", { style: { fontSize: 10, fontWeight: 800, color: '#0A0C10', background: 'var(--gold)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 } }, "新")),
+                            React.createElement("div", { style: { fontSize: 13, color: 'var(--text2, #D1D5DB)', whiteSpace: 'pre-line', lineHeight: 1.6 } }, n.body),
+                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 } },
+                                React.createElement("span", { style: { fontSize: 11, color: 'var(--muted)' } }, n.time),
+                                link && React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: 'var(--gold2)' } }, link.label + " ›"))));
+                    })))))),
         showBulletin && (React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 300, background: '#0A0C10',
                 display: 'flex', flexDirection: 'column', fontFamily: "'Microsoft JhengHei',sans-serif" } },
             React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
@@ -5160,30 +5197,6 @@ function App() {
                         React.createElement("button", { onClick: () => setEditingAnn(null), style: { background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)',
                                 borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--muted)',
                                 cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } }, "\u53D6\u6D88")))),
-                !editingAnn && notices.length > 0 && (React.createElement("div", { style: { marginBottom: 16 } },
-                    React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 } },
-                        React.createElement("div", { style: { fontSize: 14, fontWeight: 900, color: 'var(--gold2)' } },
-                            React.createElement("span", { className: notices.some(n => (Number(n.id) || 0) > noticeUnreadSnap) ? "ty-ring" : "ty-sway" }, "🔔"), " 我的通知"),
-                        React.createElement("div", { style: { fontSize: 11, color: 'var(--muted)' } }, "最近 60 天")),
-                    (noticeShowAll ? notices : notices.slice(0, 5)).map(n => {
-                        const isNew = (Number(n.id) || 0) > noticeUnreadSnap;
-                        const link = noticeLink(n);
-                        return (React.createElement("div", { key: n.id, className: "ty-notice", role: link ? "button" : undefined, onClick: link ? () => openNotice(n) : undefined,
-                            style: { background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', borderLeft: `3px solid ${isNew ? 'var(--gold)' : 'rgba(255,255,255,.09)'}`,
-                                borderRadius: 10, padding: '10px 12px', marginBottom: 8, cursor: link ? 'pointer' : 'default' } },
-                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
-                                React.createElement("span", { style: { fontSize: 14, fontWeight: 800, color: 'var(--text)', flex: 1, minWidth: 0 } }, n.title),
-                                isNew && React.createElement("span", { style: { fontSize: 10, fontWeight: 800, color: '#0A0C10', background: 'var(--gold)', borderRadius: 6, padding: '1px 6px', flexShrink: 0 } }, "新")),
-                            React.createElement("div", { style: { fontSize: 13, color: 'var(--text2, #D1D5DB)', whiteSpace: 'pre-line', lineHeight: 1.6 } }, n.body),
-                            React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 } },
-                                React.createElement("span", { style: { fontSize: 11, color: 'var(--muted)' } }, n.time),
-                                link && React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: 'var(--gold2)' } }, link.label + " ›"))));
-                    }),
-                    notices.length > 5 && (React.createElement("button", { onClick: () => setNoticeShowAll(v => !v), style: { width: '100%', minHeight: 40, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)',
-                            borderRadius: 8, color: 'var(--muted)', fontSize: 13, cursor: 'pointer', fontFamily: "'Microsoft JhengHei',sans-serif" } },
-                        noticeShowAll ? '收合' : `顯示全部（${notices.length} 則）`)),
-                    React.createElement("div", { style: { fontSize: 14, fontWeight: 900, color: 'var(--gold2)', margin: '14px 0 8px' } },
-                        React.createElement("span", { className: "ty-sway" }, "📢"), " 公告"))),
                 React.createElement("div", { style: { position: 'relative', marginBottom: 14 } },
                     React.createElement("span", { style: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
                             fontSize: 14, color: 'var(--muted)', pointerEvents: 'none' } }, "\uD83D\uDD0D"),
