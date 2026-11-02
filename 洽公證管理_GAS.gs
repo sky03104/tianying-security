@@ -336,7 +336,7 @@ function readRecords_() {
       if (!r[0] && !r[1]) continue;
       rows.push({
         id: Number(r[0]) || 0, row: i + 2, no: Number(r[1]) || 0, status: cell_(r[2]),
-        floor: cell_(r[3]), shop: cell_(r[4]), name: cell_(r[5]), phone: cell_(r[6]),
+        floor: cell_(r[3]), shop: cell_(r[4]), name: cell_(r[5]), phone: fixPhone_(cell_(r[6])),
         date: cell_(r[7]).slice(0, 10), appliedAt: cell_(r[8]), issuedAt: cell_(r[9]), issuedBy: cell_(r[10]),
         returnedAt: cell_(r[11]), returnedBy: cell_(r[12]), token: cell_(r[13]), note: cell_(r[14])
       });
@@ -362,7 +362,7 @@ function readDisabled_() {
 function patchRow_(sh, row, patch) {
   Object.keys(patch).forEach(function (k) {
     var c = REC_HEADERS_.indexOf(k);
-    if (c >= 0) sh.getRange(row, c + 1).setValue(patch[k]);
+    if (c >= 0) { var cell = sh.getRange(row, c + 1); if (c >= 3) cell.setNumberFormat('@'); cell.setValue(patch[k]); }
   });
 }
 
@@ -387,7 +387,22 @@ function publicOut_(r, nowMs) {
            phone: r.phone, date: r.date, appliedAt: r.appliedAt, issuedAt: r.issuedAt, now: nowMs };
 }
 
-function newToken_() { return Utilities.getUuid().replace(/-/g, '').slice(0, 16); }
+/* token 第一碼固定用字母 a：全數字或「數字e數字」的 16 碼字串，Sheets 會當成科學記號數字吞掉（Infinity／失真）。
+   格式仍是 16 碼小寫 hex，getRequest 的檢查規則不變。 */
+function newToken_() { return 'a' + Utilities.getUuid().replace(/-/g, '').slice(0, 15); }
+/* 電話補回被 Sheets 吃掉的開頭 0（欄位若不是純文字格式，0926266621 會被存成數字 926266621）。
+   手機 9 開頭共 9 碼、市話 2~8 開頭共 8~9 碼 → 前面補 0；其他原樣。讀出一律過這一道，舊資料也一起修好。 */
+function fixPhone_(s) {
+  var t = String(s == null ? '' : s).trim();
+  if (/^9\d{8}$/.test(t) || /^[2-8]\d{7,8}$/.test(t)) return '0' + t;
+  return t;
+}
+/* 寫入前先把這一列的 D~O 欄設成純文字，再 appendRow：電話、時間、token 才不會被自動轉型 */
+function appendTextRow_(sh, values) {
+  var row = sh.getLastRow() + 1;
+  sh.getRange(row, 4, 1, REC_HEADERS_.length - 3).setNumberFormat('@');
+  sh.appendRow(values);
+}
 
 // ============================
 // 公開 action（免登入）
@@ -418,7 +433,7 @@ function submitRequest_(d) {
   var token = newToken_();
   var id = nextId_(rr.sheet);
   var ts = now_();
-  rr.sheet.appendRow([id, no, '已申請', safeText_(v.floor), safeText_(v.shop), safeText_(v.name), v.phone,
+  appendTextRow_(rr.sheet, [id, no, '已申請', safeText_(v.floor), safeText_(v.shop), safeText_(v.name), v.phone,
                       today_(), ts, '', '', '', '', token, '']);
   var rec = { id: id, no: no, status: '已申請', floor: v.floor, shop: v.shop, name: v.name, phone: v.phone,
               date: today_(), appliedAt: ts, issuedAt: '' };
@@ -916,6 +931,7 @@ function 設定每日搬遷觸發器() {
 
 // node 測試用（GAS 環境沒有 module，不影響執行）
 if (typeof module !== 'undefined') module.exports = Object.assign(module.exports || {}, {
+  fixPhone_: fixPhone_, newToken_: newToken_,
   validateRequest_: validateRequest_, normPhone_: normPhone_, safeText_: safeText_, effStatus_: effStatus_,
   isOverdue_: isOverdue_, allocateNo_: allocateNo_, parseTs_: parseTs_, canUseTool_: canUseTool_,
   submitRequest_: submitRequest_, getRequest_: getRequest_, getAll_: getAll_, confirmIssue_: confirmIssue_,

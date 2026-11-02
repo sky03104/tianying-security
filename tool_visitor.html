@@ -263,6 +263,19 @@ if (typeof document !== 'undefined') {
 var S = { cards:[], active:[], disabled:[], todayDone:[], filter:'', loaded:false, user:null, timer:null, fetching:false };
 var P = new URLSearchParams(location.search);
 var MY_TOKEN_KEY = 'visitor_my_token';
+/* 從保全首頁按「在本機填寫」進來時帶 local=1（與 empId），表單／完成畫面才顯示「返回」；
+   廠商自己掃 QR 進來沒有這個參數（沒有 App 可返回，直接關掉分頁即可）。 */
+function qs_(pairs){
+  var o = [];
+  Object.keys(pairs).forEach(function(k){ if(pairs[k]) o.push(k + '=' + encodeURIComponent(pairs[k])); });
+  ['empId','local'].forEach(function(k){ if(pairs[k] === undefined && P.get(k)) o.push(k + '=' + encodeURIComponent(P.get(k))); });
+  return '?' + o.join('&');
+}
+function backBtnHtml_(){
+  if(P.get('local') !== '1') return '';
+  var emp = P.get('empId') || '';
+  return '<a class="back" href="' + esc(location.pathname + (emp ? '?empId=' + encodeURIComponent(emp) : '')) + '"><i class="ti ti-arrow-left"></i>返回</a>';
+}
 var PROFILE_KEY = 'visitor_profile';     // 記在這支手機上的常用資料（樓層/專櫃/姓名/電話），不上傳
 function loadProfile(){
   try { var p = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); return (p && typeof p === 'object') ? p : {}; } catch(e){ return {}; }
@@ -340,7 +353,7 @@ function renderForm(){
     return '<option' + (pf.floor === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('');
   var has = !!(pf.shop || pf.name || pf.phone);
   $('app').innerHTML =
-    '<div class="hd"><div class="hd-t"><div class="t1">洽公證申請</div><div class="t2">TIANYING SECURITY</div></div></div>' +
+    '<div class="hd">' + backBtnHtml_() + '<div class="hd-t"><div class="t1">洽公證申請</div><div class="t2">TIANYING SECURITY</div></div></div>' +
     '<div class="card">' +
     '<div class="hint" style="margin-bottom:14px">忘記帶識別證嗎？請填寫下列資料，送出後會顯示您的洽公證編號，憑畫面到保全櫃檯領證。</div>' +
     '<div class="fld"><label>日期</label><div class="ro">' + esc(todayStr()) + '</div></div>' +
@@ -362,7 +375,7 @@ async function submitForm(){
     var d = await pubPost('submitRequest', chk.v);
     lsSet(MY_TOKEN_KEY, d.token);
     saveProfile(chk.v);
-    history.replaceState(null, '', location.pathname + '?r=' + encodeURIComponent(d.token));
+    history.replaceState(null, '', location.pathname + qs_({ r:d.token }));
     if(d.dup) toast('您已有申請中的洽公證，已為您顯示原本的資料', 'inf');
     startResult(d.token, d.rec);
   } catch(e){
@@ -413,7 +426,7 @@ function drawResult(){
     '<div><span>樓層</span>' + esc(r.floor) + '</div><div><span>專櫃</span>' + esc(r.shop) + '</div>' +
     '<div><span>日期</span>' + esc(r.date) + '</div></div>';
   $('app').innerHTML =
-    '<div class="hd"><div class="hd-t"><div class="t1">洽公證申請</div><div class="t2">TIANYING SECURITY</div></div></div>' +
+    '<div class="hd">' + backBtnHtml_() + '<div class="hd-t"><div class="t1">洽公證申請</div><div class="t2">TIANYING SECURITY</div></div></div>' +
     '<div class="card res' + (dead ? ' dead' : '') + '">' + body +
     '<div class="banner ' + cls + '">' + banner + '</div>' +
     '<div class="hint">目前時間（台北）</div><div class="clock" id="clock"></div>' +
@@ -423,7 +436,7 @@ function drawResult(){
 }
 function newApply(){
   stopResult(); lsSet(MY_TOKEN_KEY, '');
-  history.replaceState(null, '', location.pathname + '?form=1');
+  history.replaceState(null, '', location.pathname + qs_({ form:'1' }));
   renderForm();
 }
 
@@ -549,7 +562,7 @@ function showQr(){
     '<div class="hint">手機相機掃描即可，不用登入。<br>送出後畫面會顯示洽公證編號，請廠商憑畫面領證。</div>' +
     '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
     '<button class="act act-gold" style="flex:1;justify-content:center" onclick="printPoster()"><i class="ti ti-printer"></i>列印海報</button>' +
-    '<button class="act" style="flex:1;justify-content:center" onclick="location.href=\'?form=1\'"><i class="ti ti-edit"></i>在本機填寫</button>' +
+    '<button class="act" style="flex:1;justify-content:center" onclick="location.href=\'?form=1&local=1\' + (P.get(\'empId\') ? \'&empId=\' + encodeURIComponent(P.get(\'empId\')) : \'\')"><i class="ti ti-edit"></i>在本機填寫</button>' +
     '<button class="act" style="flex:1;justify-content:center" onclick="closeModal()">關閉</button></div></div></div>';
 }
 function printPoster(){
@@ -637,7 +650,7 @@ window.addEventListener('load', function(){
     if(mine && gasReady()){
       pubGetRequest(mine).then(function(d){
         if(!d.gone && d.rec && (d.rec.status === '已申請' || d.rec.status === '已借出')){
-          history.replaceState(null, '', location.pathname + '?r=' + encodeURIComponent(mine)); startResult(mine, d.rec);
+          history.replaceState(null, '', location.pathname + qs_({ r:mine })); startResult(mine, d.rec);
         } else { lsSet(MY_TOKEN_KEY, ''); renderForm(); }
       }).catch(function(){ renderForm(); });
     } else renderForm();
