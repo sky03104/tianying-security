@@ -253,6 +253,20 @@ if (typeof document !== 'undefined') {
 var S = { cards:[], active:[], disabled:[], todayDone:[], filter:'', loaded:false, user:null, timer:null, fetching:false };
 var P = new URLSearchParams(location.search);
 var MY_TOKEN_KEY = 'visitor_my_token';
+var PROFILE_KEY = 'visitor_profile';     // 記在這支手機上的常用資料（樓層/專櫃/姓名/電話），不上傳
+function loadProfile(){
+  try { var p = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); return (p && typeof p === 'object') ? p : {}; } catch(e){ return {}; }
+}
+function saveProfile(v){
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ floor:v.floor, shop:v.shop, name:v.name, phone:v.phone })); } catch(e){}
+}
+function clearProfile(){
+  try { localStorage.removeItem(PROFILE_KEY); } catch(e){}
+  ['f-shop','f-name','f-phone'].forEach(function(i){ if($(i)) $(i).value = ''; });
+  if($('f-floor')) $('f-floor').value = '';
+  var b = $('f-clear'); if(b) b.style.display = 'none';
+  toast('已清除這支手機記住的資料', 'inf');
+}
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(m){
@@ -311,17 +325,21 @@ function adminGet(action, data){
 
 /* ───────────── 廠商填表 ───────────── */
 function renderForm(){
-  var opts = '<option value="">請選擇樓層</option>' + FLOORS.map(function(f){ return '<option>'+esc(f)+'</option>'; }).join('');
+  var pf = loadProfile();
+  var opts = '<option value="">請選擇樓層</option>' + FLOORS.map(function(f){
+    return '<option' + (pf.floor === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('');
+  var has = !!(pf.shop || pf.name || pf.phone);
   $('app').innerHTML =
     '<div class="hd"><div class="hd-t"><div class="t1">洽公證申請</div><div class="t2">TIANYING SECURITY</div></div></div>' +
     '<div class="card">' +
     '<div class="hint" style="margin-bottom:14px">忘記帶識別證嗎？請填寫下列資料，送出後會顯示您的洽公證編號，憑畫面到保全櫃檯領證。</div>' +
     '<div class="fld"><label>日期</label><div class="ro">' + esc(todayStr()) + '</div></div>' +
     '<div class="fld"><label>樓層 <b>*</b></label><select id="f-floor">' + opts + '</select></div>' +
-    '<div class="fld"><label>專櫃或廠商名稱 <b>*</b></label><input type="text" id="f-shop" maxlength="40" autocomplete="organization"></div>' +
-    '<div class="fld"><label>姓名 <b>*</b></label><input type="text" id="f-name" maxlength="20" autocomplete="name"></div>' +
-    '<div class="fld"><label>電話 <b>*</b></label><input type="tel" id="f-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="例：0912345678"></div>' +
+    '<div class="fld"><label>專櫃或廠商名稱 <b>*</b></label><input type="text" id="f-shop" maxlength="40" autocomplete="organization" value="' + esc(pf.shop||'') + '"></div>' +
+    '<div class="fld"><label>姓名 <b>*</b></label><input type="text" id="f-name" maxlength="20" autocomplete="name" value="' + esc(pf.name||'') + '"></div>' +
+    '<div class="fld"><label>電話 <b>*</b></label><input type="tel" id="f-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="例：0912345678" value="' + esc(pf.phone||'') + '"></div>' +
     '<button class="btn" id="f-submit" onclick="submitForm()">送出申請</button>' +
+    (has ? '<div class="hint" style="margin-top:12px">已帶入這支手機上次填的資料　<a href="#" id="f-clear" onclick="clearProfile();return false" style="color:var(--gold2)">不是我？清除</a></div>' : '') +
     '</div>';
 }
 async function submitForm(){
@@ -333,6 +351,7 @@ async function submitForm(){
   try {
     var d = await pubPost('submitRequest', chk.v);
     lsSet(MY_TOKEN_KEY, d.token);
+    saveProfile(chk.v);
     history.replaceState(null, '', location.pathname + '?r=' + encodeURIComponent(d.token));
     if(d.dup) toast('您已有申請中的洽公證，已為您顯示原本的資料', 'inf');
     startResult(d.token, d.rec);
@@ -582,7 +601,7 @@ async function exportXlsx(){
 }
 
 /* onclick 用到的函式一律明確掛到 window（包在 if 區塊內的 async function 不會自動變全域，onclick 會靜默失敗） */
-window.submitForm = submitForm; window.newApply = newApply; window.showQr = showQr; window.printPoster = printPoster;
+window.submitForm = submitForm; window.clearProfile = clearProfile; window.newApply = newApply; window.showQr = showQr; window.printPoster = printPoster;
 window.closeModal = closeModal; window.loadAll = loadAll; window.setFilter = setFilter; window.renderList = renderList;
 window.doIssue = doIssue; window.doReturn = doReturn; window.doCancel = doCancel; window.doDisable = doDisable;
 window.openHistory = openHistory; window.runHistory = runHistory; window.exportXlsx = exportXlsx;
