@@ -126,6 +126,15 @@ input:focus,select:focus{outline:none;border-color:var(--gold);}
 .toast{padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;max-width:90vw;text-align:center;}
 .t-ok{background:#22C55E;color:#fff;} .t-err{background:#E53E3E;color:#fff;} .t-inf{background:#334155;color:#fff;}
 
+/* 回到最上面浮動按鈕（右下角；捲動超過一屏才出現） */
+.totop{position:fixed;right:16px;bottom:max(18px,env(safe-area-inset-bottom));z-index:50;width:52px;height:52px;border-radius:50%;
+  border:1px solid rgba(212,168,0,.5);background:linear-gradient(135deg,#D4A800,#FFD700);color:#0A0C10;font-size:24px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.55);
+  opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .2s,transform .2s;font-family:inherit;}
+.totop.show{opacity:1;transform:none;pointer-events:auto;}
+.totop:active{transform:scale(.94);}
+@media (prefers-reduced-motion: reduce){ .totop{transition:none;} }
+
 /* 列印 A4 海報：只印 #poster */
 #poster{display:none;}
 @media print{
@@ -142,6 +151,7 @@ input:focus,select:focus{outline:none;border-color:var(--gold);}
 </head>
 <body>
 <div class="wrap" id="app"></div>
+<button class="totop" id="toTop" type="button" aria-label="回到最上面" onclick="scrollToTop()"><i class="ti ti-arrow-up"></i></button>
 <div id="modal"></div>
 <div id="twrap"></div>
 <div id="poster"></div>
@@ -600,8 +610,19 @@ async function exportXlsx(){
   } catch(e){ toast('✗ ' + e.message, 'err'); }
 }
 
+/* ───────────── 回到最上面 ───────────── */
+function scrollToTop(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top:0, behavior: reduce ? 'auto' : 'smooth' });
+}
+function updateToTop(){
+  var b = $('toTop'); if(!b) return;
+  b.classList.toggle('show', (window.pageYOffset || document.documentElement.scrollTop || 0) > Math.max(300, window.innerHeight * 0.6));
+}
+window.addEventListener('scroll', updateToTop, { passive:true });
+
 /* onclick 用到的函式一律明確掛到 window（包在 if 區塊內的 async function 不會自動變全域，onclick 會靜默失敗） */
-window.submitForm = submitForm; window.clearProfile = clearProfile; window.newApply = newApply; window.showQr = showQr; window.printPoster = printPoster;
+window.scrollToTop = scrollToTop; window.submitForm = submitForm; window.clearProfile = clearProfile; window.newApply = newApply; window.showQr = showQr; window.printPoster = printPoster;
 window.closeModal = closeModal; window.loadAll = loadAll; window.setFilter = setFilter; window.renderList = renderList;
 window.doIssue = doIssue; window.doReturn = doReturn; window.doCancel = doCancel; window.doDisable = doDisable;
 window.openHistory = openHistory; window.runHistory = runHistory; window.exportXlsx = exportXlsx;
