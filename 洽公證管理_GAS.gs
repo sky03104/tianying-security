@@ -32,7 +32,7 @@
 // 6. 之後改動：部署 → 管理部署作業 → 編輯 → 版本「新版本」（不要新增部署，網址會變）
 // ============================
 
-var SPREADSHEET_ID = '請填入試算表ID'; // ← 部署前務必替換
+var SPREADSHEET_ID = '1gDCnZlb9gWz04zsjkNfgnFlGTRhb6wphhJiAKv-VmBU';
 var SHEET_REC = '洽公證紀錄';
 var SHEET_CARD = '卡片例外';
 var TZ = 'Asia/Taipei';
