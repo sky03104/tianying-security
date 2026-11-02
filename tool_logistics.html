@@ -1208,6 +1208,125 @@ function jsonRes(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+// ══════════════════════════════
+// 每月 1 號寄上個月月報（2026-11-02）
+// 收件人：指令碼屬性 MONTHLY_REPORT_EMAILS（多人用逗號分隔，不要寫進程式碼）。
+// 內容：每日 × 三分類統計＋月合計，xlsx 附件，信件本文放摘要。
+// ⚠️ 資料來自 Supabase；讀不到就丟錯、不寄（寄出殘缺月報比沒寄更糟），並另寄「月報產生失敗」通知給收件人。
+// ══════════════════════════════
+var MONTHLY_MAIL_PROP_ = 'MONTHLY_REPORT_EMAILS';
+var MONTHLY_SENT_PROP_ = 'LAST_MONTHLY_SENT';
+
+function pad2_(n) { return ('0' + n).slice(-2); }
+// 以台北時間算「上個月」：{ year, month, ym:'2026-10' }
+function lastMonth_() {
+  var p = Utilities.formatDate(new Date(), TZ, 'yyyy-MM').split('-');
+  var y = Number(p[0]), m = Number(p[1]) - 1;
+  if (m < 1) { m = 12; y--; }
+  return { year: y, month: m, ym: y + '-' + pad2_(m) };
+}
+function htmlEsc_(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; });
+}
+
+// 月報的表格資料（純函式）：每日一列，最後一列月合計
+function 組物流月報_(year, month, agg) {
+  var wk = ['日', '一', '二', '三', '四', '五', '六'];
+  var rows = [['日期', '星期', '1.9噸', '3.5噸', '8噸以上', '當日合計']];
+  var top = null, worked = 0;
+  agg.days.forEach(function (d) {
+    rows.push([year + '-' + pad2_(month) + '-' + pad2_(d.day), wk[new Date(year, month - 1, d.day).getDay()],
+               d.t19, d.t35, d.t80, d.sum]);
+    if (d.sum > 0) worked++;
+    if (!top || d.sum > top.sum) top = d;
+  });
+  var t = agg.totals;
+  rows.push(['月合計', '', t.t19, t.t35, t.t80, t.sum]);
+  return { rows: rows, top: top, worked: worked };
+}
+
+// 建暫存試算表 → 匯出 xlsx → 刪暫存。textCols 是「要設純文字」的欄（1 起算），避免日期被自動轉型。
+function buildXlsxBlob_(fileName, sheetName, rows, textCols) {
+  var ss = SpreadsheetApp.create(fileName);
+  var id = ss.getId();
+  try {
+    var sh = ss.getSheets()[0];
+    sh.setName(sheetName);
+    var w = rows[0].length;
+    textCols.forEach(function (c) { sh.getRange(1, c, rows.length, 1).setNumberFormat('@'); });
+    sh.getRange(1, 1, rows.length, w).setValues(rows);
+    sh.getRange(1, 1, 1, w).setFontWeight('bold').setBackground('#1A2340').setFontColor('#D4A800');
+    sh.getRange(rows.length, 1, 1, w).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.autoResizeColumns(1, w);
+    SpreadsheetApp.flush();
+    var resp = UrlFetchApp.fetch('https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx',
+      { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) throw new Error('匯出 xlsx 失敗（' + resp.getResponseCode() + '）');
+    return resp.getBlob().setName(fileName + '.xlsx');
+  } finally {
+    try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
+  }
+}
+
+function monthlyEmails_() {
+  var emails = (PropertiesService.getScriptProperties().getProperty(MONTHLY_MAIL_PROP_) || '').trim();
+  if (!emails) throw new Error('收件人未設定：請在「專案設定 → 指令碼屬性」新增 MONTHLY_REPORT_EMAILS（多人用逗號分隔）');
+  return emails;
+}
+
+function 物流月報Html_(ym, rep, agg) {
+  var t = agg.totals;
+  var topTxt = (rep.top && rep.top.sum > 0) ? (ym + '-' + pad2_(rep.top.day) + '（' + rep.top.sum + ' 輛次）') : '—';
+  var avg = rep.worked ? (Math.round(t.sum / rep.worked * 10) / 10) : 0;
+  return '<div style="font-family:Microsoft JhengHei,sans-serif;font-size:14px;line-height:1.7">' +
+    '<h3>天鷹保全｜物流車輛 ' + htmlEsc_(ym) + ' 月報</h3>' +
+    '<table cellpadding="6" border="1" style="border-collapse:collapse;border-color:#ccc">' +
+    '<tr style="background:#f3f4f6"><th>1.9噸</th><th>3.5噸</th><th>8噸以上</th><th>月合計</th></tr>' +
+    '<tr align="center"><td>' + t.t19 + '</td><td>' + t.t35 + '</td><td>' + t.t80 + '</td><td><b>' + t.sum + '</b></td></tr></table>' +
+    '<p>有登記的天數：' + rep.worked + ' 天（日均 ' + avg + ' 輛次）<br>最多的一天：' + htmlEsc_(topTxt) + '</p>' +
+    (t.sum === 0 ? '<p style="color:#B91C1C">⚠ 這個月沒有任何登記資料，請確認是否正常。</p>' : '') +
+    '<p style="color:#666">每日統計見附件 Excel。此信由系統於每月 1 號自動寄出。</p></div>';
+}
+
+function 寄送物流月報_(force) {
+  var emails = monthlyEmails_();
+  var lm = lastMonth_();
+  var props = PropertiesService.getScriptProperties();
+  if (!force && props.getProperty(MONTHLY_SENT_PROP_) === lm.ym) { console.log(lm.ym + ' 月報已寄過，略過'); return; }
+  var agg = aggregateMonth_(lm.year, lm.month);     // Supabase 讀不到會丟錯，不會寄出殘缺月報
+  var rep = 組物流月報_(lm.year, lm.month, agg);
+  var blob = buildXlsxBlob_('物流車輛月報_' + lm.ym, '每日統計', rep.rows, [1]);
+  MailApp.sendEmail({ to: emails, subject: '【天鷹保全】物流車輛 ' + lm.ym + ' 月報（合計 ' + agg.totals.sum + ' 輛次）',
+                      htmlBody: 物流月報Html_(lm.ym, rep, agg), attachments: [blob], name: '天鷹保全 物流車輛統計' });
+  props.setProperty(MONTHLY_SENT_PROP_, lm.ym);
+  console.log('已寄出 ' + lm.ym + ' 月報給：' + emails);
+}
+
+function 月報失敗通知_(err) {
+  try {
+    MailApp.sendEmail({ to: monthlyEmails_(), subject: '【天鷹保全】物流車輛月報產生失敗，請通知管理員',
+      htmlBody: '<p>物流車輛 ' + htmlEsc_(lastMonth_().ym) + ' 月報沒有寄出。原因：' + htmlEsc_(err && err.message) +
+                '</p><p>系統不會寄出資料不完整的月報。修好後請在 Apps Script 執行「手動重寄上個月月報」。</p>' });
+  } catch (e) { console.log('連失敗通知都寄不出去：' + e.message); }
+}
+
+// 觸發器進入點：每月 1 號 07:00
+function 每月寄送月報() {
+  try { 寄送物流月報_(false); } catch (err) { 月報失敗通知_(err); throw err; }
+}
+// 手動補寄／重寄上個月（不看「已寄過」記號）
+function 手動重寄上個月月報() { 寄送物流月報_(true); }
+// 只需執行一次：每月 1 號早上 7 點寄上個月月報
+function 設定每月月報觸發器() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === '每月寄送月報') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('每月寄送月報').timeBased().onMonthDay(1).atHour(7).create();
+  console.log('已設定：每月 1 號 07:00 寄上個月物流月報（收件人：指令碼屬性 ' + MONTHLY_MAIL_PROP_ + '）');
+}
 `;
 
 init();

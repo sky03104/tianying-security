@@ -338,7 +338,7 @@ const NODES = [
   { id: 37, title: '物流車輛統計', topic: 'tools', pos: [2.5895, -0.52, -1.495], note: 'tool_logistics.html 獨立檔（iframe src）；三分類(1.9噸/3.5噸/8噸以上)登記＋快捷一鍵送出＋單日查詢＋整月統計；可修改/刪除；全員開放(id18)，快捷管理限 admin（2026-07-15 咖哩要求外圈工具節點整體拉開1.3倍間距）' },
 
   // ── 東海／後端 GAS ──
-  { id: 38, title: '物流統計 GAS', topic: 'backend', pos: [0.7926, 0.6153, 2.252], note: '物流車輛統計_GAS.gs（獨立部署）；getShortcuts/addShortcut/updateShortcut/deleteShortcut（快捷設定，量小固定，維持在Sheets）。2026-08-27 SQL遷移：add/update/delete/getDay/getMonth/exportMonth全改走Supabase(id39，id定位)，移除原本LockService+Script Properties流水號快取機制（Postgres bigserial自己保證唯一）；PR #265已合併，待咖哩實機部署測試，尚缺每日備份' },
+  { id: 38, title: '物流統計 GAS', topic: 'backend', pos: [0.7926, 0.6153, 2.252], note: '物流車輛統計_GAS.gs（獨立部署）；getShortcuts/addShortcut/updateShortcut/deleteShortcut（快捷設定，量小固定，維持在Sheets）。2026-08-27 SQL遷移：add/update/delete/getDay/getMonth/exportMonth全改走Supabase(id39，id定位)，移除原本LockService+Script Properties流水號快取機制（Postgres bigserial自己保證唯一）；PR #265已合併，待咖哩實機部署測試，尚缺每日備份 每月1號07:00寄上個月月報（每日×三分類＋月合計，xlsx附件，收件人=指令碼屬性MONTHLY_REPORT_EMAILS）。' },
 
   // ── 北海／資料儲存 ──
   { id: 39, title: '物流試算表', topic: 'data', pos: [-1.4474, 1.543, 1.332], note: '新建試算表；快捷設定分頁(A~C)＋YYYY-MM 月統計分頁（exportMonth 產生，邏輯不變只是資料來源換成Supabase）；工號欄純文字保開頭0。2026-08-27起「物流車輛紀錄」權威已搬到Supabase(id85的logistics_records)，原本的物流車輛紀錄分頁(A~H)不再是資料來源' },
@@ -483,7 +483,7 @@ const NODES = [
   // ── 物流區車位管理（2026-09-27）── tools
   { id: 144, title: '物流區車位管理', topic: 'tools', pos: [1.05, -1.0, -3.0], note: 'tool_parking.html ＋ 物流區車位管理_GAS.gs（獨立部署/獨立試算表：車位／借用登記／異動紀錄）；主選單id25「門禁管理」，正職以上可用、刪除車格限組長以上（三層把關）。像素風車格卡片（照娃娃機專案 machineSvg 作法）：借用中顯示大中小三款貨車動畫，空車位為車格線框，管制中加紅白路障。狀態不存、依日期即時算（管制＞借用中＞已預借＞空），同車位期間不可重疊；小卡總車位＝使用中＋空車位＋已預借＋管制中。；2026-10-06 使用權限改以主控台工具權限面板為準(前端 tianying_perms、GAS 讀系統設定 toolPerms)，刪除車格仍限組長以上' },
   // ── 洽公證管理（2026-11-02）── tools
-  { id: 145, title: '洽公證管理工具', topic: 'tools', pos: [1.55, -1.0, -3.0], note: 'tool_visitor.html ＋ 洽公證管理_GAS.gs（獨立部署/獨立試算表：洽公證紀錄／卡片例外）；主選單id26「門禁管理」。固定QR（桌上海報／首頁大按鈕全螢幕）→廠商免登入填表→送出當下配號300~600→完成畫面即時顯示狀態；保全登入後確認發證／已繳回。狀態：已申請→已借出→已繳回（另已取消／已逾時；逾期未還為計算標籤12h）。待領證30分鐘沒確認自動釋放、同電話去重、待領證上限15。Sheets只留30天，每日04:00把終態資料搬進Supabase visitor_pass_logs（回查筆數相符才刪列；ID用LAST_ID防撞號）。TODO-47' },
+  { id: 145, title: '洽公證管理工具', topic: 'tools', pos: [1.55, -1.0, -3.0], note: 'tool_visitor.html ＋ 洽公證管理_GAS.gs（獨立部署/獨立試算表：洽公證紀錄／卡片例外）；主選單id26「門禁管理」。固定QR（桌上海報／首頁大按鈕全螢幕）→廠商免登入填表→送出當下配號300~600→完成畫面即時顯示狀態；保全登入後確認發證／已繳回。狀態：已申請→已借出→已繳回（另已取消／已逾時；逾期未還為計算標籤12h）。待領證30分鐘沒確認自動釋放、同電話去重、待領證上限15。Sheets只留30天，每日04:00把終態資料搬進Supabase visitor_pass_logs（回查筆數相符才刪列；ID用LAST_ID防撞號）。TODO-47 每月1號07:00寄上個月月報（Sheets＋Supabase合併，xlsx附件；Supabase讀不到不寄、改寄失敗通知）。' },
 ];
 
 const EDGES = [
