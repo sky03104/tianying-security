@@ -517,7 +517,7 @@ function rowHtml(c){
   else {
     info = '<b>' + esc(maskName(r.name)) + '</b>　' + esc(r.phone) + '<br>' + esc(r.floor) + '　' + esc(r.shop) +
            '<br>' + (r.status === '已申請' ? '申請 ' + esc(hm(r.appliedAt)) + '（' + esc(deadlineHM(r.appliedAt)) + ' 前未領自動釋放）'
-                                          : '發證 ' + esc(hm(r.issuedAt)) + '・' + esc(r.issuedBy));
+                                          : '發證 ' + esc(hm(r.issuedAt)) + '・' + esc(maskName(r.issuedBy)));
     if(r.status === '已申請') ops = '<button class="act act-gold act-sm" onclick="doIssue(' + r.id + ')"><i class="ti ti-id-badge-2"></i>確認發證</button>' +
                                     '<button class="act act-red act-sm" onclick="doCancel(' + r.id + ')">取消</button>';
     else ops = '<button class="act act-grn act-sm" onclick="doReturn(' + r.id + ')"><i class="ti ti-arrow-back-up"></i>已繳回</button>';
