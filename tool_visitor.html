@@ -450,7 +450,7 @@ function renderHome(){
   $('app').innerHTML = html;
   loadAll(false);
   clearInterval(S.timer);
-  S.timer = setInterval(function(){ if(!document.hidden && !$('modal').innerHTML) loadAll(false); }, 15000);
+  S.timer = setInterval(function(){ if(!document.hidden && !$('modal').innerHTML) loadAll(false); }, 5000);
 }
 async function loadAll(manual){
   if(S.fetching || !loggedIn()) return;
