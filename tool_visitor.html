@@ -233,6 +233,17 @@ function filterCards(cards, filter, q){
     return c.rec ? recMatch(c.rec, kw) : false;
   });
 }
+/* 姓名顯示遮蔽（陳小明→陳X明），規則與 tool_closing／tool_opening 的 maskName 一致。
+   只用在「保全管理區」畫面顯示；搜尋、匯出 xlsx、資料庫仍用原始姓名；廠商看自己的完成畫面也不遮。 */
+function maskName(s){
+  s = String(s == null ? '' : s).trim();
+  if(!s || s === '--') return s;
+  var len = s.length;
+  if(len <= 1) return s;
+  if(len === 2) return s[0] + 'X';
+  if(len === 3) return s[0] + 'X' + s[2];
+  return s[0] + 'X'.repeat(len - 2) + s[len - 1];
+}
 function hm(ts){ return /^\d{4}-\d{2}-\d{2} (\d{2}:\d{2})/.test(String(ts||'')) ? String(ts).slice(11,16) : ''; }
 function tsMs(ts){
   if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(String(ts||''))) return NaN;
@@ -255,7 +266,7 @@ function qrSvg(text){
 
 try{ if(typeof module !== 'undefined') module.exports = {
   normKey:normKey, normPhone:normPhone, validateForm:validateForm, buildCards:buildCards, calcStats:calcStats,
-  filterCards:filterCards, recMatch:recMatch, hm:hm, deadlineHM:deadlineHM, FLOORS:FLOORS }; }catch(e){}
+  filterCards:filterCards, recMatch:recMatch, maskName:maskName, hm:hm, deadlineHM:deadlineHM, FLOORS:FLOORS }; }catch(e){}
 
 /* ════════════════ 以下為畫面與通訊 ════════════════ */
 if (typeof document !== 'undefined') {
@@ -504,7 +515,7 @@ function rowHtml(c){
   if(c.state === 'free') info = '<span class="idle">未借出</span>';
   else if(c.state === 'off') info = '<span class="idle">已停用' + (c.note ? '：' + esc(c.note) : '') + '</span>';
   else {
-    info = '<b>' + esc(r.name) + '</b>　' + esc(r.phone) + '<br>' + esc(r.floor) + '　' + esc(r.shop) +
+    info = '<b>' + esc(maskName(r.name)) + '</b>　' + esc(r.phone) + '<br>' + esc(r.floor) + '　' + esc(r.shop) +
            '<br>' + (r.status === '已申請' ? '申請 ' + esc(hm(r.appliedAt)) + '（' + esc(deadlineHM(r.appliedAt)) + ' 前未領自動釋放）'
                                           : '發證 ' + esc(hm(r.issuedAt)) + '・' + esc(r.issuedBy));
     if(r.status === '已申請') ops = '<button class="act act-gold act-sm" onclick="doIssue(' + r.id + ')"><i class="ti ti-id-badge-2"></i>確認發證</button>' +
@@ -524,7 +535,7 @@ function renderList(){
   var done = $('doneBox');
   if(done) done.innerHTML = S.todayDone.length
     ? '<div class="sec-h">今日已完成（' + S.todayDone.length + '）</div><div class="list">' + S.todayDone.map(function(r){
-        return '<div class="row"><div class="no">' + r.no + '</div><div class="info"><b>' + esc(r.name) + '</b>　' + esc(r.phone) +
+        return '<div class="row"><div class="no">' + r.no + '</div><div class="info"><b>' + esc(maskName(r.name)) + '</b>　' + esc(r.phone) +
                '<br>' + esc(r.floor) + '　' + esc(r.shop) + '</div><div class="tag off">' + esc(r.status) + '</div></div>'; }).join('') + '</div>'
     : '';
 }
@@ -536,7 +547,7 @@ function findRec_(id){ for(var i = 0; i < S.active.length; i++) if(S.active[i].i
 function doIssue(id){ act_(function(){ return api('confirmIssue', { id:id }); }, '已確認發證'); }
 function doReturn(id){
   var r = findRec_(id);
-  if(r && !window.confirm('確認收回 ' + r.no + ' 號洽公證？\n' + r.name + '（' + r.shop + '）')) return;
+  if(r && !window.confirm('確認收回 ' + r.no + ' 號洽公證？\n' + maskName(r.name) + '（' + r.shop + '）')) return;
   act_(function(){ return api('returnPass', { id:id }); }, '已繳回');
 }
 function doCancel(id){
@@ -597,7 +608,7 @@ async function runHistory(){
     var more = d.truncated ? '<div class="hint">30 天前的結果超過 300 筆只顯示一部分，請縮小日期或加關鍵字。</div>' : '';
     $('h-res').innerHTML = warn + more + '<div class="hint" style="text-align:left;margin-bottom:6px">共 ' + H.rows.length + ' 筆</div>' +
       '<div class="list">' + H.rows.map(function(r){
-        return '<div class="row"><div class="no" style="font-size:20px">' + r.no + '</div><div class="info"><b>' + esc(r.name) + '</b>　' + esc(r.phone) +
+        return '<div class="row"><div class="no" style="font-size:20px">' + r.no + '</div><div class="info"><b>' + esc(maskName(r.name)) + '</b>　' + esc(r.phone) +
                '<br>' + esc(r.floor) + '　' + esc(r.shop) + '<br>' + esc(r.date) + ' ' + esc(hm(r.appliedAt)) + '</div>' +
                '<div class="tag ' + (r.overdue ? 'over' : (r.status === '已借出' ? 'out' : r.status === '已申請' ? 'pend' : 'off')) + '">' + esc(r.overdue ? '逾期未還' : r.status) + '</div></div>'; }).join('') + '</div>';
   } catch(e){ $('h-res').innerHTML = '<div class="errbox">查詢失敗：' + esc(e.message) + '</div>'; }
