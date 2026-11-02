@@ -191,10 +191,27 @@ function readToolPerms_() {
   if (perms) { try { cache.put('toolPerms', JSON.stringify(perms), TOOL_PERMS_CACHE_SEC_); } catch (e) {} }
   return perms;
 }
+/* 「找不到就退回預設」：雲端 toolPerms 是管理員在面板按儲存時寫下的，之後才新增的工具不會在裡面，
+   舊版這裡會直接判成沒權限（隊長開 物流區車位管理 顯示「權限不足」就是這樣）。
+   做法跟主控台 index.html applyCloudSettings 一致：雲端權限存檔當下的已知工具清單（_known；舊資料沒有
+   就用「任何角色清單裡出現過的工具」）若不含本工具＝它是存檔後才新增的新工具 → 套預設角色；
+   已知清單含本工具＝管理員看過並決定了 → 嚴格照面板設定（沒勾就是沒權限）。 */
+function toolKnownInPerms_(perms, id) {
+  var known = [];
+  if (perms && Object.prototype.toString.call(perms._known) === '[object Array]') {
+    known = perms._known;
+  } else if (perms) {
+    Object.keys(perms).forEach(function (r) {
+      if (Object.prototype.toString.call(perms[r]) === '[object Array]') known = known.concat(perms[r]);
+    });
+  }
+  return known.indexOf(id) >= 0 || known.indexOf(String(id)) >= 0;
+}
 function canUseTool_(role, perms) {
   if (role === 'admin') return true;
-  if (perms && Object.prototype.toString.call(perms[role]) === '[object Array]') {
-    return perms[role].indexOf(PARKING_TOOL_ID_) >= 0 || perms[role].indexOf(String(PARKING_TOOL_ID_)) >= 0;
+  var id = PARKING_TOOL_ID_;
+  if (perms && Object.prototype.toString.call(perms[role]) === '[object Array]' && toolKnownInPerms_(perms, id)) {
+    return perms[role].indexOf(id) >= 0 || perms[role].indexOf(String(id)) >= 0;
   }
   return STAFF_PLUS_ROLES_.indexOf(role) >= 0;
 }
@@ -749,4 +766,4 @@ function forceAuth() {
 }
 
 // node 測試用（GAS 環境沒有 module，不影響執行）
-if (typeof module !== 'undefined') module.exports = Object.assign(module.exports || {}, { canUseTool_: canUseTool_ });
+if (typeof module !== 'undefined') module.exports = Object.assign(module.exports || {}, { canUseTool_: canUseTool_, toolKnownInPerms_: toolKnownInPerms_ });
