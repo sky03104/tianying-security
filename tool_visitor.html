@@ -178,11 +178,11 @@ var ALL_ROLES = ['parttime','fulltime','leader','vicecaptain','captain','executi
 
 /* ════════════════ 核心邏輯（純函式，可用 node 直接測） ════════════════ */
 function normKey(s){ return String(s==null?'':s).replace(/\s+/g,'').toUpperCase(); }
-/* 電話規則必須跟 GAS 的 normPhone_ 一模一樣：手機 09xxxxxxxx 或市話 0[2-8]xxxxxxx(x)；不合法回 '' */
+/* 電話規則必須跟 GAS 的 normPhone_ 一模一樣：去空白/連字號/括號後必須是台灣手機 09xxxxxxxx（共 10 碼）；不合法回 ''。
+   （2026-11-02 咖哩指定只收手機號碼，不再收市話） */
 function normPhone(s){
   var d = String(s==null?'':s).replace(/[\s\-()（）]/g,'');
-  if(/^09\d{8}$/.test(d) || /^0[2-8]\d{7,8}$/.test(d)) return d;
-  return '';
+  return /^09\d{8}$/.test(d) ? d : '';
 }
 /* 驗證規則同 GAS validateRequest_。回傳 { ok, msg, field } */
 function validateForm(d){
@@ -192,7 +192,7 @@ function validateForm(d){
   if(FLOORS.indexOf(floor) < 0) return { ok:false, field:'f-floor', msg:'請選擇樓層' };
   if(shop.length < 1 || shop.length > 40) return { ok:false, field:'f-shop', msg:'請填寫專櫃或廠商名稱（40 字以內）' };
   if(name.length < 1 || name.length > 20) return { ok:false, field:'f-name', msg:'請填寫姓名（20 字以內）' };
-  if(!normPhone(d.phone)) return { ok:false, field:'f-phone', msg:'電話格式不對（手機 09 開頭共 10 碼，或市話含區碼）' };
+  if(!normPhone(d.phone)) return { ok:false, field:'f-phone', msg:'手機號碼格式不對（需 09 開頭共 10 碼，例：0912345678）' };
   return { ok:true, v:{ floor:floor, shop:shop, name:name, phone:normPhone(d.phone) } };
 }
 /* 把 300~600 每張證對上「目前占用中的紀錄」。state：free 未借出／pend 待領證／out 已借出／over 逾期未還／off 停用 */
@@ -371,10 +371,12 @@ function renderForm(){
     '<div class="fld"><label>樓層 <b>*</b></label><select id="f-floor">' + opts + '</select></div>' +
     '<div class="fld"><label>專櫃或廠商名稱 <b>*</b></label><input type="text" id="f-shop" maxlength="40" autocomplete="organization" value="' + esc(pf.shop||'') + '"></div>' +
     '<div class="fld"><label>姓名 <b>*</b></label><input type="text" id="f-name" maxlength="20" autocomplete="name" value="' + esc(pf.name||'') + '"></div>' +
-    '<div class="fld"><label>電話 <b>*</b></label><input type="tel" id="f-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="例：0912345678" value="' + esc(pf.phone||'') + '"></div>' +
+    '<div class="fld"><label>電話 <b>*</b></label><input type="tel" id="f-phone" maxlength="14" inputmode="numeric" autocomplete="tel" placeholder="手機號碼，例：0912345678" oninput="phoneHint()" value="' + esc(pf.phone||'') + '">' +
+    '<div class="hint" id="f-phone-hint" style="text-align:left"></div></div>' +
     '<button class="btn" id="f-submit" onclick="submitForm()">送出申請</button>' +
     (has ? '<div class="hint" style="margin-top:12px">已帶入這支手機上次填的資料　<a href="#" id="f-clear" onclick="clearProfile();return false" style="color:var(--gold2)">不是我？清除</a></div>' : '') +
     '</div>';
+  phoneHint();
 }
 async function submitForm(){
   ['f-floor','f-shop','f-name','f-phone'].forEach(function(i){ $(i).classList.remove('bad'); });
@@ -444,6 +446,15 @@ function drawResult(){
     (dead ? '<button class="btn" style="margin-top:14px" onclick="newApply()">重新申請</button>' : '') +
     '</div>';
   drawClock();
+}
+/* 電話欄即時提示：有輸入但格式還不對 → 紅字；格式正確 → 綠字；空白 → 灰字說明 */
+function phoneHint(){
+  var i = $('f-phone'), t = $('f-phone-hint'); if(!i || !t) return;
+  var v = i.value.trim();
+  i.classList.remove('bad');
+  if(!v){ t.style.color = ''; t.textContent = '請輸入手機號碼（09 開頭共 10 碼）'; }
+  else if(normPhone(v)){ t.style.color = 'var(--success)'; t.textContent = '✓ 手機號碼格式正確'; }
+  else { t.style.color = 'var(--danger)'; t.textContent = '手機號碼需為 09 開頭共 10 碼，目前 ' + v.replace(/[\s\-()（）]/g,'').length + ' 碼'; }
 }
 function newApply(){
   stopResult(); lsSet(MY_TOKEN_KEY, '');
@@ -646,7 +657,7 @@ function updateToTop(){
 window.addEventListener('scroll', updateToTop, { passive:true });
 
 /* onclick 用到的函式一律明確掛到 window（包在 if 區塊內的 async function 不會自動變全域，onclick 會靜默失敗） */
-window.scrollToTop = scrollToTop; window.submitForm = submitForm; window.clearProfile = clearProfile; window.newApply = newApply; window.showQr = showQr; window.printPoster = printPoster;
+window.scrollToTop = scrollToTop; window.phoneHint = phoneHint; window.submitForm = submitForm; window.clearProfile = clearProfile; window.newApply = newApply; window.showQr = showQr; window.printPoster = printPoster;
 window.closeModal = closeModal; window.loadAll = loadAll; window.setFilter = setFilter; window.renderList = renderList;
 window.doIssue = doIssue; window.doReturn = doReturn; window.doCancel = doCancel; window.doDisable = doDisable;
 window.openHistory = openHistory; window.runHistory = runHistory; window.exportXlsx = exportXlsx;

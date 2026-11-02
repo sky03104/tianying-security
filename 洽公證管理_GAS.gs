@@ -234,11 +234,11 @@ function safeText_(s) {
   if (/^[=+\-@]/.test(t)) t = "'" + t;
   return t;
 }
-/** 電話正規化：去空白/連字號/括號。手機 09xxxxxxxx 或市話 0[2-8]xxxxxxx(x)；不合法回 '' */
+/** 電話正規化：去空白/連字號/括號後必須是台灣手機 09xxxxxxxx（共 10 碼）；不合法回 ''。
+ *  ⚠️ 規則必須跟 tool_visitor.html 的 normPhone 一模一樣。（2026-11-02 咖哩指定只收手機，不再收市話） */
 function normPhone_(s) {
   var d = String(s == null ? '' : s).replace(/[\s\-()（）]/g, '');
-  if (/^09\d{8}$/.test(d) || /^0[2-8]\d{7,8}$/.test(d)) return d;
-  return '';
+  return /^09\d{8}$/.test(d) ? d : '';
 }
 /** 搜尋/比對用正規化：去空白＋轉大寫，跟前端 正規化 同規則 */
 function normKey_(s) { return String(s == null ? '' : s).replace(/\s+/g, '').toUpperCase(); }
@@ -253,7 +253,7 @@ function validateRequest_(d) {
   if (FLOORS.indexOf(floor) < 0) return { ok: false, msg: '請選擇樓層' };
   if (shop.length < 1 || shop.length > 40) return { ok: false, msg: '請填寫專櫃或廠商名稱（40 字以內）' };
   if (name.length < 1 || name.length > 20) return { ok: false, msg: '請填寫姓名（20 字以內）' };
-  if (!phone) return { ok: false, msg: '電話格式不對（手機 09 開頭共 10 碼，或市話含區碼）' };
+  if (!phone) return { ok: false, msg: '手機號碼格式不對（需 09 開頭共 10 碼，例：0912345678）' };
   return { ok: true, v: { floor: floor, shop: shop, name: name, phone: phone } };
 }
 
