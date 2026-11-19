@@ -134,7 +134,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '74.42';
+const APP_VERSION = '75.43';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -170,8 +170,14 @@ function 月請假天數_(taken, newDates, ym) {
     banner.onclick = function(){ location.reload(); };
     document.body.appendChild(banner);
   }
+  // 2026-11-19 效能：每次檢查都要下載整份 index.html（約 116KB 壓縮後），
+  // 原本每次切回 APP 都會再抓一次、沒有節流 → 距上次檢查未滿 5 分鐘就跳過。
+  var lastCheck = 0, MIN_GAP = 5 * 60 * 1000;
   function check(){
-    fetch('./index.html?_=' + Date.now(), { cache: 'no-store' })
+    var now = Date.now();
+    if (now - lastCheck < MIN_GAP) return;
+    lastCheck = now;
+    fetch('./index.html?_=' + now, { cache: 'no-store' })
       .then(function(r){ return r.text(); })
       .then(function(txt){
         var m = txt.match(/const APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
@@ -184,7 +190,7 @@ function 月請假天數_(taken, newDates, ym) {
   } else {
     check();
   }
-  setInterval(check, 5 * 60 * 1000); // 每5分鐘檢查一次
+  setInterval(check, MIN_GAP + 1000); // 每5分鐘檢查一次（多 1 秒避免剛好卡在節流邊界被跳過）
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState === 'visible') check();
   });
