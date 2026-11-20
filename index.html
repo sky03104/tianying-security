@@ -134,7 +134,7 @@ const REPORT_GAS_URL      = 'https://script.google.com/macros/s/AKfycbwHXlwTMmJy
 // 任何工具（index.html或任一tool_*.html）的前端有改動 → 整數+1；
 // 任何工具的後端（內嵌GAS_CODE或獨立.gs檔）有改動 → 小數+1。
 // 純視覺標示，方便比對現場看到的是不是最新版本，改完任何工具記得同步更新這裡。
-const APP_VERSION = '75.43';
+const APP_VERSION = '76.43';
 
 /* ── 每人每月請假天數上限（2026-10-02 新增）──
    全部假別合計；待審核＋已核准都算、已拒絕不算；同一天重複申請只算一次。
@@ -4850,8 +4850,8 @@ function App() {
                                     ? `${fmtLeaveDate(req.startDate)} ～ ${fmtLeaveDate(req.endDate)}（${req.days} 天）`
                                     : `${fmtLeaveDate(req.startDate)}（${req.days || 1} 天）`,
                                 req.dept),
-                            req.dates && req.dates.length > 1 && (React.createElement("div", { style: { fontSize: 11, color: 'var(--muted2)', marginBottom: 6,
-                                    background: 'rgba(255,255,255,.03)', padding: '4px 8px', borderRadius: 6 } },
+                            req.dates && req.dates.length > 1 && (React.createElement("div", { style: { fontSize: 13, fontWeight: 600, color: '#FFD700', marginBottom: 6,
+                                    background: 'rgba(255,215,0,.08)', padding: '5px 8px', borderRadius: 6 } },
                                 "\u8A73\u7D30\u65E5\u671F\uFF1A",
                                 req.dates.map(fmtLeaveDate).join('、'))),
                             req.reason && (React.createElement("div", { style: { fontSize: 12, color: 'var(--muted)',
