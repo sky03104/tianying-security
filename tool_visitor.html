@@ -398,16 +398,33 @@ async function submitForm(){
 }
 
 /* ───────────── 完成畫面（即時狀態，防舊截圖冒用） ───────────── */
-var R = { token:'', rec:null, offset:0, poll:null, tick:null };
-function stopResult(){ clearInterval(R.poll); clearInterval(R.tick); R.poll = R.tick = null; }
+var R = { token:'', rec:null, offset:0, poll:null, tick:null, live:false };
+/* 2026-11-19 效能：原本固定每 5 秒查一次，狀態已失效、切到背景都照查不停（廠商不關分頁就一直打 GAS）。
+   改成：①已繳回／已取消／已逾時／查無資料 → 停止查詢（畫面已變灰，不會再變回有效）
+        ②已借出（可能掛好幾小時）→ 每 30 秒；待領證／讀取中 → 每 5 秒（保全就在面前確認，要即時）
+        ③畫面在背景不查，切回前景立刻查一次 */
+function resultDead_(r){ return !!r && (r.gone || ['已繳回','已取消','已逾時'].indexOf(r.status) >= 0); }
+function resultDelay_(r){ return (r && r.status === '已借出') ? 30000 : 5000; }
+function stopResult(){ clearTimeout(R.poll); clearInterval(R.tick); R.poll = R.tick = null; R.live = false; }
+function schedulePoll_(){
+  clearTimeout(R.poll); R.poll = null;
+  if(!R.live || resultDead_(R.rec)) return;
+  R.poll = setTimeout(function(){
+    R.poll = null;
+    if(document.hidden) return;   // 背景不查，等 visibilitychange 再接上
+    pollResult();
+  }, resultDelay_(R.rec));
+}
 function startResult(token, rec){
-  stopResult(); R.token = token; R.rec = rec || null;
+  stopResult(); R.token = token; R.rec = rec || null; R.live = true;
   if(rec && rec.now) R.offset = rec.now - Date.now();
   drawResult();
   R.tick = setInterval(drawClock, 1000);
-  R.poll = setInterval(pollResult, 5000);
-  if(!rec) pollResult();
+  if(!rec) pollResult(); else schedulePoll_();
 }
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && R.live && !R.poll && !resultDead_(R.rec)) pollResult();
+});
 function drawClock(){
   var el = $('clock'); if(!el) return;
   el.textContent = new Intl.DateTimeFormat('zh-TW',{ timeZone:'Asia/Taipei', hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' })
@@ -421,6 +438,7 @@ async function pollResult(){
     else R.rec = d.rec;
     drawResult();
   } catch(e){ /* 暫時連不上就維持原畫面，下一輪再試 */ }
+  schedulePoll_();
 }
 function drawResult(){
   var r = R.rec;
@@ -495,8 +513,14 @@ function renderHome(){
   $('app').innerHTML = html;
   loadAll(false);
   clearInterval(S.timer);
-  S.timer = setInterval(function(){ if(!document.hidden && !$('modal').innerHTML) loadAll(false); }, 5000);
+  // 2026-11-19 效能：5 秒 → 20 秒（多台手機同時開著會把 GAS 執行額度吃光、拖慢全站）。
+  // 發證／繳回／取消等操作完成後本來就會立刻 loadAll，不影響操作後的即時性；切回前景也會立刻更新一次。
+  S.timer = setInterval(function(){ if(!document.hidden && !$('modal').innerHTML) loadAll(false); }, 20000);
 }
+// 管理畫面切回前景時立刻更新（輪詢間隔拉長到 20 秒後，避免回來看到舊資料）
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && S.timer && $('statsBox') && !$('modal').innerHTML) loadAll(false);
+});
 async function loadAll(manual){
   if(S.fetching || !loggedIn()) return;
   S.fetching = true;

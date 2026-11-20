@@ -464,22 +464,63 @@ function normDate_(val) {
   return String(val == null ? '' : val).trim();
 }
 
+// 請假日期欄（F 欄）→ ['yyyy-MM-dd', ...]
+function leaveDatesOf_(datesRaw) {
+  if (datesRaw instanceof Date) return [normDate_(datesRaw)];
+  return String(datesRaw == null ? '' : datesRaw).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+}
+
+// 2026-11-19 效能：請假紀錄只增不減，原本每次登入（bootstrap）都整張讀出來回傳全部歷史。
+// 改成只回「上個月 1 號以後還有請假日期」或「仍待審核」的紀錄，更早的不讀。
+//   ・上個月也留著：月初上傳／補傳上個月班表時，tool_upload 要比對上個月的已核准請假
+//   ・待審核不論多舊都留著，免得主管漏審
+//   ・人數上限／每月上限只看本月以後的日期，不受影響
+// 做法：先只讀 F（日期）、K（狀態）兩個窄欄找出第一筆要留的列，再從那列往下讀整列，
+// 前面那一大段舊資料的整列內容完全不讀。
+function leaveCutoff_() {
+  var now = new Date();
+  var y = Number(Utilities.formatDate(now, 'Asia/Taipei', 'yyyy'));
+  var m = Number(Utilities.formatDate(now, 'Asia/Taipei', 'M')) - 1;  // 上個月
+  if (m < 1) { m = 12; y--; }
+  return y + '-' + (m < 10 ? '0' : '') + m + '-01';
+}
+function leaveRowWanted_(datesRaw, endRaw, status, cutoff) {
+  if (String(status) === 'pending') return true;
+  var ds = leaveDatesOf_(datesRaw);
+  var end = normDate_(endRaw);
+  if (end) ds.push(end);
+  for (var i = 0; i < ds.length; i++) if (ds[i] >= cutoff) return true;
+  return false;
+}
+
 function getLeaveRequests() {
   try {
     var sh = getLeaveSheet();
     var shiftIdx = colIndexByName_(sh, '班別');  // 班別欄索引（容錯順序）
-    var data = sh.getDataRange().getValues();
+    var last = sh.getLastRow();
     var list = [];
-    for (var r = 1; r < data.length; r++) {
+    if (last < 2) return jsonRes({status:'ok', list:list});
+    var cutoff = leaveCutoff_();
+    var n = last - 1;
+    var colF = sh.getRange(2, 6, n, 1).getValues();   // 請假日期
+    var colH = sh.getRange(2, 8, n, 1).getValues();   // 結束日期
+    var colK = sh.getRange(2, 11, n, 1).getValues();  // 狀態
+    // first：第一筆「日期落在 cutoff 之後」的列，從這裡往下整段讀；
+    // 它前面的舊列只有「仍待審核」的才個別讀（通常 0～幾筆），不會因為一筆很舊的待審把整張表拖回來讀
+    var first = n, stragglers = [];
+    for (var i = 0; i < n; i++) {
+      if (leaveRowWanted_(colF[i][0], colH[i][0], '', cutoff)) { first = i; break; }
+      if (String(colK[i][0]) === 'pending') stragglers.push(i);
+    }
+    var width = Math.max(sh.getLastColumn(), 12, shiftIdx + 1);
+    var data = [];
+    stragglers.forEach(function (i) { data.push(sh.getRange(i + 2, 1, 1, width).getValues()[0]); });
+    if (first < n) data = data.concat(sh.getRange(first + 2, 1, n - first, width).getValues());
+    for (var r = 0; r < data.length; r++) {
       if (!data[r][0]) continue;
+      if (!leaveRowWanted_(data[r][5], data[r][7], data[r][10], cutoff)) continue;
 
-      var datesRaw = data[r][5];
-      var dates;
-      if (datesRaw instanceof Date) {
-        dates = [normDate_(datesRaw)];
-      } else {
-        dates = String(datesRaw == null ? '' : datesRaw).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-      }
+      var dates = leaveDatesOf_(data[r][5]);
 
       // 班別：只信任明確的「早班」/「晚班」，讀不到欄位或空值回空字串（未知），
       // 不准悄悄當晚班——空字串由前端排除在早/晚班人數統計之外
