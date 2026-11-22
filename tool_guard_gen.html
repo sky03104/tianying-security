@@ -973,7 +973,7 @@ function localDateStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-function GenerateTab({ postConfig }) {
+function GenerateTab({ postConfig, cfgReady }) {
   const [dateStr, setDateStr] = useState(localDateStr(new Date()));
   const [southGate, setSouthGate] = useState(false);
   const [patrolExtra, setPatrolExtra] = useState(false);
@@ -1155,6 +1155,7 @@ function GenerateTab({ postConfig }) {
   }
 
   async function handleGenerate() {
+    if (!checkCfgReady()) return;
     setBusy(true);
     setResult(null);
     try {
@@ -1225,6 +1226,16 @@ function GenerateTab({ postConfig }) {
   const weekLabel = weekRangeLabel(weekDates);
   const weekKey = weekDates.map(localDateStr).join(',');
 
+  // 2026-11-22 修正：哨點設定還沒讀完就按，會用空設定排出「一般崗位全空」的結果，
+  // 而且那批結果被快取，之後再按還是空的（咖哩回報下載的哨表只有帶隊/漢來/海底撈有人）。
+  // ①設定沒讀完前按鈕不能按 ②設定一變動就丟掉舊快取 ③設定是空的直接擋下
+  useEffect(() => { setWeekly(null); }, [postConfig]);
+  function checkCfgReady() {
+    if (!cfgReady) { showToast('哨點設定還在讀取中，請稍候再按', 'err'); return false; }
+    if (!Object.keys(postConfig || {}).length) { showToast('讀不到哨點設定（沒有任何人勾選適任哨點），無法自動排哨', 'err'); return false; }
+    return true;
+  }
+
   async function ensureWeekly() {
     if (weekly && weekly.key === weekKey) return weekly;
     setWeeklyBusy('gen');
@@ -1240,7 +1251,7 @@ function GenerateTab({ postConfig }) {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   async function handleWeeklyDownload() {
-    if (weeklyBusy) return;
+    if (weeklyBusy || !checkCfgReady()) return;
     try {
       const w = await ensureWeekly();
       setWeeklyBusy('dl');
@@ -1258,7 +1269,7 @@ function GenerateTab({ postConfig }) {
   }
 
   async function handleWeeklyUpload() {
-    if (weeklyBusy) return;
+    if (weeklyBusy || !checkCfgReady()) return;
     let w;
     try { w = await ensureWeekly(); } catch (e) { showToast('產生失敗：' + e.message, 'err'); setWeeklyBusy(''); return; }
     const todo = w.days.filter(x => !x.missing);
@@ -1298,9 +1309,9 @@ function GenerateTab({ postConfig }) {
         '從今天排到本週六，一天一個檔。增派依月班表代號自動勾選；帶隊幹部早班優先' + WEEKLY_LEADER_PREF.early + '、晚班優先' + WEEKLY_LEADER_PREF.late
         + '；泊車增派、見習人員、自訂哨點留空。該月班表還沒上傳的日子整天留空。下載和上傳用的是同一批結果。'),
       h('div', { className: 'row' },
-        h('button', { className: 'btn btn-primary', onClick: handleWeeklyDownload, disabled: !!weeklyBusy },
-          h('i', { className: 'ti ti-download' }), weeklyBusy === 'dl' || weeklyBusy === 'gen' ? busyText : '一鍵下載本週哨表（' + weekLabel + '）'),
-        h('button', { className: 'btn btn-indigo', onClick: handleWeeklyUpload, disabled: !!weeklyBusy },
+        h('button', { className: 'btn btn-primary', onClick: handleWeeklyDownload, disabled: !!weeklyBusy || !cfgReady },
+          h('i', { className: 'ti ti-download' }), !cfgReady ? '讀取哨點設定中…' : (weeklyBusy === 'dl' || weeklyBusy === 'gen' ? busyText : '一鍵下載本週哨表（' + weekLabel + '）')),
+        h('button', { className: 'btn btn-indigo', onClick: handleWeeklyUpload, disabled: !!weeklyBusy || !cfgReady },
           h('i', { className: 'ti ti-cloud-upload' }), weeklyBusy === 'up' ? busyText : '一鍵上傳本週'),
         showing && h('button', { className: 'btn btn-ghost', onClick: () => setWeekly(null), disabled: !!weeklyBusy },
           h('i', { className: 'ti ti-refresh' }), '重新排')
@@ -1405,8 +1416,8 @@ function GenerateTab({ postConfig }) {
         h('div', { className: 'field' }, h('label', null, p.label + '姓名'),
           h('input', { type: 'text', value: (customPostState[p.id] && customPostState[p.id].name) || '', placeholder: '姓名', onChange: e => setCustomPostName(p.id, e.target.value) }))
       )),
-      h('button', { className: 'btn btn-primary', onClick: handleGenerate, disabled: busy },
-        h('i', { className: 'ti ti-wand' }), busy ? '產生中…' : '產生預覽')
+      h('button', { className: 'btn btn-primary', onClick: handleGenerate, disabled: busy || !cfgReady },
+        h('i', { className: 'ti ti-wand' }), !cfgReady ? '讀取哨點設定中…' : (busy ? '產生中…' : '產生預覽'))
     ),
     result && h('div', { className: 'card' },
       h('div', { className: 'card-title' }, h('i', { className: 'ti ti-table' }), '預覽：' + result.dateLabel),
@@ -1539,7 +1550,7 @@ function App() {
       h('button', { className: 'tab-btn' + (tab === 'gen' ? ' active' : ''), onClick: () => setTab('gen') }, h('i', { className: 'ti ti-table' }), ' 產生哨表'),
       h('button', { className: 'tab-btn' + (tab === 'cfg' ? ' active' : ''), onClick: () => setTab('cfg') }, h('i', { className: 'ti ti-map-pin' }), ' 哨點設定')
     ),
-    tab === 'gen' ? h(GenerateTab, { postConfig }) : h(PostConfigTab, {
+    tab === 'gen' ? h(GenerateTab, { postConfig, cfgReady: !loadingCfg && !loadError }) : h(PostConfigTab, {
       postConfig, setPostConfig, employees, loading: loadingCfg, onSave: handleSaveConfig, saving, loadError
     })
   );
