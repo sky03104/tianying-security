@@ -129,6 +129,15 @@ function getDaysInMonth_(year, month) {
 // 當日在職名單（排除休假代號），供哨表自動分配使用
 // 讀取邏輯照抄 天鷹保全APP_後端_GAS.gs 的 readEmployeeShiftsFromSheet_：
 //   姓名在 data[r][1]，班別代號在 data[r][2+day-1]
+//
+// 2026-11-22 跨月修正：原本只看「幾號」、永遠讀線上班表，查下個月的日期會
+// 拿到「這個月同一號」的代號，整份排錯人卻不會有任何提示。改成依 Z1 的月份
+// 標記（班表管理 GAS 寫入，格式 yyyy/MM）找對應月份：
+//   ① 線上班表就是那個月 → 讀線上
+//   ② 否則找「{分頁名}_待生效」，月份對得上 → 讀待生效
+//   ③ 都對不上 → 該班回傳空名單，data.missing=true，前端整天留空
+// 例外：線上班表 Z1 是空的（還沒被新版班表管理寫過），且查的是本月 → 沿用線上（維持舊行為）
+// 回應多帶 ymChecked:true，讓前端分辨「新版 GAS 已檢查過月份」還是「舊版沒檢查」。
 // ============================
 function getMonthlyRoster(year, month, day) {
   year = parseInt(year); month = parseInt(month); day = parseInt(day);
@@ -136,12 +145,15 @@ function getMonthlyRoster(year, month, day) {
   var maxDay = getDaysInMonth_(year, month);
   if (day < 1 || day > maxDay) throw new Error('日期超出範圍：' + year + '年' + month + '月只有' + maxDay + '天');
 
-  var result = { early: [], late: [] };
+  var ym = year + '/' + (month < 10 ? '0' + month : String(month));
+  var result = { early: [], late: [], missing: false, missingShifts: [], sources: {} };
   ['early', 'late'].forEach(function (key) {
     var cfg = SCHEDULE_SHEETS_[key];
     var ss = SpreadsheetApp.openById(cfg.id);
-    var sh = ss.getSheetByName(cfg.sheetName) || ss.getSheets()[0];
-    var data = sh.getDataRange().getValues();
+    var picked = pickRosterSheet_(ss, cfg.sheetName, ym);
+    if (!picked) { result.missingShifts.push(key); return; }
+    result.sources[key] = picked.source;
+    var data = picked.sheet.getDataRange().getValues();
     var colIdx = 2 + day - 1; // data[r][2+day-1]
     for (var r = 0; r < data.length; r++) {
       var name = String(data[r][1] || '').trim();
@@ -151,14 +163,39 @@ function getMonthlyRoster(year, month, day) {
       result[key].push({ name: name, code: code });
     }
   });
+  // 咖哩 2026-11-22 決定：只要有一班找不到該月班表，整天都留空（不產生半份哨表）
+  if (result.missingShifts.length) {
+    result.missing = true;
+    result.early = [];
+    result.late = [];
+  }
 
   var weekdayIdx = new Date(year, month - 1, day).getDay();
   return {
     status: 'ok',
-    msg: '',
+    msg: result.missing ? (month + '月班表尚未上傳（線上與待生效都不是' + month + '月）' ) : '',
     data: result,
+    ymChecked: true,
     weekday: WEEKDAY_ZH_[weekdayIdx]
   };
+}
+
+// 依月份挑分頁：線上 → 待生效 → 找不到回傳 null
+function pickRosterSheet_(ss, sheetName, ym) {
+  var live = ss.getSheetByName(sheetName) || ss.getSheets()[0];
+  var liveYm = sheetYm_(live);
+  if (liveYm === ym) return { sheet: live, source: 'live' };
+  var staging = ss.getSheetByName(sheetName + '_待生效');
+  if (staging && sheetYm_(staging) === ym) return { sheet: staging, source: 'staging' };
+  if (!liveYm && ym === Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM')) return { sheet: live, source: 'live' };
+  return null;
+}
+
+// 讀 Z1 月份標記，統一成 yyyy/MM（若被試算表自動轉成日期也能讀）
+function sheetYm_(sh) {
+  var v = sh.getRange('Z1').getValue();
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy/MM');
+  return String(v || '').trim();
 }
 
 // ============================
