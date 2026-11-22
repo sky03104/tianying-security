@@ -250,6 +250,17 @@ function buildBaseRows() {
   return rows;
 }
 
+// 第1列日期標題（buildGuardMatrix 與「一鍵本週」的留空哨表共用，版型只有一處）
+function fillDateHeader(rows, year, month, day, weekdayIdx) {
+  rows[0][0] = String(year - 1911) + '年';
+  rows[0][3] = String(month);
+  rows[0][4] = '月'; // 原本漏寫，2026-07-20咖哩比對真實範本才發現E1「月」跟G1「日 星期」不見了
+  rows[0][5] = String(day);
+  rows[0][6] = '日  星期';
+  rows[0][7] = WEEKDAY_ZH[weekdayIdx] || '';
+  rows[0][8] = '天鷹保全駐漢神巨蛋商場、外圍每日執勤人員名單';
+}
+
 /* ══════════════════════ 核心：18×14 值陣列產生邏輯（純函式，不碰 DOM，可獨立測試） ══════════════════════ */
 function shuffle(arr) {
   const a = arr.slice();
@@ -268,13 +279,7 @@ function buildGuardMatrix(opts) {
   const warnings = [];
   const forcedWarnings = [];
 
-  rows[0][0] = String(year - 1911) + '年';
-  rows[0][3] = String(month);
-  rows[0][4] = '月'; // 原本漏寫，2026-07-20咖哩比對真實範本才發現E1「月」跟G1「日 星期」不見了
-  rows[0][5] = String(day);
-  rows[0][6] = '日  星期';
-  rows[0][7] = WEEKDAY_ZH[weekdayIdx] || '';
-  rows[0][8] = '天鷹保全駐漢神巨蛋商場、外圍每日執勤人員名單';
+  fillDateHeader(rows, year, month, day, weekdayIdx);
 
   // 帶隊幹部（下拉選單挑人，但選單只依哨點設定資格列人，沒對照當天月班表——
   // 這裡補查：選定的人當天若不在早/晚班在職名單裡，還是照填，但要跳出強制警告，
@@ -573,6 +578,92 @@ function buildGuardMatrix(opts) {
 // 供瀏覽器 console / node 測試使用
 try { window.buildGuardMatrix = buildGuardMatrix; window.POST_DEFS = POST_DEFS; } catch (e) {}
 try { if (typeof module !== 'undefined') module.exports = { buildGuardMatrix, POST_DEFS, POST_KEYS, buildBaseRows }; } catch (e) {}
+
+/* ══════════════════════ 一鍵本週哨表（2026-11-22 咖哩需求）══════════════════════
+   ・範圍：從「今天」到本週六（週日按＝日～六、週二按＝二～六、週五按＝五～六）
+   ・增派勾選依當天月班表代號自動判斷（規則跟 buildGuardMatrix 的強制警告同一套）
+   ・泊車增派／見習人員／自訂哨點屬人工決定，一鍵模式一律留空（咖哩決定）
+   ・帶隊幹部自動挑：早班優先謝志遠、晚班優先潘伯威；當天沒上班或有專職代號，
+     改從哨點設定標記過帶班資格的人裡依優先序挑；都沒有就留空並提醒
+   ・該月班表線上與待生效都找不到 → 整天留空（咖哩決定，不拿別月資料頂替）
+════════════════════════════════════════════════════════════════════ */
+const WEEKLY_LEADER_PREF = { early: '謝志遠', late: '潘伯威' };
+// 這些代號當天有專職哨位，不適合再當帶隊幹部（避免同一人填兩處）
+const LEADER_SKIP_CODES = ['H', 'H2', '南', '海', 'L', 'LN', 'N', 'C', 'D', 'E'];
+
+// 今天～本週六的日期清單（本地時間，台灣裝置＝台北時間）
+function weekDatesFrom(today) {
+  const out = [];
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const n = 7 - d.getDay();
+  for (let i = 0; i < n; i++) {
+    out.push(new Date(d.getFullYear(), d.getMonth(), d.getDate() + i));
+  }
+  return out;
+}
+function shortMD(d) { return (d.getMonth() + 1) + '/' + d.getDate(); }
+function weekRangeLabel(dates) {
+  if (!dates.length) return '';
+  const a = shortMD(dates[0]), b = shortMD(dates[dates.length - 1]);
+  return a === b ? a : a + '～' + b;
+}
+
+// 依月班表代號決定增派勾選：南→南側門、L/LN→巡檢增派、LN/N（早班）或 C/E（早晚班）→停巡增派、D→外哨增派
+function autoExtraOptions(earlyRoster, lateRoster) {
+  const earlyCodes = earlyRoster.map(p => p.code);
+  const allCodes = earlyRoster.concat(lateRoster).map(p => p.code);
+  return {
+    southGate: earlyCodes.indexOf('南') >= 0,
+    patrolExtra: earlyCodes.some(c => c === 'L' || c === 'LN'),
+    stopPatrolExtra: earlyCodes.some(c => c === 'LN' || c === 'N') || allCodes.some(c => c === 'C' || c === 'E'),
+    outerExtra: allCodes.indexOf('D') >= 0
+  };
+}
+
+// 回傳 { name, note }：note 是要放進「需要注意」的說明（優先人選沒上班時講清楚改帶誰）
+function pickAutoLeader(roster, postConfig, shift) {
+  const usable = p => p && LEADER_SKIP_CODES.indexOf(p.code) < 0 && String(p.code || '').indexOf('見') < 0;
+  const shiftZh = shift === 'early' ? '早班' : '晚班';
+  const pref = WEEKLY_LEADER_PREF[shift];
+  const prefP = roster.find(p => p.name === pref);
+  if (usable(prefP)) return { name: pref, note: '' };
+  const key = LEADER_KEYS[shift];
+  const rank = p => { const v = priorityFor(postConfig[p.name], key); return v == null ? Infinity : v; };
+  const cands = roster.filter(p => usable(p) && hasQual(postConfig[p.name], key))
+    .sort((a, b) => (rank(a) - rank(b)) || a.name.localeCompare(b.name, 'zh-Hant'));
+  const why = prefP ? pref + '當天是 ' + prefP.code + ' 班（專職哨位）' : pref + '當天沒有' + shiftZh + '排班';
+  if (cands.length) return { name: cands[0].name, note: shiftZh + '帶隊幹部：' + why + '，自動改帶「' + cands[0].name + '」' };
+  return { name: '', note: shiftZh + '帶隊幹部：' + why + '，哨點設定裡也沒有其他當天有上班的帶班人選，留空需手動填' };
+}
+
+// 產生單日結果。rosterRes＝getMonthlyRoster 回應；currentYm＝今天的 'yyyy-M'（舊版 GAS 相容判斷用）
+function buildWeeklyDay(date, rosterRes, postConfig, currentYm) {
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate(), wd = date.getDay();
+  const base = { year: y, month: m, day: d, weekday: WEEKDAY_ZH[wd],
+    dateLabel: y + '/' + String(m).padStart(2, '0') + '/' + String(d).padStart(2, '0') + ' 星期' + WEEKDAY_ZH[wd] };
+  const blank = (why) => {
+    const rows = buildBaseRows();
+    fillDateHeader(rows, y, m, d, wd);
+    return Object.assign(base, { rows, warnings: [], forcedWarnings: [why + '，本日哨表留空'], rosters: { early: [], late: [] }, missing: true });
+  };
+  if (!rosterRes || rosterRes.status !== 'ok') return blank('讀取月班表失敗：' + ((rosterRes && rosterRes.msg) || '未知錯誤'));
+  const data = rosterRes.data || {};
+  if (data.missing) return blank(rosterRes.msg || (m + '月班表尚未上傳'));
+  // 舊版 GAS 沒檢查月份：非本月的日期一律當作讀不到，寧可留空也不拿錯月份的代號排人
+  if (!rosterRes.ymChecked && (y + '-' + m) !== currentYm) return blank('排哨 GAS 尚未更新，無法確認 ' + m + ' 月班表');
+  const early = data.early || [], late = data.late || [];
+  const opts = autoExtraOptions(early, late);
+  const le = pickAutoLeader(early, postConfig, 'early');
+  const ll = pickAutoLeader(late, postConfig, 'late');
+  const r = buildGuardMatrix(Object.assign({
+    year: y, month: m, day: d, weekdayIdx: wd, earlyRoster: early, lateRoster: late, postConfig,
+    parkExtra: false, parkNames: ['', ''], manualExtraPosts: [], leaderEarly: le.name, leaderLate: ll.name
+  }, opts));
+  const notes = [le.note, ll.note].filter(Boolean);
+  return Object.assign(base, { rows: r.rows, warnings: notes.concat(r.warnings), forcedWarnings: r.forcedWarnings,
+    rosters: { early, late }, missing: false, opts, leaders: { early: le.name, late: ll.name } });
+}
+try { if (typeof module !== 'undefined') Object.assign(module.exports, { weekDatesFrom, weekRangeLabel, autoExtraOptions, pickAutoLeader, buildWeeklyDay, fillDateHeader }); } catch (e) {}
 
 /* ══════════════════════ xlsx 匯出：合併儲存格範圍（固定版型，每天都一樣） ══════════════════════ */
 const MERGE_RANGES = [
@@ -1070,6 +1161,8 @@ function GenerateTab({ postConfig }) {
       const [y, m, d] = dateStr.split('-').map(n => parseInt(n, 10));
       const r = await callGuardGas('getMonthlyRoster', { year: y, month: m, day: d });
       if (r.status !== 'ok') { showToast(r.msg || '讀取月班表失敗', 'err'); setBusy(false); return; }
+      // 2026-11-22：該月班表線上與待生效都找不到，不產生（原本會默默拿這個月同一號的代號排人）
+      if (r.data && r.data.missing) { showToast(r.msg || (m + '月班表尚未上傳'), 'err'); setBusy(false); return; }
       const weekdayIdx = new Date(y, m - 1, d).getDay();
       // 2026-08-04：見習人員（早/晚班）＋咖哩自訂的哨點，整理成同一份清單交給 buildGuardMatrix，
       // 之後再新增自訂哨點也不用改這裡的程式碼，跟著 customPostDefs 走就好。
@@ -1125,6 +1218,117 @@ function GenerateTab({ postConfig }) {
     else showToast(r.error || '上傳失敗', 'err');
   }
 
+  // ── 一鍵本週（2026-11-22）：下載與上傳共用同一批結果，避免兩次各自隨機導致檔案跟上傳內容不一樣 ──
+  const [weekly, setWeekly] = useState(null); // { key, days:[...], uploaded:{ [dateLabel]: '結果文字' } }
+  const [weeklyBusy, setWeeklyBusy] = useState('');  // ''｜'gen'｜'dl'｜'up'
+  const weekDates = weekDatesFrom(new Date());
+  const weekLabel = weekRangeLabel(weekDates);
+  const weekKey = weekDates.map(localDateStr).join(',');
+
+  async function ensureWeekly() {
+    if (weekly && weekly.key === weekKey) return weekly;
+    setWeeklyBusy('gen');
+    const today = new Date();
+    const currentYm = today.getFullYear() + '-' + (today.getMonth() + 1);
+    const resList = await Promise.all(weekDates.map(d =>
+      callGuardGas('getMonthlyRoster', { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() })));
+    const days = weekDates.map((d, i) => buildWeeklyDay(d, resList[i], postConfig, currentYm));
+    const w = { key: weekKey, days, uploaded: {} };
+    setWeekly(w);
+    return w;
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  async function handleWeeklyDownload() {
+    if (weeklyBusy) return;
+    try {
+      const w = await ensureWeekly();
+      setWeeklyBusy('dl');
+      // 一天一個檔（咖哩指定）；連續下載中間隔一下，瀏覽器才不會吃掉後面幾個
+      for (const day of w.days) {
+        await downloadXlsx(day.rows, day.dateLabel.split(' ')[0], day.rosters);
+        await sleep(700);
+      }
+      const blanks = w.days.filter(x => x.missing).length;
+      showToast('已下載 ' + w.days.length + ' 個檔案' + (blanks ? '（其中 ' + blanks + ' 天留空）' : ''), blanks ? 'err' : 'ok');
+    } catch (e) {
+      showToast('一鍵下載失敗：' + e.message, 'err');
+    }
+    setWeeklyBusy('');
+  }
+
+  async function handleWeeklyUpload() {
+    if (weeklyBusy) return;
+    let w;
+    try { w = await ensureWeekly(); } catch (e) { showToast('產生失敗：' + e.message, 'err'); setWeeklyBusy(''); return; }
+    const todo = w.days.filter(x => !x.missing);
+    const skipped = w.days.filter(x => x.missing);
+    if (!todo.length) { showToast('這幾天的月班表都讀不到，沒有可上傳的哨表', 'err'); setWeeklyBusy(''); return; }
+    const todayStr = localDateStr(new Date());
+    const hasToday = todo.some(x => localDateStr(new Date(x.year, x.month - 1, x.day)) === todayStr);
+    const msg = '即將上傳 ' + todo.length + ' 天哨表：\n' + todo.map(x => x.dateLabel).join('\n')
+      + (skipped.length ? '\n\n留空不上傳：' + skipped.map(x => x.dateLabel.split(' ')[0]).join('、') : '')
+      + (hasToday ? '\n\n⚠️ 包含今天：會覆蓋目前的「今日哨表」' : '')
+      + '\n明天以後已排好的哨表也會被這次的內容取代。要繼續嗎？';
+    if (!window.confirm(msg)) { setWeeklyBusy(''); return; }
+    setWeeklyBusy('up');
+    const uploaded = {};
+    let ok = 0;
+    // 逐天上傳（GAS 端有鎖，平行送只會排隊等）；寫到今日/明日/待生效由 GAS 依日期決定
+    for (const day of todo) {
+      const r = await fetch(GD_UPLOAD_GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'guardUpload', empId: EMP_ID, year: day.year, month: day.month, day: day.day, weekday: day.weekday, rows: day.rows })
+      }).then(x => x.json()).catch(e => ({ success: false, error: e.message }));
+      if (r.success) { ok++; uploaded[day.dateLabel] = { ok: true, text: r.targetSheet || '已上傳' }; }
+      else uploaded[day.dateLabel] = { ok: false, text: r.error || '上傳失敗' };
+      setWeekly(prev => prev && Object.assign({}, prev, { uploaded: Object.assign({}, prev.uploaded, uploaded) }));
+    }
+    setWeeklyBusy('');
+    showToast('上傳完成 ' + ok + '/' + todo.length + ' 天', ok === todo.length ? 'ok' : 'err');
+  }
+
+  function renderWeeklyCard() {
+    const busyText = { gen: '讀取班表中…', dl: '下載中…', up: '上傳中…' }[weeklyBusy];
+    const showing = weekly && weekly.key === weekKey ? weekly : null;
+    return h('div', { className: 'card' },
+      h('div', { className: 'card-title' }, h('i', { className: 'ti ti-calendar-week' }), '一鍵本週哨表（' + weekLabel + '）'),
+      h('div', { style: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '12px' } },
+        '從今天排到本週六，一天一個檔。增派依月班表代號自動勾選；帶隊幹部早班優先' + WEEKLY_LEADER_PREF.early + '、晚班優先' + WEEKLY_LEADER_PREF.late
+        + '；泊車增派、見習人員、自訂哨點留空。該月班表還沒上傳的日子整天留空。下載和上傳用的是同一批結果。'),
+      h('div', { className: 'row' },
+        h('button', { className: 'btn btn-primary', onClick: handleWeeklyDownload, disabled: !!weeklyBusy },
+          h('i', { className: 'ti ti-download' }), weeklyBusy === 'dl' || weeklyBusy === 'gen' ? busyText : '一鍵下載本週哨表（' + weekLabel + '）'),
+        h('button', { className: 'btn btn-indigo', onClick: handleWeeklyUpload, disabled: !!weeklyBusy },
+          h('i', { className: 'ti ti-cloud-upload' }), weeklyBusy === 'up' ? busyText : '一鍵上傳本週'),
+        showing && h('button', { className: 'btn btn-ghost', onClick: () => setWeekly(null), disabled: !!weeklyBusy },
+          h('i', { className: 'ti ti-refresh' }), '重新排')
+      ),
+      showing && h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+        showing.days.map(day => {
+          const up = showing.uploaded[day.dateLabel];
+          return h('div', { key: day.dateLabel, style: { border: '1px solid ' + (day.missing ? 'rgba(248,113,113,.5)' : 'var(--border)'), borderRadius: '10px', padding: '10px 12px' } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', fontSize: '14px', fontWeight: 700 } },
+              h('span', null, day.dateLabel),
+              h('span', { style: { color: day.missing ? 'var(--danger)' : 'var(--success)' } }, day.missing ? '留空' : '已排好')
+            ),
+            !day.missing && h('div', { style: { fontSize: '12.5px', color: 'var(--text-muted)', marginTop: '4px' } },
+              '帶隊：早 ' + (day.leaders.early || '（空）') + '／晚 ' + (day.leaders.late || '（空）')),
+            up && h('div', { style: { fontSize: '12.5px', marginTop: '4px', color: up.ok ? 'var(--success)' : 'var(--danger)' } },
+              (up.ok ? '✔ ' : '✘ ') + up.text),
+            day.forcedWarnings.length > 0 && h('ul', { style: { margin: '6px 0 0', paddingLeft: '18px', color: 'var(--danger)', fontSize: '12.5px', fontWeight: 600, lineHeight: 1.6 } },
+              day.forcedWarnings.map((x, i) => h('li', { key: i }, x))),
+            day.warnings.length > 0 && h('details', { style: { marginTop: '4px' } },
+              h('summary', { style: { fontSize: '12.5px', color: 'var(--warn)', cursor: 'pointer', padding: '4px 0' } }, '需要注意（' + day.warnings.length + '）'),
+              h('ul', { style: { margin: '4px 0 0', paddingLeft: '18px', fontSize: '12.5px', lineHeight: 1.6 } },
+                day.warnings.map((x, i) => h('li', { key: i }, x))))
+          );
+        })
+      )
+    );
+  }
+
   return h('div', null,
     toast && h(Toast, toast),
     picker && h('div', { className: 'picker-ovl', onClick: closePicker },
@@ -1139,6 +1343,7 @@ function GenerateTab({ postConfig }) {
         h('button', { className: 'picker-cancel', onClick: closePicker }, '取消')
       )
     ),
+    renderWeeklyCard(),
     h('div', { className: 'card' },
       h('div', { className: 'card-title' }, h('i', { className: 'ti ti-calendar' }), '日期與增派設定'),
       h('div', { className: 'row' },
