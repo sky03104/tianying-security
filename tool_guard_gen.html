@@ -274,7 +274,7 @@ function shuffle(arr) {
 function buildGuardMatrix(opts) {
   const { year, month, day, weekdayIdx, earlyRoster, lateRoster, postConfig,
     southGate, patrolExtra, parkExtra, stopPatrolExtra, outerExtra, parkNames,
-    manualExtraPosts, leaderEarly, leaderLate } = opts;
+    manualExtraPosts, leaderEarly, leaderLate, fillUnqualified } = opts;
   const rows = buildBaseRows();
   const warnings = [];
   const forcedWarnings = [];
@@ -405,6 +405,22 @@ function buildGuardMatrix(opts) {
     && !(def.forcedCodes && lateRoster.some(p => def.forcedCodes[p.code])));
   const earlyResult = assignByMaxMatching(activeEarlyDefs, earlyPoolBase);
   const lateResult = assignByMaxMatching(activeLateDefs, latePoolBase);
+  // ── 補滿模式（2026-11-22，一鍵本週用，咖哩：以填滿哨點為主）──
+  // 資格配對完還有空哨、同班又有沒分配到的人 → 依版面順序把剩下的人補進空哨，
+  // 並逐筆提醒「非適任人員暫排」，讓幹部知道哪些格子要再確認。單日模式不開，維持原行為。
+  const unqualifiedFills = [];
+  if (fillUnqualified) {
+    [{ res: earlyResult, defs: activeEarlyDefs }, { res: lateResult, defs: activeLateDefs }].forEach(({ res, defs }) => {
+      const order = defs.filter(d => res.failedKeys.indexOf(d.key) >= 0); // 依 POST_DEFS 版面順序
+      order.forEach(def => {
+        if (!res.leftover.length) return;
+        const p = res.leftover.shift();
+        res.postMatch[def.key] = p;
+        res.failedKeys.splice(res.failedKeys.indexOf(def.key), 1);
+        unqualifiedFills.push('「' + def.key + '」沒有適任人員可排，為補滿暫排「' + p.name + '」（哨點設定沒勾這個哨點），請確認');
+      });
+    });
+  }
   POST_DEFS.forEach(def => {
     if (def.conditional === 'southGate' && !southGate) return;
     if (def.conditional) rows[def.row][def.col - 1] = def.label; // 勾選當天才補上條件式標籤（例如南側門）
@@ -427,6 +443,7 @@ function buildGuardMatrix(opts) {
       }
     });
   });
+  unqualifiedFills.forEach(w => warnings.push(w));
   const earlyPool = earlyResult.leftover, latePool = lateResult.leftover;
   if (earlyPool.length) warnings.push('早班有排班但未分配到崗位：' + earlyPool.map(p => p.name).join('、'));
   if (latePool.length) warnings.push('晚班有排班但未分配到崗位：' + latePool.map(p => p.name).join('、'));
@@ -657,7 +674,8 @@ function buildWeeklyDay(date, rosterRes, postConfig, currentYm) {
   const ll = pickAutoLeader(late, postConfig, 'late');
   const r = buildGuardMatrix(Object.assign({
     year: y, month: m, day: d, weekdayIdx: wd, earlyRoster: early, lateRoster: late, postConfig,
-    parkExtra: false, parkNames: ['', ''], manualExtraPosts: [], leaderEarly: le.name, leaderLate: ll.name
+    parkExtra: false, parkNames: ['', ''], manualExtraPosts: [], leaderEarly: le.name, leaderLate: ll.name,
+    fillUnqualified: true
   }, opts));
   const notes = [le.note, ll.note].filter(Boolean);
   return Object.assign(base, { rows: r.rows, warnings: notes.concat(r.warnings), forcedWarnings: r.forcedWarnings,
