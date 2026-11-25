@@ -13,7 +13,7 @@
 //   5. 每天 22:00 另寄一封「今日巡檢總結」，沒收到總結＝巡檢本身壞了。
 //
 // 檢查時間點（台北時間）：
-//   06:00  打烊後（昨20:00~今06:00）、過夜車輛（同窗）
+//   06:00  打烊後、過夜機車（館內）、過夜汽車（館內）、過夜車輛（新莊；看「多久沒登記」）（窗口都是昨20:00~今06:00）
 //   08:00  物流車輛·晚班（昨20:00~今08:00）
 //   11:00  開店前（今06:00~11:00）
 //   20:00  物流車輛·早班（今08:00~20:00）
@@ -88,9 +88,22 @@ var PATROL_CHECKS = {
       return out;
     }
   },
-  overnight: {
-    label: '過夜車輛登記', deadline: '06:00', table: 'vehicle_overnight_logs',
-    select: 'created_at',
+  // 過夜車輛拆成三項（機車佔 82%，合在一起算會把汽車漏登記蓋掉；新莊停車場登記不是每晚都有，另外處理）
+  overnightMoto: {
+    label: '過夜機車（館內）', deadline: '06:00', table: 'vehicle_overnight_logs', typeLabel: '館內機車',
+    select: 'created_at,type_label',
+    windowFor: function (D) { return [patrolToMs_(patrolAddDays_(D, -1), '20:00'), patrolToMs_(D, '06:00')]; }
+  },
+  overnightCar: {
+    label: '過夜汽車（館內）', deadline: '06:00', table: 'vehicle_overnight_logs', typeLabel: '館內汽車',
+    select: 'created_at,type_label',
+    windowFor: function (D) { return [patrolToMs_(patrolAddDays_(D, -1), '20:00'), patrolToMs_(D, '06:00')]; }
+  },
+  // 新莊停車場：近幾個月每月只有 4~6 天有登記（不是每晚），「0 筆就報」會天天亮燈，
+  // 改看「多久沒登記」，超過設定天數才報注意（見 patrolEvaluateSparse_）
+  overnightXz: {
+    label: '過夜車輛（新莊）', deadline: '06:00', table: 'vehicle_overnight_logs', typeLabel: '新莊停車場', sparse: true,
+    select: 'created_at,type_label',
     windowFor: function (D) { return [patrolToMs_(patrolAddDays_(D, -1), '20:00'), patrolToMs_(D, '06:00')]; }
   },
   logiNight: {
@@ -119,8 +132,8 @@ var PATROL_CHECKS = {
 Object.keys(PATROL_CHECKS).forEach(function (k) { PATROL_CHECKS[k].key = k; });
 
 // 工具顯示用：預計檢查時間（觸發器時間，實際會在其後約 15 分鐘內執行）
-var PATROL_RUN_AT = { closing: '06:00', overnight: '06:00', logiNight: '08:00', opening: '11:00', logiDay: '20:00', construction: '22:00' };
-var PATROL_ORDER = ['closing', 'overnight', 'logiNight', 'opening', 'logiDay', 'construction'];
+var PATROL_RUN_AT = { closing: '06:00', overnightMoto: '06:00', overnightCar: '06:00', overnightXz: '06:00', logiNight: '08:00', opening: '11:00', logiDay: '20:00', construction: '22:00' };
+var PATROL_ORDER = ['closing', 'overnightMoto', 'overnightCar', 'overnightXz', 'logiNight', 'opening', 'logiDay', 'construction'];
 
 // ───────────────────────────────────────────────────────────────
 // 二之一、門檻設定（工具「設定」分頁可改；存在指令碼屬性 PATROL_CONFIG）
@@ -128,10 +141,11 @@ var PATROL_ORDER = ['closing', 'overnight', 'logiNight', 'opening', 'logiDay', '
 //   物流早/晚班 0.15（每天 5~119 筆起伏大）
 // ───────────────────────────────────────────────────────────────
 var PATROL_DEFAULT_CFG = {
-  lowRatio: { closing: 0.5, overnight: 0.25, logiNight: 0.15, opening: 0.5, logiDay: 0.15, construction: 0.5 },
+  lowRatio: { closing: 0.5, overnightMoto: 0.25, overnightCar: 0.25, overnightXz: 0.25, logiNight: 0.15, opening: 0.5, logiDay: 0.15, construction: 0.5 },
   minBaseline: PATROL_MIN_BASELINE,
   staleHours: PATROL_CONSTRUCTION_STALE_HOURS,
-  enabled: { closing: true, overnight: true, logiNight: true, opening: true, logiDay: true, construction: true }
+  sparseDays: 21,   // 新莊停車場超過幾天沒有任何登記才報「注意」
+  enabled: { closing: true, overnightMoto: true, overnightCar: true, overnightXz: true, logiNight: true, opening: true, logiDay: true, construction: true }
 };
 
 /** 把輸入整理成合法設定：非法值退回預設、數字夾在合理範圍（前端驗證只是方便，後端才是真的） */
@@ -140,10 +154,15 @@ function patrolSanitizeConfig_(c) {
   var out = { lowRatio: {}, enabled: {} };
   PATROL_ORDER.forEach(function (k) {
     var v = c.lowRatio ? Number(c.lowRatio[k]) : NaN;
+    // 舊版只有一項「overnight」（過夜車輛合併）：沿用它存過的門檻／開關當三項的起始值
+    if (!isFinite(v) && k.indexOf('overnight') === 0 && c.lowRatio) v = Number(c.lowRatio.overnight);
     out.lowRatio[k] = (isFinite(v) && v >= 0.05 && v <= 0.95) ? Math.round(v * 100) / 100 : PATROL_DEFAULT_CFG.lowRatio[k];
     var e = c.enabled ? c.enabled[k] : undefined;
+    if ((e === undefined || e === null) && k.indexOf('overnight') === 0 && c.enabled) e = c.enabled.overnight;
     out.enabled[k] = (e === undefined || e === null) ? PATROL_DEFAULT_CFG.enabled[k] : (e === true || e === 'true');
   });
+  var sd = Number(c.sparseDays);
+  out.sparseDays = (isFinite(sd) && sd >= 7 && sd <= 90) ? Math.round(sd) : PATROL_DEFAULT_CFG.sparseDays;
   var mb = Number(c.minBaseline);
   out.minBaseline = (isFinite(mb) && mb >= 1 && mb <= 50) ? Math.round(mb) : PATROL_DEFAULT_CFG.minBaseline;
   var sh = Number(c.staleHours);
@@ -213,6 +232,35 @@ function patrolEvaluate_(check, D, rows) {
     });
   }
   return { status: status, count: count, avg: base.avg, lines: lines };
+}
+
+/** 依檢查項目的類型標籤篩資料列（過夜車輛三項共用同一張表） */
+function patrolFilterRows_(check, rows) {
+  if (!check.typeLabel) return rows;
+  return rows.filter(function (r) { return r.type_label === check.typeLabel; });
+}
+
+/**
+ * 「不是每天都有」的項目判斷（純函式）：新莊停車場。
+ * p：{ sparseDays, lastMs（最近一次登記，null＝回溯範圍內完全沒有）, endMs（今天窗口結束）,
+ *      todayCount（今天窗口內的筆數）, daysWithData（近 30 天有幾天有登記）, lookbackDays, lastText }
+ */
+function patrolEvaluateSparse_(p) {
+  var status = 'GREEN', lines = [];
+  lines.push('昨晚到今晨登記 ' + p.todayCount + ' 台（這一項不是每晚都有登記，看「多久沒登記」）');
+  if (p.lastMs === null || p.lastMs === undefined) {
+    status = 'ORANGE';
+    lines.push('近 ' + p.lookbackDays + ' 天完全沒有登記紀錄');
+  } else {
+    var d = Math.max(0, Math.floor((p.endMs - p.lastMs) / 86400000));
+    if (d > p.sparseDays) {
+      status = 'ORANGE';
+      lines.push('已經 ' + d + ' 天沒有登記（最近一次 ' + p.lastText + '），超過設定的 ' + p.sparseDays + ' 天');
+    } else {
+      lines.push('最近一次登記 ' + p.lastText + '（' + d + ' 天前）；近 30 天有 ' + p.daysWithData + ' 天有登記');
+    }
+  }
+  return { status: status, count: p.todayCount, avg: 0, lines: lines };
 }
 
 /**
@@ -293,8 +341,33 @@ function patrolFetchRows_(check, D) {
     + '?select=' + check.select
     + '&created_at=gte.' + encodeURIComponent(patrolMsToISO_(from))
     + '&created_at=lt.' + encodeURIComponent(patrolMsToISO_(to))
+    + (check.typeLabel ? '&type_label=eq.' + encodeURIComponent(check.typeLabel) : '')
     + '&order=created_at.asc';
-  return patrolFetchAll_(path);
+  return patrolFilterRows_(check, patrolFetchAll_(path));
+}
+
+/** 稀疏項目（新莊）：抓回溯範圍內該類型的資料並判斷 */
+function patrolRunSparse_(check, D) {
+  var cfg = patrolGetConfig_();
+  var lookback = Math.max(30, cfg.sparseDays + 1);
+  var w = check.windowFor(D);
+  var from = check.windowFor(patrolAddDays_(D, -lookback))[0];
+  var path = '/rest/v1/' + check.table + '?select=created_at,type_label'
+    + '&type_label=eq.' + encodeURIComponent(check.typeLabel)
+    + '&created_at=gte.' + encodeURIComponent(patrolMsToISO_(from))
+    + '&created_at=lt.' + encodeURIComponent(patrolMsToISO_(w[1])) + '&order=created_at.asc';
+  var rows = patrolFilterRows_(check, patrolFetchAll_(path));
+  var lastMs = null, todayCount = 0, days = {};
+  var d30from = check.windowFor(patrolAddDays_(D, -30))[0];
+  rows.forEach(function (r) {
+    var t = new Date(r.created_at).getTime();
+    if (lastMs === null || t > lastMs) lastMs = t;
+    if (t >= w[0] && t < w[1]) todayCount++;
+    if (t >= d30from) days[Utilities.formatDate(new Date(t), PATROL_TZ, 'yyyy-MM-dd')] = true;
+  });
+  return patrolEvaluateSparse_({ sparseDays: cfg.sparseDays, lastMs: lastMs, endMs: w[1], todayCount: todayCount,
+    daysWithData: Object.keys(days).length, lookbackDays: lookback,
+    lastText: lastMs === null ? '' : Utilities.formatDate(new Date(lastMs), PATROL_TZ, 'yyyy-MM-dd') });
 }
 
 /** 施工單巡檢：抓資料並套用 patrolEvaluateConstruction_ */
@@ -341,6 +414,8 @@ function patrolRunOne_(key, D) {
   try {
     if (check.custom) {
       res = patrolRunConstruction_(D);
+    } else if (check.sparse) {
+      res = patrolRunSparse_(check, D);
     } else {
       res = patrolEvaluate_(check, D, patrolFetchRows_(check, D));
     }
@@ -505,7 +580,7 @@ function patrolRunKeys_(keys, withSummary) {
   return results;
 }
 
-function 巡檢_0600() { patrolRunKeys_(['closing', 'overnight'], false); }
+function 巡檢_0600() { patrolRunKeys_(['closing', 'overnightMoto', 'overnightCar', 'overnightXz'], false); }
 function 巡檢_0800() { patrolRunKeys_(['logiNight'], false); }
 function 巡檢_1100() { patrolRunKeys_(['opening'], false); }
 function 巡檢_2000() { patrolRunKeys_(['logiDay'], false); }
@@ -576,6 +651,7 @@ function 回測近30天(days) {
   Object.keys(PATROL_CHECKS).forEach(function (k) {
     var check = PATROL_CHECKS[k];
     if (check.custom) { lines.push('■ ' + check.label + '：改看「明天施工單＋最近上傳時間」，不做逐日回測'); return; }
+    if (check.sparse) { lines.push('■ ' + check.label + '：改看「多久沒登記」，不做逐日回測'); return; }
     // 一次抓足資料：最早那天往前 14 天 ～ 昨天窗尾
     var earliest = patrolAddDays_(D0, -N);
     var from = check.windowFor(patrolAddDays_(earliest, -PATROL_BASELINE_DAYS))[0];
@@ -798,7 +874,7 @@ var PATROL_CHART_CACHE_KEY = 'charts_v1';
 var PATROL_CHART_CACHE_SEC = 600;
 
 function patrolChartUnit_(key) {
-  if (key === 'overnight' || key === 'logiNight' || key === 'logiDay') return '台';
+  if (key.indexOf('overnight') === 0 || key === 'logiNight' || key === 'logiDay') return '台';
   return '筆';
 }
 
@@ -866,7 +942,7 @@ function patrolChartData_(force) {
     if (c.custom) return;
     var from = c.windowFor(extDays[0])[0], to = c.windowFor(D)[1];
     var isLogi = c.table === 'logistics_records';
-    var f = fetched[c.table] || (fetched[c.table] = { from: from, to: to, select: isLogi ? 'created_at,category,count' : 'created_at' });
+    var f = fetched[c.table] || (fetched[c.table] = { from: from, to: to, select: isLogi ? 'created_at,category,count' : (c.typeLabel ? 'created_at,type_label' : 'created_at') });
     if (from < f.from) f.from = from;
     if (to > f.to) f.to = to;
   });
@@ -882,13 +958,13 @@ function patrolChartData_(force) {
     var c = PATROL_CHECKS[key];
     if (c.custom) { charts.push(patrolChartConstruction_(D)); return; }
     var isLogi = c.table === 'logistics_records';
-    var b = patrolBucketDays_(c, extDays, fetched[c.table].rows, isLogi);
+    var b = patrolBucketDays_(c, extDays, patrolFilterRows_(c, fetched[c.table].rows), isLogi);
     var cut = extDays.length - PATROL_CHART_DAYS;
     var cats = null;
     if (b.cats) { cats = {}; Object.keys(b.cats).forEach(function (k) { cats[k] = b.cats[k].slice(cut); }); }
     var w = c.windowFor(D);
-    charts.push({ key: key, label: c.label, deadline: c.deadline, unit: patrolChartUnit_(key),
-      metric: isLogi ? '每日車輛數（登記台數加總，依車型堆疊）' : '每日登記' + patrolChartUnit_(key) + '數',
+    charts.push({ key: key, label: c.label, deadline: c.deadline, unit: patrolChartUnit_(key), sparse: !!c.sparse,
+      metric: isLogi ? '每日車輛數（登記台數加總，依車型堆疊）' : (c.sparse ? '每日登記台數（新莊不是每晚都有，0 是常態）' : '每日登記' + patrolChartUnit_(key) + '數'),
       days: extDays.slice(cut), vals: b.vals.slice(cut), avgs: patrolRollingAvg_(b.vals, PATROL_CHART_DAYS, span),
       cats: cats, todayIndex: PATROL_CHART_DAYS - 1, partialToday: w[1] > nowMs });
   });
@@ -974,6 +1050,7 @@ try {
     patrolSaveResults_: patrolSaveResults_, patrolLoadResults_: patrolLoadResults_,
     patrolNotifyIssues_: patrolNotifyIssues_, patrolResultsHtml_: patrolResultsHtml_,
     patrolGetConfig_: patrolGetConfig_, patrolChartData_: patrolChartData_, patrolBucketDays_: patrolBucketDays_, patrolRollingAvg_: patrolRollingAvg_, patrolSanitizeConfig_: patrolSanitizeConfig_, patrolOverview_: patrolOverview_,
+    patrolEvaluateSparse_: patrolEvaluateSparse_, patrolFilterRows_: patrolFilterRows_, patrolRunSparse_: patrolRunSparse_,
     doGet: doGet, doPost: doPost, patrolRunNow_: patrolRunNow_, PATROL_ORDER: PATROL_ORDER
   };
 } catch (e) { /* GAS 環境：忽略 */ }
