@@ -160,10 +160,12 @@ var STATUS = {
   OFF:    { txt: '已停用', icon: '⚪' },
   NONE:   { txt: '尚未檢查', icon: '⏳' }
 };
-var SHORT = { closing: '打烊後', overnight: '過夜車輛', logiNight: '物流晚班', opening: '開店前', logiDay: '物流早班', construction: '施工單' };
+var SHORT = { closing: '打烊後', overnightMoto: '過夜機車', overnightCar: '過夜汽車', overnightXz: '過夜新莊', logiNight: '物流晚班', opening: '開店前', logiDay: '物流早班', construction: '施工單' };
 var HINTS = {
   closing: '低於近 14 天平均的幾成算偏少',
-  overnight: '低於近 14 天平均的幾成算偏少（每晚起伏大，設低一點）',
+  overnightMoto: '低於近 14 天平均的幾成算偏少（機車每晚起伏很大，設低一點）',
+  overnightCar: '低於近 14 天平均的幾成算偏少',
+  overnightXz: '新莊不是每晚都有登記：超過右邊的天數都沒有任何登記，才報「注意」',
   logiNight: '低於近 14 天平均的幾成算偏少（晚班平常很少登記）',
   opening: '低於近 14 天平均的幾成算偏少',
   logiDay: '低於近 14 天平均的幾成算偏少（每天起伏大，設低一點）',
@@ -392,7 +394,7 @@ function openDetail(key, date){
 /* ───── 數據圖 ───── */
 var CAT_COLORS = { '1.9噸': '#818CF8', '3.5噸': '#D4A800', '8噸以上': '#FB923C' };
 var WEEK = ['日','一','二','三','四','五','六'];
-var THR_KEYS = { closing: 1, overnight: 1, opening: 1 };   // 只有「數字跟巡檢判斷同一個」的項目才畫紅色門檻線（物流圖是車輛數，巡檢是登記筆數）
+var THR_KEYS = { closing: 1, overnightMoto: 1, overnightCar: 1, opening: 1 };   // 只有「數字跟巡檢判斷同一個」的項目才畫紅色門檻線（物流圖是車輛數，巡檢是登記筆數）
 
 async function loadCharts(force){
   if(S.chartsLoading) return;
@@ -458,7 +460,7 @@ function chartSvg(c){
       var fill = future ? '#D4A800' : (low ? '#FB923C' : '#818CF8');
       bars += '<rect x="' + bx.toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + Math.max(0.5, y(0) - y(v)).toFixed(1) + '" fill="' + fill + '"' + op + '/>';
     }
-    if(v === 0 && !future && !partial) bars += '<rect x="' + bx.toFixed(1) + '" y="' + (y(0) - 2.5).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2.5" fill="#F87171"/>';   // 0 筆用紅色細線標出
+    if(v === 0 && !future && !partial && !c.sparse) bars += '<rect x="' + bx.toFixed(1) + '" y="' + (y(0) - 2.5).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2.5" fill="#F87171"/>';   // 0 筆用紅色細線標出
     if(i === c.todayIndex){
       var top = v > 0 ? y(v) : y(0) - 3;
       bars += '<rect x="' + (bx - 1).toFixed(1) + '" y="' + (top - 1).toFixed(1) + '" width="' + (w + 2).toFixed(1) + '" height="' + (y(0) - top + 1).toFixed(1) + '" fill="none" stroke="#FFD700" stroke-width="1.5"' + (partial ? ' stroke-dasharray="3 2"' : '') + '/>';
@@ -556,8 +558,10 @@ function renderSettings(){
     '<span class="ch ' + (d.triggerCount === 5 || d.triggerCount < 0 ? 'ok' : 'bad') + '">' + (d.triggerCount === 5 ? '✓ 每日觸發器 5／5' : (d.triggerCount < 0 ? '觸發器狀態未知' : '✗ 每日觸發器 ' + d.triggerCount + '／5')) + '</span></div>';
   html += '<div class="sec"><i class="ti ti-list-check"></i>檢查項目（開關＋偏少門檻）</div>';
   d.checks.forEach(function(ck){
-    html += '<div class="row"><div class="nm">' + esc(ck.label) + '<small>' + esc(HINTS[ck.key] || '') + '</small></div>' +
-      '<input class="num" id="lr_' + ck.key + '" type="number" inputmode="numeric" min="5" max="95" step="5" value="' + Math.round(c.lowRatio[ck.key] * 100) + '"' + dis + '><span class="unit">%</span>' +
+    var thrInput = (ck.key === 'overnightXz')
+      ? '<input class="num" id="sd" type="number" inputmode="numeric" min="7" max="90" step="1" value="' + c.sparseDays + '"' + dis + '><span class="unit">天</span>'
+      : '<input class="num" id="lr_' + ck.key + '" type="number" inputmode="numeric" min="5" max="95" step="5" value="' + Math.round(c.lowRatio[ck.key] * 100) + '"' + dis + '><span class="unit">%</span>';
+    html += '<div class="row"><div class="nm">' + esc(ck.label) + '<small>' + esc(HINTS[ck.key] || '') + '</small></div>' + thrInput +
       '<label class="sw"><input type="checkbox" id="en_' + ck.key + '"' + (c.enabled[ck.key] ? ' checked' : '') + dis + '><i></i></label></div>';
   });
   html += '<div class="sec"><i class="ti ti-adjustments-horizontal"></i>通用</div>' +
@@ -568,23 +572,24 @@ function renderSettings(){
   if(edit){
     html += '<button class="btn gold" style="margin-top:12px" onclick="saveConfig()"' + (S.busy ? ' disabled' : '') + '><i class="ti ti-device-floppy"></i>儲存設定</button>' +
       '<button class="btn ind" style="margin-top:10px" onclick="sendTest()"' + (S.busy ? ' disabled' : '') + '><i class="ti ti-send"></i>寄測試通知（Email＋站內）</button>' +
-      '<div class="hint">儲存後從下一次自動檢查起生效。偏少門檻越高越容易報警（打烊後、開店前是 50%；起伏大的過夜車輛 25%、物流 15%）。</div>';
+      '<div class="hint">儲存後從下一次自動檢查起生效。偏少門檻越高越容易報警（打烊後、開店前是 50%；起伏大的過夜機車／汽車 25%、物流 15%）。新莊停車場不是每晚都有登記，改看「多久沒登記」。</div>';
   }
   html += '<div class="sec"><i class="ti ti-clock-hour-4"></i>檢查時間表</div><div class="tbl">' +
-    '06:00　打烊後登記、過夜車輛<br>08:00　物流車輛（晚班）<br>11:00　開店前登記<br>20:00　物流車輛（早班）<br>22:00　施工單更新＋今日總結信<br>' +
+    '06:00　打烊後登記、過夜機車／汽車（館內）、過夜新莊<br>08:00　物流車輛（晚班）<br>11:00　開店前登記<br>20:00　物流車輛（早班）<br>22:00　施工單更新＋今日總結信<br>' +
     '<span style="color:var(--muted);font-size:12px">實際會在該時間後約 15 分鐘內執行。每天 22:00 一定會寄一封總結；沒收到＝巡檢壞了。</span></div>' +
     '<div class="sec"><i class="ti ti-users"></i>通知對象</div><div class="tbl">Email：指令碼屬性 PATROL_EMAILS 設定的收件人<br>站內通知（首頁 🔔）：隊長、副隊長、組長<br>' +
     '<span style="color:var(--muted);font-size:12px">只有發現「異常／注意」才即時通知；全部正常時只寄 22:00 總結。</span></div>';
   return html;
 }
 function readDraft(){
-  var d = S.data, c = { lowRatio:{}, enabled:{}, minBaseline: 0, staleHours: 0 };
+  var d = S.data, c = { lowRatio:{}, enabled:{}, minBaseline: 0, staleHours: 0, sparseDays: 0 };
   d.checks.forEach(function(ck){
-    var v = Number($('lr_' + ck.key).value);
-    c.lowRatio[ck.key] = v / 100;
+    var el = $('lr_' + ck.key);   // 新莊那一列用「天數」，沒有百分比輸入框 → 沿用目前設定值
+    c.lowRatio[ck.key] = el ? Number(el.value) / 100 : d.config.lowRatio[ck.key];
     c.enabled[ck.key] = !!$('en_' + ck.key).checked;
   });
   c.minBaseline = Number($('mb').value); c.staleHours = Number($('sh').value);
+  c.sparseDays = $('sd') ? Number($('sd').value) : d.config.sparseDays;
   return c;
 }
 function validateDraft(c){
@@ -595,6 +600,7 @@ function validateDraft(c){
   }
   if(!isFinite(c.minBaseline) || c.minBaseline < 1 || c.minBaseline > 50) return '基準最低平均要在 1～50 之間';
   if(!isFinite(c.staleHours) || c.staleHours < 12 || c.staleHours > 336) return '施工單「多久沒上傳」要在 12～336 小時之間';
+  if(!isFinite(c.sparseDays) || c.sparseDays < 7 || c.sparseDays > 90) return '新莊「多久沒登記」要在 7～90 天之間';
   return '';
 }
 async function saveConfig(){
@@ -613,8 +619,9 @@ async function sendTest(){
   if(S.busy) return; S.busy = true; render();
   try{
     var r = await api('sendTest');
-    if(r.mail && r.notice) toast('✓ 測試信已寄出，首頁 🔔 也會收到測試通知', 'ok');
-    else toast((r.mail ? '✓ Email 已寄出' : '✗ Email 失敗') + '；' + (r.notice ? '✓ 站內通知成功' : '✗ 站內通知失敗或未設定') + (r.msg ? '（' + r.msg + '）' : ''), r.mail ? 'inf' : 'err');
+    if(r.mail && r.notice && r.noticeCount === 0) toast('✓ Email 已寄出；站內通知已送出，但主 App 找不到任何隊長／副隊長／組長帳號可收', 'inf');
+    else if(r.mail && r.notice) toast('✓ 測試信已寄出，首頁 🔔 也會收到測試通知', 'ok');
+    else toast((r.mail ? '✓ Email 已寄出' : '✗ Email 失敗') + '；' + (r.notice ? '✓ 站內通知成功' : '✗ 站內通知失敗：' + (r.noticeMsg || '原因不明，請看巡檢 GAS 的執行記錄')) + (r.msg ? '（' + r.msg + '）' : ''), r.mail ? 'inf' : 'err');
   }catch(e){ toast('✗ ' + e.message, 'err'); }
   S.busy = false; render();
 }
