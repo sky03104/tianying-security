@@ -613,8 +613,9 @@ async function sendTest(){
   if(S.busy) return; S.busy = true; render();
   try{
     var r = await api('sendTest');
-    if(r.mail && r.notice) toast('✓ 測試信已寄出，首頁 🔔 也會收到測試通知', 'ok');
-    else toast((r.mail ? '✓ Email 已寄出' : '✗ Email 失敗') + '；' + (r.notice ? '✓ 站內通知成功' : '✗ 站內通知失敗或未設定') + (r.msg ? '（' + r.msg + '）' : ''), r.mail ? 'inf' : 'err');
+    if(r.mail && r.notice && r.noticeCount === 0) toast('✓ Email 已寄出；站內通知已送出，但主 App 找不到任何隊長／副隊長／組長帳號可收', 'inf');
+    else if(r.mail && r.notice) toast('✓ 測試信已寄出，首頁 🔔 也會收到測試通知', 'ok');
+    else toast((r.mail ? '✓ Email 已寄出' : '✗ Email 失敗') + '；' + (r.notice ? '✓ 站內通知成功' : '✗ 站內通知失敗：' + (r.noticeMsg || '原因不明，請看巡檢 GAS 的執行記錄')) + (r.msg ? '（' + r.msg + '）' : ''), r.mail ? 'inf' : 'err');
   }catch(e){ toast('✗ ' + e.message, 'err'); }
   S.busy = false; render();
 }

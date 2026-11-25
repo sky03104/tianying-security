@@ -415,22 +415,41 @@ function patrolSendMail_(subject, bodyHtml) {
   });
 }
 
-/** 寫站內通知（隊長／副隊長／組長）；失敗只記 log，不影響 Email */
+/** 最近一次發站內通知的結果（給工具「寄測試通知」顯示原因用；不是業務資料） */
+var patrolLastNoticeErr_ = '';
+var patrolLastNoticeCount_ = -1;
+
+/** 寫站內通知（隊長／副隊長／組長）；失敗只記 log，不影響 Email。失敗原因記在 patrolLastNoticeErr_ */
 function patrolPostNotice_(title, body) {
+  patrolLastNoticeErr_ = ''; patrolLastNoticeCount_ = -1;
   var props = PropertiesService.getScriptProperties();
   var url = props.getProperty('MAIN_GAS_URL');
   var secret = props.getProperty('PATROL_SECRET');
-  if (!url || !secret) { console.log('未設定 MAIN_GAS_URL／PATROL_SECRET，略過站內通知'); return false; }
+  if (!url || !secret) {
+    patrolLastNoticeErr_ = '巡檢 GAS 的指令碼屬性還沒設 ' + (!url ? 'MAIN_GAS_URL' : 'PATROL_SECRET');
+    console.log('未設定 MAIN_GAS_URL／PATROL_SECRET，略過站內通知'); return false;
+  }
   try {
     var resp = UrlFetchApp.fetch(url, {
       method: 'post',
       payload: { action: 'addPatrolNotices', data: JSON.stringify({ secret: secret, title: title, body: body }) },
       muteHttpExceptions: true
     });
-    var j = JSON.parse(resp.getContentText() || '{}');
-    if (j.status !== 'ok') console.error('站內通知失敗：' + resp.getContentText());
-    return j.status === 'ok';
+    var text = resp.getContentText() || '';
+    var j = null;
+    try { j = JSON.parse(text); } catch (e) { j = null; }
+    if (!j) {
+      patrolLastNoticeErr_ = '主 App 回應不是預期格式（HTTP ' + resp.getResponseCode() + '）：MAIN_GAS_URL 可能不對，或主 App GAS 的存取權限不是「任何人」';
+      console.error('站內通知失敗（非 JSON 回應）：' + text.slice(0, 200)); return false;
+    }
+    if (j.status === 'ok') { patrolLastNoticeCount_ = Number(j.count); return true; }
+    if (j.code === 'FORBIDDEN') patrolLastNoticeErr_ = '主 App 拒絕：兩邊的 PATROL_SECRET 不一致，或主 App 沒設 PATROL_SECRET';
+    else if (/未知 action/.test(j.msg || '')) patrolLastNoticeErr_ = '主 App GAS 還沒部署新版本（不認得 addPatrolNotices 這個動作）';
+    else patrolLastNoticeErr_ = '主 App 回報：' + String(j.msg || text).slice(0, 80);
+    console.error('站內通知失敗：' + text.slice(0, 200));
+    return false;
   } catch (err) {
+    patrolLastNoticeErr_ = '連不到主 App：' + err.message;
     console.error('站內通知失敗：' + err.toString());
     return false;
   }
@@ -907,6 +926,8 @@ function patrolSendTest_() {
   try { patrolSendMail_('【天鷹保全巡檢】測試信', '<div>這是測試信，收到代表 Email 通知管道正常。</div>'); out.mail = true; }
   catch (e) { out.msg = 'Email 失敗：' + e.message; }
   out.notice = patrolPostNotice_('🔔 數據巡檢測試通知', '這是測試通知，收到代表站內通知管道正常。');
+  out.noticeMsg = out.notice ? '' : patrolLastNoticeErr_;
+  out.noticeCount = patrolLastNoticeCount_;   // 0＝送出了但主 App 找不到任何隊長／副隊長／組長帳號
   return out;
 }
 
