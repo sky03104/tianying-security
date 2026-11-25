@@ -29,8 +29,8 @@ body{margin:0;background:var(--bg);color:var(--text);
 
 /* 分頁 */
 .tabs{display:flex;gap:6px;margin-bottom:12px;}
-.tab{flex:1;min-height:44px;border-radius:22px;border:1px solid var(--border);background:var(--card);color:var(--muted);
-  font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;}
+.tab{flex:1;min-width:0;min-height:44px;padding:0 2px;border-radius:22px;border:1px solid var(--border);background:var(--card);color:var(--muted);
+  font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;}
 .tab.on{border-color:var(--gold);background:rgba(212,168,0,.12);color:var(--gold2);}
 
 /* 橫幅 */
@@ -81,6 +81,25 @@ td.today{background:rgba(212,168,0,.1);}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:4px;vertical-align:-1px;}
 .stat{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--card);margin-bottom:8px;font-size:13.5px;}
 .stat .nm{flex:1;font-weight:700;min-width:0;} .stat span.c{font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* 數據圖 */
+.chartcard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 10px 10px;margin-bottom:12px;}
+.chartcard .ctop{display:flex;align-items:center;gap:8px;padding:0 4px;}
+.chartcard .ctt{flex:1;min-width:0;font-size:15.5px;font-weight:800;}
+.chartcard .cm{color:var(--muted);font-size:11.5px;margin:2px 4px 8px;line-height:1.5;}
+.cstats{display:flex;gap:6px;flex-wrap:wrap;margin:0 4px 8px;}
+.cs{font-size:12px;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--border);white-space:nowrap;}
+.cs b{font-variant-numeric:tabular-nums;color:var(--gold2);}
+svg.chart{display:block;width:100%;height:auto;touch-action:manipulation;}
+svg.chart text{font-family:inherit;fill:#8A95A8;font-size:9px;}
+.csel{margin:6px 4px 0;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);font-size:13px;line-height:1.7;min-height:38px;}
+.csel b{color:var(--gold2);}
+.cleg{display:flex;gap:10px;flex-wrap:wrap;margin:6px 4px 0;font-size:11.5px;color:var(--muted);}
+.cleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
+.cleg u{display:inline-block;width:16px;border-top:2px dashed;margin-right:4px;vertical-align:3px;text-decoration:none;}
+.subhd{display:flex;align-items:center;gap:8px;margin:0 2px 10px;color:var(--muted);font-size:12.5px;}
+.subhd span{flex:1;}
+.subhd button{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:10px;min-height:40px;padding:0 12px;font-size:13px;font-family:inherit;cursor:pointer;}
 
 /* 設定 */
 .sec{color:var(--gold2);font-size:14px;font-weight:800;margin:16px 2px 8px;display:flex;align-items:center;gap:6px;}
@@ -151,7 +170,8 @@ var HINTS = {
   construction: '明天施工單低於近 4 週同星期平均的幾成算偏少'
 };
 
-var S = { tab: 'today', data: null, live: null, err: '', busy: false, draft: null, timer: null, loaded: false };
+var S = { tab: 'today', data: null, live: null, err: '', busy: false, draft: null, timer: null, loaded: false,
+          charts: null, chartsAt: 0, chartsLoading: false, chartsErr: '', sel: {} };
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(m){
@@ -181,8 +201,8 @@ async function api(action, data){
   if(d.status !== 'ok'){ var e = new Error(d.msg || '未知錯誤'); e.code = d.code; throw e; }
   return d;
 }
-async function apiGet(action){
-  var d = await fetchJson_(PATROL_GAS_URL + '?action=' + action + '&token=' + encodeURIComponent(getAuthToken()));
+async function apiGet(action, extra){
+  var d = await fetchJson_(PATROL_GAS_URL + '?action=' + action + '&token=' + encodeURIComponent(getAuthToken()) + (extra || ''));
   if(d.status !== 'ok'){ var e = new Error(d.msg || '讀取失敗'); e.code = d.code; throw e; }
   return d;
 }
@@ -263,7 +283,7 @@ function render(){
     html += '<div class="lock"><i class="ti ti-lock"></i>數據巡檢需登入天鷹保全 App，<br>且職務為組長以上才能使用。<br>請回主控台登入後再開啟本工具。</div>';
     $('app').innerHTML = html; return;
   }
-  html += '<div class="tabs">' + tabBtn('today','ti-radar-2','今日') + tabBtn('history','ti-calendar-stats','紀錄') + tabBtn('settings','ti-adjustments','設定') + '</div>';
+  html += '<div class="tabs">' + tabBtn('today','ti-radar-2','今日') + tabBtn('history','ti-calendar-stats','紀錄') + tabBtn('charts','ti-chart-bar','數據圖') + tabBtn('settings','ti-adjustments','設定') + '</div>';
   if(!S.loaded){
     html += S.err ? '<div class="banner warn">✗ ' + esc(S.err) + '<br>' + (S.errCode==='INVALID' ? '' : '請按右上角重新讀取。') + '</div>'
                   : '<div class="empty">讀取中…</div>';
@@ -271,6 +291,7 @@ function render(){
   }
   if(S.tab === 'today') html += renderToday();
   else if(S.tab === 'history') html += renderHistory();
+  else if(S.tab === 'charts') html += renderCharts();
   else html += renderSettings();
   $('app').innerHTML = html;
   if(S.tab === 'history'){
@@ -281,7 +302,11 @@ function render(){
 function tabBtn(id, icon, label){
   return '<button class="tab' + (S.tab===id?' on':'') + '" onclick="setTab(\'' + id + '\')"><i class="ti ' + icon + '"></i>' + label + '</button>';
 }
-function setTab(t){ S.tab = t; render(); window.scrollTo(0, 0); }
+function setTab(t){
+  S.tab = t; render(); window.scrollTo(0, 0);
+  // 數據圖：第一次打開、或資料超過 10 分鐘才向後端要（後端也有 10 分鐘快取）
+  if(t === 'charts' && !S.chartsLoading && (!S.charts || Date.now() - S.chartsAt > 600000)) loadCharts(false);
+}
 
 function renderToday(){
   var d = S.data, cfg = d.config, nowMin = toMin(d.now);
@@ -362,6 +387,163 @@ function openDetail(key, date){
     '<div class="top" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="chip ' + st + '">' + STATUS[st].icon + ' ' + STATUS[st].txt + '</span>' +
     '<span style="color:var(--muted);font-size:13px">' + esc(date) + (r.at ? '　檢查時間 ' + esc(r.at) : '') + '　截止 ' + esc(c.deadline) + '</span></div>' +
     lines + '<button class="btn ind" style="margin-top:16px" onclick="closeModal()">關閉</button></div></div>';
+}
+
+/* ───── 數據圖 ───── */
+var CAT_COLORS = { '1.9噸': '#818CF8', '3.5噸': '#D4A800', '8噸以上': '#FB923C' };
+var WEEK = ['日','一','二','三','四','五','六'];
+var THR_KEYS = { closing: 1, overnight: 1, opening: 1 };   // 只有「數字跟巡檢判斷同一個」的項目才畫紅色門檻線（物流圖是車輛數，巡檢是登記筆數）
+
+async function loadCharts(force){
+  if(S.chartsLoading) return;
+  S.chartsLoading = true; S.chartsErr = ''; render();
+  try{
+    var d = await apiGet('getCharts', force ? '&refresh=1' : '');
+    S.charts = d; S.chartsAt = Date.now(); S.sel = {};
+    if(force) toast('✓ 已重新計算', 'ok');
+  }catch(e){
+    S.chartsErr = e.message || '讀取失敗'; toast('✗ ' + S.chartsErr, 'err');
+  }
+  S.chartsLoading = false; render();
+}
+function selBar(key, i){ S.sel[key] = i; render(); }
+function mmdd(d){ return d.slice(5,7) + '/' + d.slice(8); }
+function wk(d){ var p = d.split('-'); return WEEK[new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).getUTCDay()]; }
+function niceMax(v){
+  if(v <= 5) return 5;
+  var p = Math.pow(10, Math.floor(Math.log10(v))), m = [1, 2, 2.5, 5, 10];
+  for(var i = 0; i < m.length; i++) if(v <= m[i] * p) return m[i] * p;
+  return 10 * p;
+}
+function fmtN(v){ return (Math.round(v * 10) / 10).toString(); }
+
+/* 長條圖（純 SVG）：柱＝每日數值（物流依車型堆疊）、灰虛線＝近 14 天平均、紅虛線＝偏少門檻、金框＝今天、淡色＝尚未結束／未來 */
+function chartSvg(c){
+  var cfg = S.data.config, n = c.vals.length;
+  var W = 340, H = 168, L = 34, R = 6, T = 10, B = 22, pw = W - L - R, ph = H - T - B, bw = pw / n;
+  var thr = null;
+  if(c.avgs && THR_KEYS[c.key]){
+    var ratio = cfg.lowRatio[c.key];
+    thr = c.avgs.map(function(a){ return a >= cfg.minBaseline ? a * ratio : null; });
+  }
+  var mx = 1; c.vals.forEach(function(v){ if(v > mx) mx = v; });
+  if(c.avgs) c.avgs.forEach(function(v){ if(v > mx) mx = v; });
+  mx = niceMax(mx);
+  var y = function(v){ return T + (1 - v / mx) * ph; };
+  var sel = (S.sel[c.key] === undefined) ? c.todayIndex : S.sel[c.key];
+  var g = '';
+  [0, mx / 2, mx].forEach(function(v){
+    g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="rgba(255,255,255,.08)" stroke-width="1"/>' +
+         '<text x="' + (L - 4) + '" y="' + (y(v) + 3).toFixed(1) + '" text-anchor="end">' + fmtN(v) + '</text>';
+  });
+  var bars = '', hits = '';
+  for(var i = 0; i < n; i++){
+    var x = L + i * bw, bx = x + bw * 0.14, w = bw * 0.72, v = c.vals[i];
+    var future = c.futureFrom !== undefined && i >= c.futureFrom;
+    var partial = c.partialToday && i === c.todayIndex;
+    if(i === sel) bars += '<rect x="' + x.toFixed(1) + '" y="' + T + '" width="' + bw.toFixed(1) + '" height="' + ph + '" fill="rgba(255,255,255,.07)"/>';
+    var op = (future || partial) ? ' opacity=".5"' : '';
+    if(c.cats){
+      var base = 0;
+      Object.keys(CAT_COLORS).forEach(function(k){
+        var cv = (c.cats[k] || [])[i] || 0; if(!cv) return;
+        var y1 = y(base + cv), y0 = y(base);
+        bars += '<rect x="' + bx.toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + Math.max(0.5, y0 - y1).toFixed(1) + '" fill="' + CAT_COLORS[k] + '"' + op + '/>';
+        base += cv;
+      });
+      var rest = v - base;     // 未知車型的台數（總數有、堆疊沒有）用灰色補上，總高度才跟數字一致
+      if(rest > 0){ bars += '<rect x="' + bx.toFixed(1) + '" y="' + y(base + rest).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + (y(base) - y(base + rest)).toFixed(1) + '" fill="#6B7280"' + op + '/>'; }
+    }else if(v > 0){
+      var low = thr && thr[i] !== null && v < thr[i] && !partial;
+      var fill = future ? '#D4A800' : (low ? '#FB923C' : '#818CF8');
+      bars += '<rect x="' + bx.toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + Math.max(0.5, y(0) - y(v)).toFixed(1) + '" fill="' + fill + '"' + op + '/>';
+    }
+    if(v === 0 && !future && !partial) bars += '<rect x="' + bx.toFixed(1) + '" y="' + (y(0) - 2.5).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2.5" fill="#F87171"/>';   // 0 筆用紅色細線標出
+    if(i === c.todayIndex){
+      var top = v > 0 ? y(v) : y(0) - 3;
+      bars += '<rect x="' + (bx - 1).toFixed(1) + '" y="' + (top - 1).toFixed(1) + '" width="' + (w + 2).toFixed(1) + '" height="' + (y(0) - top + 1).toFixed(1) + '" fill="none" stroke="#FFD700" stroke-width="1.5"' + (partial ? ' stroke-dasharray="3 2"' : '') + '/>';
+    }
+    hits += '<rect x="' + x.toFixed(1) + '" y="' + T + '" width="' + bw.toFixed(1) + '" height="' + (ph + B) + '" fill="transparent" onclick="selBar(\'' + c.key + '\',' + i + ')"><title>' + esc(c.days[i]) + '</title></rect>';
+  }
+  var lines = '';
+  var path = function(arr, color, dash){
+    var d = '', pen = false;
+    for(var i = 0; i < arr.length; i++){
+      if(arr[i] === null || arr[i] === undefined){ pen = false; continue; }
+      d += (pen ? 'L' : 'M') + (L + (i + 0.5) * bw).toFixed(1) + ' ' + y(arr[i]).toFixed(1) + ' '; pen = true;
+    }
+    return d ? '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.4" stroke-dasharray="' + dash + '"/>' : '';
+  };
+  if(c.avgs) lines += path(c.avgs, '#9CA3AF', '4 3');
+  if(thr) lines += path(thr, '#F87171', '2 3');
+  var xl = '';
+  for(var j = 0; j < n; j += 1){
+    var near = (j !== c.todayIndex) && Math.abs(j - c.todayIndex) < 3;      // 離「今天」太近的日期標籤會疊在一起，跳過
+    if((j % 5 === 0 && !near) || j === c.todayIndex) xl += '<text x="' + (L + (j + 0.5) * bw).toFixed(1) + '" y="' + (H - 7) + '" text-anchor="middle"' + (j === c.todayIndex ? ' style="fill:#FFD700"' : '') + '>' + mmdd(c.days[j]) + '</text>';
+  }
+  return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(c.label + '近30天' + c.metric) + '">' + g + bars + lines + xl + hits + '</svg>';
+}
+
+function chartStats(c){
+  var chips = [], cs = function(k, v){ return '<span class="cs">' + esc(k) + ' <b>' + esc(v) + '</b></span>'; };
+  var u = c.unit;
+  if(c.futureFrom !== undefined){
+    var past = c.vals.slice(0, c.futureFrom), sum = 0; past.forEach(function(v){ sum += v; });
+    chips.push(cs('今天', c.vals[c.todayIndex] + u), cs('明天', c.vals[c.todayIndex + 1] + u), cs('後天', c.vals[c.todayIndex + 2] + u), cs('近30天平均', fmtN(sum / past.length) + u));
+    return chips.join('');
+  }
+  var full = []; c.vals.forEach(function(v, i){ if(!(c.partialToday && i === c.todayIndex)) full.push(i); });
+  var hi = full[0], lo = full[0];
+  full.forEach(function(i){ if(c.vals[i] > c.vals[hi]) hi = i; if(c.vals[i] < c.vals[lo]) lo = i; });
+  chips.push(cs(c.partialToday ? '今天（進行中）' : '今天', c.vals[c.todayIndex] + u), cs('近14天平均', fmtN(c.avgs[c.todayIndex]) + u),
+             cs('30天最高', c.vals[hi] + u + '（' + mmdd(c.days[hi]) + '）'), cs('30天最低', c.vals[lo] + u + '（' + mmdd(c.days[lo]) + '）'));
+  return chips.join('');
+}
+function chartSelLine(c){
+  var i = (S.sel[c.key] === undefined) ? c.todayIndex : S.sel[c.key], u = c.unit, d = c.days[i];
+  var tag = (c.futureFrom !== undefined && i >= c.futureFrom) ? '（已排）' : ((c.partialToday && i === c.todayIndex) ? '（進行中）' : (i === c.todayIndex ? '（今天）' : ''));
+  var h = '<b>' + esc(mmdd(d)) + '（' + wk(d) + '）' + tag + '</b>：' + c.vals[i] + ' ' + u;
+  if(c.avgs){
+    h += '　近14天平均 ' + fmtN(c.avgs[i]) + ' ' + u;
+    if(THR_KEYS[c.key] && c.avgs[i] >= S.data.config.minBaseline) h += '　偏少門檻 ' + fmtN(c.avgs[i] * S.data.config.lowRatio[c.key]) + ' ' + u;
+  }
+  if(c.cats){
+    var parts = [];
+    Object.keys(CAT_COLORS).forEach(function(k){ var v = (c.cats[k] || [])[i] || 0; parts.push(esc(k) + ' ' + v); });
+    h += '<br>' + parts.join('・');
+  }
+  return h;
+}
+function renderCharts(){
+  var html = '';
+  if(S.chartsLoading && !S.charts) return '<div class="empty">讀取中…<br><span style="font-size:12px">第一次要算近 30 天的資料，約 5～10 秒</span></div>';
+  if(S.chartsErr && !S.charts){
+    return '<div class="banner warn">✗ ' + esc(S.chartsErr) + '</div><button class="btn gold" onclick="loadCharts(true)"><i class="ti ti-refresh"></i>重新讀取</button>';
+  }
+  if(!S.charts) return '<div class="empty">讀取中…</div>';
+  html += '<div class="subhd"><span>近 30 天每日數據（點柱子看當天數字）<br>更新於 ' + esc(S.charts.at) + (S.charts.cached ? '（10 分鐘內的快取）' : '') + '</span>' +
+    '<button onclick="loadCharts(true)"' + (S.chartsLoading ? ' disabled' : '') + '><i class="ti ti-refresh"></i> ' + (S.chartsLoading ? '計算中…' : '重新計算') + '</button></div>';
+  S.charts.charts.forEach(function(c){
+    var r = resultOf(c.key), off = !S.data.config.enabled[c.key];
+    var st = off ? 'OFF' : (r ? r.status : 'NONE');
+    var leg = '';
+    if(c.cats){
+      leg += Object.keys(CAT_COLORS).map(function(k){ return '<span><i style="background:' + CAT_COLORS[k] + '"></i>' + esc(k) + '</span>'; }).join('');
+    }else if(c.futureFrom !== undefined){
+      leg += '<span><i style="background:#818CF8"></i>已過的日子</span><span><i style="background:#D4A800;opacity:.55"></i>明後天（已排）</span>';
+    }else{
+      leg += '<span><i style="background:#818CF8"></i>每日數量</span>' + (THR_KEYS[c.key] ? '<span><i style="background:#FB923C"></i>低於門檻</span>' : '');
+    }
+    if(c.avgs) leg += '<span><u style="border-color:#9CA3AF"></u>近14天平均</span>';
+    if(THR_KEYS[c.key]) leg += '<span><u style="border-color:#F87171"></u>偏少門檻</span>';
+    leg += '<span><i style="background:transparent;border:1.5px solid #FFD700"></i>今天</span>';
+    html += '<div class="chartcard"><div class="ctop"><div class="ctt">' + esc(c.label) + '</div><span class="chip ' + st + '">' + STATUS[st].icon + ' ' + STATUS[st].txt + '</span></div>' +
+      '<div class="cm">' + esc(c.metric) + (c.deadline ? '・截止 ' + esc(c.deadline) : '') + '</div>' +
+      '<div class="cstats">' + chartStats(c) + '</div>' + chartSvg(c) +
+      '<div class="cleg">' + leg + '</div><div class="csel">' + chartSelLine(c) + '</div></div>';
+  });
+  html += '<div class="hint">圖的數字直接從各工具的資料算出來，跟「今日／紀錄」的紅橘綠燈是同一套窗口（打烊後＝昨 20:00～今 06:00 等）。物流圖看的是「車輛數」（登記台數加總），所以跟巡檢判斷用的「登記筆數」不同；紅色門檻線只畫在跟巡檢數字一致的項目。</div>';
+  return html;
 }
 
 function renderSettings(){

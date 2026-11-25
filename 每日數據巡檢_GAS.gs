@@ -766,6 +766,118 @@ function patrolOverview_(user) {
   };
 }
 
+/**
+ * action: getCharts：「數據圖」分頁用，近 30 天每項的每日數據（直接從 Supabase 算，不依賴巡檢紀錄，部署第一天就有圖）。
+ *   一般項目：每日筆數（過夜車輛＝台）；物流：每日「車輛數」（登記台數加總）並依車型分堆疊；
+ *   施工單：每日「開工筆數」（含明後天已排的）。
+ *   每天附上「近 14 天滾動平均」，前端乘上目前設定的偏少比例就是紅色門檻線（所以改設定不用重算）。
+ *   結果快取 10 分鐘（約 10 個 Supabase 請求，不要每次打開都重算）；refresh=1 強制重算。
+ */
+var PATROL_CHART_DAYS = 30;
+var PATROL_CHART_CATS = ['1.9噸', '3.5噸', '8噸以上'];
+var PATROL_CHART_CACHE_KEY = 'charts_v1';
+var PATROL_CHART_CACHE_SEC = 600;
+
+function patrolChartUnit_(key) {
+  if (key === 'overnight' || key === 'logiNight' || key === 'logiDay') return '台';
+  return '筆';
+}
+
+/** 純函式：把資料列依「每天的窗口」分桶。rows 含 created_at（毫秒由此函式轉）、logistics 另含 category／count */
+function patrolBucketDays_(check, dayList, rows, isLogi) {
+  var ts = rows.map(function (r) { return new Date(r.created_at).getTime(); });
+  var vals = [], cats = {};
+  if (isLogi) PATROL_CHART_CATS.forEach(function (c) { cats[c] = []; });
+  dayList.forEach(function (d) {
+    var w = check.windowFor(d);
+    var total = 0, per = {};
+    for (var i = 0; i < rows.length; i++) {
+      if (ts[i] < w[0] || ts[i] >= w[1]) continue;
+      if (isLogi) {
+        var n = Number(rows[i].count); if (!isFinite(n) || n < 0) n = 0;
+        total += n;
+        var cat = PATROL_CHART_CATS.indexOf(rows[i].category) >= 0 ? rows[i].category : null;
+        if (cat) per[cat] = (per[cat] || 0) + n;
+      } else { total++; }
+    }
+    vals.push(total);
+    if (isLogi) PATROL_CHART_CATS.forEach(function (c) { cats[c].push(per[c] || 0); });
+  });
+  return { vals: vals, cats: isLogi ? cats : null };
+}
+
+/** 純函式：每個位置取「前 N 天」平均（滾動平均）。vals 是由舊到新；只回傳最後 outLen 個位置的平均 */
+function patrolRollingAvg_(vals, outLen, span) {
+  var out = [];
+  for (var i = vals.length - outLen; i < vals.length; i++) {
+    var sum = 0, n = 0;
+    for (var k = Math.max(0, i - span); k < i; k++) { sum += vals[k]; n++; }
+    out.push(n ? Math.round(sum / n * 10) / 10 : 0);
+  }
+  return out;
+}
+
+function patrolChartConstruction_(D) {
+  var oldest = patrolAddDays_(D, -(PATROL_CHART_DAYS - 1)), newest = patrolAddDays_(D, 2);
+  var rows = patrolFetchAll_('/rest/v1/construction_orders?select=work_date&work_date=gte.' + oldest + '&work_date=lte.' + newest);
+  var per = {};
+  rows.forEach(function (r) { per[r.work_date] = (per[r.work_date] || 0) + 1; });
+  var days = [], vals = [];
+  for (var i = PATROL_CHART_DAYS - 1; i >= -2; i--) { var d = patrolAddDays_(D, -i); days.push(d); vals.push(per[d] || 0); }
+  return { key: 'construction', label: PATROL_CHECKS.construction.label, unit: '筆', metric: '每日開工筆數（含明後天已排的）',
+    days: days, vals: vals, avgs: null, cats: null, todayIndex: PATROL_CHART_DAYS - 1, futureFrom: PATROL_CHART_DAYS };
+}
+
+function patrolChartData_(force) {
+  var cache = CacheService.getScriptCache();
+  if (!force) {
+    var hit = cache.get(PATROL_CHART_CACHE_KEY);
+    if (hit) { try { var cached = JSON.parse(hit); if (cached.today === patrolTodayStr_()) { cached.cached = true; return cached; } } catch (e) {} }
+  }
+  var D = patrolTodayStr_();
+  var nowMs = Date.now();
+  var span = PATROL_BASELINE_DAYS;
+  var extDays = [];
+  for (var i = PATROL_CHART_DAYS - 1 + span; i >= 0; i--) extDays.push(patrolAddDays_(D, -i));
+
+  // 同一張表只抓一次：涵蓋所有用到這張表的檢查窗口
+  var fetched = {};
+  PATROL_ORDER.forEach(function (key) {
+    var c = PATROL_CHECKS[key];
+    if (c.custom) return;
+    var from = c.windowFor(extDays[0])[0], to = c.windowFor(D)[1];
+    var isLogi = c.table === 'logistics_records';
+    var f = fetched[c.table] || (fetched[c.table] = { from: from, to: to, select: isLogi ? 'created_at,category,count' : 'created_at' });
+    if (from < f.from) f.from = from;
+    if (to > f.to) f.to = to;
+  });
+  Object.keys(fetched).forEach(function (table) {
+    var f = fetched[table];
+    f.rows = patrolFetchAll_('/rest/v1/' + table + '?select=' + f.select
+      + '&created_at=gte.' + encodeURIComponent(patrolMsToISO_(f.from))
+      + '&created_at=lt.' + encodeURIComponent(patrolMsToISO_(f.to)) + '&order=created_at.asc');
+  });
+
+  var charts = [];
+  PATROL_ORDER.forEach(function (key) {
+    var c = PATROL_CHECKS[key];
+    if (c.custom) { charts.push(patrolChartConstruction_(D)); return; }
+    var isLogi = c.table === 'logistics_records';
+    var b = patrolBucketDays_(c, extDays, fetched[c.table].rows, isLogi);
+    var cut = extDays.length - PATROL_CHART_DAYS;
+    var cats = null;
+    if (b.cats) { cats = {}; Object.keys(b.cats).forEach(function (k) { cats[k] = b.cats[k].slice(cut); }); }
+    var w = c.windowFor(D);
+    charts.push({ key: key, label: c.label, deadline: c.deadline, unit: patrolChartUnit_(key),
+      metric: isLogi ? '每日車輛數（登記台數加總，依車型堆疊）' : '每日登記' + patrolChartUnit_(key) + '數',
+      days: extDays.slice(cut), vals: b.vals.slice(cut), avgs: patrolRollingAvg_(b.vals, PATROL_CHART_DAYS, span),
+      cats: cats, todayIndex: PATROL_CHART_DAYS - 1, partialToday: w[1] > nowMs });
+  });
+  var out = { status: 'ok', today: D, at: Utilities.formatDate(new Date(), PATROL_TZ, 'HH:mm'), charts: charts, cached: false };
+  try { cache.put(PATROL_CHART_CACHE_KEY, JSON.stringify(out), PATROL_CHART_CACHE_SEC); } catch (e) {}
+  return out;
+}
+
 /** action: runNow：現在立刻檢查全部（不存結果、不寄信、不發通知，純看） */
 function patrolRunNow_() {
   var lock = LockService.getScriptLock();
@@ -801,6 +913,11 @@ function patrolSendTest_() {
 function doGet(e) {
   var p = (e && e.parameter) || {};
   try {
+    if (p.action === 'getCharts') {
+      var uc = requirePatrolUser_(p.token, false);
+      if (!uc) return authFailRes_();
+      return jsonRes_(patrolChartData_(p.refresh === '1'));
+    }
     if (p.action === 'getOverview') {
       var user = requirePatrolUser_(p.token, false);
       if (!user) return authFailRes_();
@@ -835,7 +952,7 @@ try {
     巡檢_0600: 巡檢_0600, 巡檢_2200: 巡檢_2200, 回測近30天: 回測近30天, 設定每日巡檢觸發器: 設定每日巡檢觸發器,
     patrolSaveResults_: patrolSaveResults_, patrolLoadResults_: patrolLoadResults_,
     patrolNotifyIssues_: patrolNotifyIssues_, patrolResultsHtml_: patrolResultsHtml_,
-    patrolGetConfig_: patrolGetConfig_, patrolSanitizeConfig_: patrolSanitizeConfig_, patrolOverview_: patrolOverview_,
+    patrolGetConfig_: patrolGetConfig_, patrolChartData_: patrolChartData_, patrolBucketDays_: patrolBucketDays_, patrolRollingAvg_: patrolRollingAvg_, patrolSanitizeConfig_: patrolSanitizeConfig_, patrolOverview_: patrolOverview_,
     doGet: doGet, doPost: doPost, patrolRunNow_: patrolRunNow_, PATROL_ORDER: PATROL_ORDER
   };
 } catch (e) { /* GAS 環境：忽略 */ }
