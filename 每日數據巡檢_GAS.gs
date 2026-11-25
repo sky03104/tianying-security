@@ -534,6 +534,7 @@ try {
     patrolBaseline_: patrolBaseline_, patrolEvaluate_: patrolEvaluate_, patrolEvaluateConstruction_: patrolEvaluateConstruction_,
     patrolRunOne_: patrolRunOne_, patrolRunKeys_: patrolRunKeys_, patrolSendDailySummary_: patrolSendDailySummary_,
     巡檢_0600: 巡檢_0600, 巡檢_2200: 巡檢_2200, 回測近30天: 回測近30天, 設定每日巡檢觸發器: 設定每日巡檢觸發器,
-    patrolSaveResults_: patrolSaveResults_, patrolLoadResults_: patrolLoadResults_
+    patrolSaveResults_: patrolSaveResults_, patrolLoadResults_: patrolLoadResults_,
+    patrolNotifyIssues_: patrolNotifyIssues_, patrolResultsHtml_: patrolResultsHtml_
   };
 } catch (e) { /* GAS 環境：忽略 */ }
