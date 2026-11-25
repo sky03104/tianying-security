@@ -74,7 +74,7 @@ tianying-security/
 ```
 
 ### 程式規範（必須遵守）
-- **React 版本**：必須 18.3.1（禁止 19.x）
+- **React 版本**：`tool_*.html` 等用 CDN `<script src>` 載入的頁面必須 18.3.1（禁止 19.x——19.x 已無 UMD 建置，CDN 載入會 404、卡 splash）。例外：`index.html` 經 `react-bundle.js` 內嵌 React 19.2.5（歷史遺留，暫不降版，見 `docs/技術經驗筆記.md` 2026-07-11／07-26）；要升 19 必須改成打包內嵌，不可改回 CDN
 - **HTML 標籤**：一律完整閉合，不能有 `<div>` 未配 `</div>`
 - **字型與圖示**：Tabler Icons (CDN) + Microsoft JhengHei / Noto Sans TC
 - **色彩系統**：
@@ -118,7 +118,7 @@ tianying-security/
 4. **GAS 改動**：編輯既有部署 → 新版本（不要建立新部署，URL 會變）
 
 ### 禁止 Never
-- **React 19.x**：禁用，只用 18.3.1
+- **CDN 載入的 React 19.x**：禁用，CDN 頁只用 18.3.1（`index.html` 內嵌的 19.2.5 為既有例外，不要動也不要照抄）
 - **UUID 主鍵**：禁用，用純數字流水號（1, 2, 3...）
 - **工號遺失**：URLSearchParams 解析後一定要保留工號狀態
 - **破版設計**：行動端寬度 ≤100%、不能溢出

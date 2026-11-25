@@ -78,7 +78,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>天鷹保全 · [工具名稱]</title>
   
-  <!-- React 18.3.1 (絕對禁止 19.x) -->
+  <!-- React 18.3.1（CDN 載入的頁面禁止 19.x，因 19.x 無 UMD；index.html 內嵌 19.2.5 為既有例外） -->
   <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   
@@ -107,7 +107,7 @@
 - ✅ 返回主選單按鈕（保留工號狀態，不遺失）
 - ✅ 大量複製貼上防重去重機制 (Deduplication)
 - ✅ `node --check` 語法驗證通過
-- ✅ React 版本必須 18.3.1（非19.x）
+- ✅ CDN 載入的工具頁 React 版本必須 18.3.1（非19.x；index.html 內嵌 19.2.5 為既有例外）
 - ✅ 行動端RWD無破版溢出
 - ✅ Glassmorphism卡片實作完整
 - ✅ 成功/失敗用色精確（綠#4ADE80/紅#F87171）
@@ -215,7 +215,7 @@ const payload = {
 
 **HTML/前端工具**：
 - [ ] HTML標籤完整閉合，無遺漏
-- [ ] React版本確認為18.3.1（非19.x）
+- [ ] CDN 工具頁 React 版本確認為18.3.1（非19.x；index.html 內嵌例外）
 - [ ] Tabler Icons正確引入
 - [ ] URLSearchParams正確解析 `?empId=`
 - [ ] 返回按鈕保留工號狀態
