@@ -119,6 +119,7 @@ function doPost(e) {
     if (action === 'verifySession')      return verifySession(e);
     if (action === 'changePassword')     return changePassword(e);
     if (action === 'getMyNotices')       return getMyNotices(e);
+    if (action === 'addPatrolNotices')   return addPatrolNoticesAction_(e);
 
     if (action === 'submitApplication')  return submitApplication(e);
     if (action === 'reviewApplication')  return reviewApplication(e);
@@ -2650,6 +2651,39 @@ function getMyNotices(e) {
     return jsonRes({status:'ok', rows: out});
   } catch (err) {
     return jsonRes({status:'err', code:'SERVER', msg: err.toString()});
+  }
+}
+
+/**
+ * 【action: addPatrolNotices】每日數據巡檢（獨立 GAS）呼叫：寫站內通知給隊長／副隊長／組長
+ * 收：data={ secret, title, body }；secret 必須等於指令碼屬性 PATROL_SECRET（沒設＝一律拒絕）
+ * 只開放寫入固定類型 patrol 的通知，收件人由這裡依角色決定，呼叫端不能指定。
+ */
+function addPatrolNoticesAction_(e) {
+  try {
+    var d = JSON.parse((e.parameter && e.parameter.data) || '{}');
+    var secret = PropertiesService.getScriptProperties().getProperty('PATROL_SECRET');
+    if (!secret || String(d.secret || '') !== secret) return jsonRes({status:'err', code:'FORBIDDEN', msg:'未授權'});
+    var title = String(d.title || '').slice(0, 100);
+    var body = String(d.body || '').slice(0, 1000);
+    if (!title) return jsonRes({status:'err', msg:'缺少標題'});
+    var sh = getUserDbSheet_();
+    var data = sh.getDataRange().getValues();
+    var rows = [];
+    for (var r = 1; r < data.length; r++) {
+      var empId = String(data[r][0]);
+      if (!empId) continue;
+      var role = String(data[r][3]);
+      var status = String(data[r][5] || 'active');
+      if (status !== 'active') continue;
+      if (role === 'captain' || role === 'vicecaptain' || role === 'leader') {
+        rows.push({ empId: empId, type: 'patrol', title: title, body: body });
+      }
+    }
+    var n = addNotices_(rows);
+    return jsonRes({status:'ok', count: n});
+  } catch (err) {
+    return jsonRes({status:'err', msg: err.toString()});
   }
 }
 
