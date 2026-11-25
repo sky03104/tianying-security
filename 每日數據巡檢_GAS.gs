@@ -19,16 +19,22 @@
 //   20:00  物流車輛·早班（今08:00~20:00）
 //   22:00  施工單（明天有沒有施工單、最近有沒有上傳）＋今日總結
 //
+// 另有「數據巡檢」工具（tool_patrol.html，主選單 id27）：看今日結果、立即檢查、近30天紀錄、調門檻。
+// 本檔同時是它的後端（網頁應用程式 doGet／doPost，每個 action 驗通行證＋角色）。
+//
 // 指令碼屬性（專案設定 → 指令碼屬性）：
 //   SUPABASE_URL / SUPABASE_SECRET_KEY  同其他 GAS（只讀）
 //   PATROL_EMAILS   收件人，多人用逗號分隔
 //   MAIN_GAS_URL    主 App GAS 的 /exec 網址（寫站內通知用，可不設＝不發站內通知）
 //   PATROL_SECRET   與主 App GAS 設同一個值（隨機長字串）
+//   SESSION_SECRET  與主 App 同一個值（工具驗登入用；沒設會退回問主 App，較慢）
+//   PATROL_CONFIG   （自動產生）工具裡「設定」分頁存的門檻，不用手動設
 // ═══════════════════════════════════════════════════════════════
 
 var PATROL_TZ = 'Asia/Taipei';
 var PATROL_BASELINE_DAYS = 14;   // 近幾天當比較基準
-var PATROL_LOW_RATIO = 0.5;      // 低於基準平均的幾成算「偏少」（橘）
+var PATROL_LOW_RATIO = 0.5;      // （預設）低於基準平均的幾成算「偏少」（橘）；實際值見 patrolGetConfig_
+var PATROL_HISTORY_DAYS = 31;    // 巡檢結果保留天數（工具「紀錄」分頁看近 30 天）
 var PATROL_CONSTRUCTION_STALE_HOURS = 72; // 施工單超過幾小時沒新上傳算「太久」（實測最長連續 3 天沒上傳屬正常）
 var PATROL_MIN_BASELINE = 3;     // 基準平均至少幾筆才啟用「偏少」判斷（量太小不準）
 
@@ -85,14 +91,12 @@ var PATROL_CHECKS = {
   overnight: {
     label: '過夜車輛登記', deadline: '06:00', table: 'vehicle_overnight_logs',
     select: 'created_at',
-    lowRatio: 0.25,   // 實測近30天每晚 2~159 台、起伏很大，0.5 會天天橘燈，降到 0.25
     windowFor: function (D) { return [patrolToMs_(patrolAddDays_(D, -1), '20:00'), patrolToMs_(D, '06:00')]; }
   },
   logiNight: {
     label: '物流車輛（晚班）', deadline: '08:00', table: 'logistics_records',
     select: 'created_at,category',
     zeroMinBaseline: 1, // 實測近30天晚班只有 4 天有登記：近14天平均 <1 筆時，0 筆視為平常、不報警
-    lowRatio: 0.15,
     windowFor: function (D) { return [patrolToMs_(patrolAddDays_(D, -1), '20:00'), patrolToMs_(D, '08:00')]; }
   },
   opening: {
@@ -103,7 +107,6 @@ var PATROL_CHECKS = {
   logiDay: {
     label: '物流車輛（早班）', deadline: '20:00', table: 'logistics_records',
     select: 'created_at,category',
-    lowRatio: 0.15,   // 實測每天 5~119 筆、起伏大，0.5 會約 1/4 的天數橘燈，降到 0.15
     windowFor: function (D) { return [patrolToMs_(D, '08:00'), patrolToMs_(D, '20:00')]; }
   },
   // 施工單不走「窗內筆數」判斷（實測近30天約4成的日子當天沒上傳、是整批上傳），
@@ -112,6 +115,47 @@ var PATROL_CHECKS = {
     label: '施工單更新', deadline: '22:00', table: 'construction_orders', custom: true
   }
 };
+
+Object.keys(PATROL_CHECKS).forEach(function (k) { PATROL_CHECKS[k].key = k; });
+
+// 工具顯示用：預計檢查時間（觸發器時間，實際會在其後約 15 分鐘內執行）
+var PATROL_RUN_AT = { closing: '06:00', overnight: '06:00', logiNight: '08:00', opening: '11:00', logiDay: '20:00', construction: '22:00' };
+var PATROL_ORDER = ['closing', 'overnight', 'logiNight', 'opening', 'logiDay', 'construction'];
+
+// ───────────────────────────────────────────────────────────────
+// 二之一、門檻設定（工具「設定」分頁可改；存在指令碼屬性 PATROL_CONFIG）
+//   偏少比例依真實資料訂：打烊/開店 0.5、過夜車輛 0.25（每晚 2~159 台起伏大）、
+//   物流早/晚班 0.15（每天 5~119 筆起伏大）
+// ───────────────────────────────────────────────────────────────
+var PATROL_DEFAULT_CFG = {
+  lowRatio: { closing: 0.5, overnight: 0.25, logiNight: 0.15, opening: 0.5, logiDay: 0.15, construction: 0.5 },
+  minBaseline: PATROL_MIN_BASELINE,
+  staleHours: PATROL_CONSTRUCTION_STALE_HOURS,
+  enabled: { closing: true, overnight: true, logiNight: true, opening: true, logiDay: true, construction: true }
+};
+
+/** 把輸入整理成合法設定：非法值退回預設、數字夾在合理範圍（前端驗證只是方便，後端才是真的） */
+function patrolSanitizeConfig_(c) {
+  c = c || {};
+  var out = { lowRatio: {}, enabled: {} };
+  PATROL_ORDER.forEach(function (k) {
+    var v = c.lowRatio ? Number(c.lowRatio[k]) : NaN;
+    out.lowRatio[k] = (isFinite(v) && v >= 0.05 && v <= 0.95) ? Math.round(v * 100) / 100 : PATROL_DEFAULT_CFG.lowRatio[k];
+    var e = c.enabled ? c.enabled[k] : undefined;
+    out.enabled[k] = (e === undefined || e === null) ? PATROL_DEFAULT_CFG.enabled[k] : (e === true || e === 'true');
+  });
+  var mb = Number(c.minBaseline);
+  out.minBaseline = (isFinite(mb) && mb >= 1 && mb <= 50) ? Math.round(mb) : PATROL_DEFAULT_CFG.minBaseline;
+  var sh = Number(c.staleHours);
+  out.staleHours = (isFinite(sh) && sh >= 12 && sh <= 336) ? Math.round(sh) : PATROL_DEFAULT_CFG.staleHours;
+  return out;
+}
+
+function patrolGetConfig_() {
+  var raw = null;
+  try { raw = JSON.parse(PropertiesService.getScriptProperties().getProperty('PATROL_CONFIG') || 'null'); } catch (e) { raw = null; }
+  return patrolSanitizeConfig_(raw);
+}
 
 // ───────────────────────────────────────────────────────────────
 // 三、純函式：判斷邏輯（可在 node 單獨測）
@@ -148,13 +192,14 @@ function patrolEvaluate_(check, D, rows) {
   var status = 'GREEN';
   var lines = [];
 
-  var lowRatio = check.lowRatio || PATROL_LOW_RATIO;
+  var cfg = patrolGetConfig_();
+  var lowRatio = cfg.lowRatio[check.key] || PATROL_LOW_RATIO;
   if (count === 0 && base.avg < (check.zeroMinBaseline || 0)) {
     lines.push('0 筆（這個時段平常就很少登記，近 ' + PATROL_BASELINE_DAYS + ' 天平均 ' + avgTxt + ' 筆，不算異常）');
   } else if (count === 0) {
     status = 'RED';
     lines.push('截止 ' + check.deadline + ' 前「0 筆」登記（近 ' + PATROL_BASELINE_DAYS + ' 天平均 ' + avgTxt + ' 筆）');
-  } else if (base.avg >= PATROL_MIN_BASELINE && count < base.avg * lowRatio) {
+  } else if (base.avg >= cfg.minBaseline && count < base.avg * lowRatio) {
     status = 'ORANGE';
     lines.push('只有 ' + count + ' 筆，明顯低於近 ' + PATROL_BASELINE_DAYS + ' 天平均 ' + avgTxt + ' 筆');
   } else {
@@ -178,6 +223,7 @@ function patrolEvaluate_(check, D, rows) {
  */
 function patrolEvaluateConstruction_(p) {
   var status = 'GREEN', lines = [];
+  var cfg = patrolGetConfig_();
   var sum = 0;
   p.sameWeekdayEq.forEach(function (c) { sum += c; });
   var avg = p.sameWeekdayEq.length ? sum / p.sameWeekdayEq.length : 0;
@@ -185,7 +231,7 @@ function patrolEvaluateConstruction_(p) {
   if (p.tomorrowCover === 0) {
     status = 'RED';
     lines.push(p.tomorrowStr + '（明天）截止 22:00 前「0 筆」施工單');
-  } else if (avg >= PATROL_MIN_BASELINE && p.tomorrowEq < avg * PATROL_LOW_RATIO) {
+  } else if (avg >= cfg.minBaseline && p.tomorrowEq < avg * cfg.lowRatio.construction) {
     status = 'ORANGE';
     lines.push(p.tomorrowStr + '（明天）施工單只有 ' + p.tomorrowEq + ' 筆，明顯低於近 ' + p.sameWeekdayEq.length + ' 週同星期平均 ' + avg.toFixed(1) + ' 筆');
   } else {
@@ -197,7 +243,7 @@ function patrolEvaluateConstruction_(p) {
     lines.push('找不到任何上傳紀錄');
   } else {
     var ageH = (p.nowMs - p.lastUploadMs) / 3600000;
-    if (ageH > PATROL_CONSTRUCTION_STALE_HOURS) {
+    if (ageH > cfg.staleHours) {
       if (status === 'GREEN') status = 'ORANGE';
       lines.push('最近一次上傳是 ' + p.lastUploadText + '，已超過 ' + Math.floor(ageH / 24) + ' 天沒有新上傳');
     } else {
@@ -320,10 +366,10 @@ function patrolSaveResults_(D, results) {
   try { cur = JSON.parse(props.getProperty(k) || '{}'); } catch (e) { cur = {}; }
   results.forEach(function (r) { cur[r.key] = r; });
   props.setProperty(k, JSON.stringify(cur));
-  // 清 3 天前的舊紀錄
+  // 清掉超過保留天數的舊紀錄
   var all = props.getProperties();
   Object.keys(all).forEach(function (name) {
-    if (name.indexOf('RESULT_') === 0 && name.slice(7) < patrolAddDays_(D, -3)) props.deleteProperty(name);
+    if (name.indexOf('RESULT_') === 0 && name.slice(7) < patrolAddDays_(D, -PATROL_HISTORY_DAYS)) props.deleteProperty(name);
   });
 }
 
@@ -335,8 +381,8 @@ function patrolLoadResults_(D) {
 // ───────────────────────────────────────────────────────────────
 // 七、通知（Email ＋ 站內）
 // ───────────────────────────────────────────────────────────────
-var PATROL_ICON = { GREEN: '🟢', ORANGE: '🟠', RED: '🔴' };
-var PATROL_COLOR = { GREEN: '#16A34A', ORANGE: '#EA580C', RED: '#DC2626' };
+var PATROL_ICON = { GREEN: '🟢', ORANGE: '🟠', RED: '🔴', OFF: '⚪' };
+var PATROL_COLOR = { GREEN: '#16A34A', ORANGE: '#EA580C', RED: '#DC2626', OFF: '#9CA3AF' };
 
 function patrolEmails_() {
   return PropertiesService.getScriptProperties().getProperty('PATROL_EMAILS') || '';
@@ -408,10 +454,12 @@ function patrolNotifyIssues_(D, results) {
 /** 22:00 每日總結：所有時間點的結果＋沒跑到的標「未執行」 */
 function patrolSendDailySummary_(D) {
   var saved = patrolLoadResults_(D);
-  var order = ['closing', 'overnight', 'logiNight', 'opening', 'logiDay', 'construction'];
+  var order = PATROL_ORDER;
+  var cfg = patrolGetConfig_();
   var list = [];
   order.forEach(function (k) {
-    if (saved[k]) list.push(saved[k]);
+    if (!cfg.enabled[k]) list.push({ key: k, label: PATROL_CHECKS[k].label, deadline: PATROL_CHECKS[k].deadline, status: 'OFF', lines: ['已停用（在「數據巡檢」工具的設定裡關閉了這一項）'] });
+    else if (saved[k]) list.push(saved[k]);
     else list.push({ key: k, label: PATROL_CHECKS[k].label, deadline: PATROL_CHECKS[k].deadline,
       status: 'RED', lines: ['⚠️ 今天沒有這項的巡檢紀錄（觸發器可能沒跑），請確認巡檢是否正常'] });
   });
@@ -428,9 +476,12 @@ function patrolSendDailySummary_(D) {
 
 function patrolRunKeys_(keys, withSummary) {
   var D = patrolTodayStr_();
-  var results = keys.map(function (k) { return patrolRunOne_(k, D); });
-  patrolSaveResults_(D, results);
-  patrolNotifyIssues_(D, results);
+  var cfg = patrolGetConfig_();
+  var results = keys.filter(function (k) { return cfg.enabled[k]; }).map(function (k) { return patrolRunOne_(k, D); });
+  if (results.length) {
+    patrolSaveResults_(D, results);
+    patrolNotifyIssues_(D, results);
+  }
   if (withSummary) patrolSendDailySummary_(D);
   return results;
 }
@@ -453,7 +504,8 @@ function forceAuth() {
     'SUPABASE_SECRET_KEY：' + (props.getProperty('SUPABASE_SECRET_KEY') ? '已設定' : '❌ 未設定'),
     'PATROL_EMAILS：' + (props.getProperty('PATROL_EMAILS') ? '已設定' : '❌ 未設定'),
     'MAIN_GAS_URL：' + (props.getProperty('MAIN_GAS_URL') ? '已設定' : '（未設定＝不發站內通知）'),
-    'PATROL_SECRET：' + (props.getProperty('PATROL_SECRET') ? '已設定' : '（未設定＝不發站內通知）')
+    'PATROL_SECRET：' + (props.getProperty('PATROL_SECRET') ? '已設定' : '（未設定＝不發站內通知）'),
+    'SESSION_SECRET：' + (props.getProperty('SESSION_SECRET') ? '已設定（工具登入驗證走本機，快）' : '（未設定＝工具登入驗證退回問主 App，較慢）')
   ].join('\n');
   MailApp.getRemainingDailyQuota(); // 觸發寄信授權
   Logger.log(msg);
@@ -527,6 +579,253 @@ function 回測近30天(days) {
   return text;
 }
 
+// ───────────────────────────────────────────────────────────────
+// 十、工具後端（網頁應用程式）：tool_patrol.html 用
+//   通行證驗證照洽公證管理 GAS（本機 HMAC 驗證＋快取，沒設 SESSION_SECRET 退回問主 App）。
+//   看（getOverview／runNow）：組長以上（以主控台工具權限面板為準，id27）；
+//   改設定／寄測試通知：副隊長以上（面板怎麼勾都一樣，這兩個固定限制）。
+//   前端的角色判斷只是方便，真正的把關在這裡每個 action。
+// ───────────────────────────────────────────────────────────────
+var PATROL_TOOL_ID_ = 27;
+var PATROL_VIEW_ROLES_ = ['leader', 'vicecaptain', 'captain', 'executive', 'admin'];   // 沒有面板設定時的預設
+var PATROL_EDIT_ROLES_ = ['vicecaptain', 'captain', 'executive', 'admin'];
+var MAIN_APP_GAS_URL_ = 'https://script.google.com/macros/s/AKfycbxEVBHseDpLWiWe4d8kLcCHbVFiKAK9wyoLwqNkt59PS4vPCY9QfG0_wiDJf2coO3zMcg/exec';
+var MAIN_APP_SHEET_ID_ = '1oZsn8WlJ_-qQ6k9tIzm6Ymp3Zp-IfBFCf80Ut7Zw_JU';
+var PATROL_AUTH_CACHE_SEC_ = 300;
+var lastAuthErr_ = '';  // 'INVALID'｜'SERVER'｜'ROLE'
+
+function jsonRes_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function authCacheKey_(token) {
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token));
+  return 'auth_' + Utilities.base64EncodeWebSafe(digest);
+}
+
+/** 位元組陣列轉16進位字串，需跟主App的 bytesToHex_ 逐位元組一致，簽章才對得起來 */
+function bytesToHex_(bytes) {
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var v = (bytes[i] < 0 ? bytes[i] + 256 : bytes[i]).toString(16);
+    out += (v.length === 1 ? '0' + v : v);
+  }
+  return out;
+}
+
+function verifyLocal_(token) {
+  var secret = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
+  if (!secret) return null;
+  var parts = String(token).split('.');
+  if (parts.length !== 2) return { err: 'INVALID' };
+  var payload;
+  try { payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString(); }
+  catch (e) { return { err: 'INVALID' }; }
+  if (bytesToHex_(Utilities.computeHmacSha256Signature(payload, secret)) !== parts[1]) return { err: 'INVALID' };
+  var seg = payload.split('|');
+  if (seg.length !== 2) return { err: 'INVALID' };
+  var empId = seg[0], expireMs = Number(seg[1]);
+  if (!empId || !expireMs || new Date().getTime() > expireMs) return { err: 'INVALID' };
+  try {
+    var sh = SpreadsheetApp.openById(MAIN_APP_SHEET_ID_).getSheetByName('帳號管理');
+    if (!sh) return { err: 'SERVER' };
+    var data = sh.getDataRange().getValues();
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][0]).trim() !== String(empId).trim()) continue;
+      if (String(data[r][5] || 'active') === 'inactive') return { err: 'INVALID' };
+      return { user: { empId: String(empId).trim(), name: String(data[r][1]), role: String(data[r][3]) } };
+    }
+    return { err: 'INVALID' };
+  } catch (e) { return { err: 'SERVER' }; }
+}
+
+function verifyRemote_(token) {
+  try {
+    var res = UrlFetchApp.fetch(MAIN_APP_GAS_URL_, {
+      method: 'post',
+      payload: { action: 'verifySession', data: JSON.stringify({ token: token }) },
+      muteHttpExceptions: true
+    });
+    var d = JSON.parse(res.getContentText());
+    if (d.status === 'ok' && d.user && d.user.empId) return { user: d.user };
+    if (d.code === 'INVALID' || (!d.code && /登入已失效/.test(d.msg || ''))) return { err: 'INVALID' };
+    return { err: 'SERVER' };
+  } catch (err) { return { err: 'SERVER' }; }
+}
+
+function verifyAuthToken_(token) {
+  lastAuthErr_ = 'INVALID';
+  if (!token) return null;
+  var cache = CacheService.getScriptCache();
+  var key = authCacheKey_(token);
+  var hit = cache.get(key);
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  var r = verifyLocal_(token);
+  if (r === null) {
+    r = verifyRemote_(token);
+    if (r.err === 'SERVER') { Utilities.sleep(800); r = verifyRemote_(token); }
+  }
+  if (!r.user) { lastAuthErr_ = r.err; return null; }
+  try { cache.put(key, JSON.stringify(r.user), PATROL_AUTH_CACHE_SEC_); } catch (e) {}
+  return r.user;
+}
+
+/** 主控台「工具權限」面板設定（主 App 試算表「系統設定」的 toolPerms）；讀不到回 null */
+function readToolPerms_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('toolPerms');
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  var perms = null;
+  try {
+    var sh = SpreadsheetApp.openById(MAIN_APP_SHEET_ID_).getSheetByName('系統設定');
+    if (sh) {
+      var data = sh.getDataRange().getValues();
+      for (var r = 1; r < data.length; r++) {
+        if (String(data[r][0]).trim() !== 'toolPerms') continue;
+        var pp = JSON.parse(String(data[r][1] || ''));
+        if (pp && typeof pp === 'object') perms = pp;
+        break;
+      }
+    }
+  } catch (e) { perms = null; }
+  if (perms) { try { cache.put('toolPerms', JSON.stringify(perms), 300); } catch (e) {} }
+  return perms;
+}
+
+/** 本工具是不是在面板的「已知工具」清單裡：不在＝存檔後才新增的新工具 → 退回預設角色（同主控台規則） */
+function patrolToolKnown_(perms) {
+  var known = [];
+  if (perms && Object.prototype.toString.call(perms._known) === '[object Array]') known = perms._known;
+  else if (perms) {
+    Object.keys(perms).forEach(function (r) {
+      if (Object.prototype.toString.call(perms[r]) === '[object Array]') known = known.concat(perms[r]);
+    });
+  }
+  return known.indexOf(PATROL_TOOL_ID_) >= 0 || known.indexOf(String(PATROL_TOOL_ID_)) >= 0;
+}
+
+function canViewPatrol_(role, perms) {
+  if (role === 'admin') return true;
+  if (perms && Object.prototype.toString.call(perms[role]) === '[object Array]' && patrolToolKnown_(perms)) {
+    return perms[role].indexOf(PATROL_TOOL_ID_) >= 0 || perms[role].indexOf(String(PATROL_TOOL_ID_)) >= 0;
+  }
+  return PATROL_VIEW_ROLES_.indexOf(role) >= 0;
+}
+
+/** 驗通行證＋角色；needEdit＝true 時還要副隊長以上。失敗回 null 並設 lastAuthErr_ */
+function requirePatrolUser_(token, needEdit) {
+  var user = verifyAuthToken_(token);
+  if (!user) return null;
+  if (!canViewPatrol_(user.role, readToolPerms_())) { lastAuthErr_ = 'ROLE'; return null; }
+  if (needEdit && PATROL_EDIT_ROLES_.indexOf(user.role) < 0) { lastAuthErr_ = 'EDIT'; return null; }
+  return user;
+}
+
+function authFailRes_() {
+  if (lastAuthErr_ === 'SERVER') return jsonRes_({ status: 'error', code: 'SERVER', msg: '伺服器暫時忙碌，無法確認登入狀態，請稍後再試（不用重新登入）' });
+  if (lastAuthErr_ === 'ROLE') return jsonRes_({ status: 'error', code: 'ROLE', msg: '權限不足：您的職務目前沒有開放「數據巡檢」，請洽主管' });
+  if (lastAuthErr_ === 'EDIT') return jsonRes_({ status: 'error', code: 'EDIT', msg: '只有副隊長以上可以修改設定或寄測試通知' });
+  return jsonRes_({ status: 'error', code: 'INVALID', msg: '登入已失效，請回天鷹保全 App 重新登入' });
+}
+
+/** 讀所有已存的每日結果：回傳 { 'yyyy-MM-dd': { key: result } }，只取 fromDate 之後 */
+function patrolLoadAllResults_(fromDate) {
+  var all = PropertiesService.getScriptProperties().getProperties();
+  var out = {};
+  Object.keys(all).forEach(function (name) {
+    if (name.indexOf('RESULT_') !== 0) return;
+    var d = name.slice(7);
+    if (d < fromDate) return;
+    try { out[d] = JSON.parse(all[name]); } catch (e) {}
+  });
+  return out;
+}
+
+/** 已建立的巡檢觸發器數量（應為 5） */
+function patrolTriggerCount_() {
+  var names = ['巡檢_0600', '巡檢_0800', '巡檢_1100', '巡檢_2000', '巡檢_2200'];
+  try {
+    return ScriptApp.getProjectTriggers().filter(function (t) { return names.indexOf(t.getHandlerFunction()) >= 0; }).length;
+  } catch (e) { return -1; }   // -1＝讀不到（沒授權），前端不顯示警告
+}
+
+/** action: getOverview：今日結果＋近30天紀錄＋目前設定 */
+function patrolOverview_(user) {
+  var D = patrolTodayStr_();
+  var hist = patrolLoadAllResults_(patrolAddDays_(D, -29));
+  var checks = PATROL_ORDER.map(function (k) {
+    return { key: k, label: PATROL_CHECKS[k].label, deadline: PATROL_CHECKS[k].deadline, runAt: PATROL_RUN_AT[k] };
+  });
+  return {
+    status: 'ok', today: D, now: Utilities.formatDate(new Date(), PATROL_TZ, 'HH:mm'),
+    checks: checks, history: hist, config: patrolGetConfig_(),
+    canEdit: PATROL_EDIT_ROLES_.indexOf(user.role) >= 0,
+    triggerCount: patrolTriggerCount_(),
+    emailsSet: !!patrolEmails_(),
+    noticeSet: !!(PropertiesService.getScriptProperties().getProperty('MAIN_GAS_URL') && PropertiesService.getScriptProperties().getProperty('PATROL_SECRET'))
+  };
+}
+
+/** action: runNow：現在立刻檢查全部（不存結果、不寄信、不發通知，純看） */
+function patrolRunNow_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(3000)) return { status: 'error', msg: '正在檢查中，請稍後再按一次' };
+  try {
+    var D = patrolTodayStr_();
+    var cfg = patrolGetConfig_();
+    var results = {};
+    PATROL_ORDER.forEach(function (k) {
+      if (!cfg.enabled[k]) { results[k] = { key: k, label: PATROL_CHECKS[k].label, deadline: PATROL_CHECKS[k].deadline, status: 'OFF', lines: ['已停用'], at: '' }; return; }
+      results[k] = patrolRunOne_(k, D);
+    });
+    return { status: 'ok', today: D, results: results, at: Utilities.formatDate(new Date(), PATROL_TZ, 'HH:mm') };
+  } finally { lock.releaseLock(); }
+}
+
+/** action: saveConfig */
+function patrolSaveConfig_(data) {
+  var clean = patrolSanitizeConfig_(data && data.config);
+  PropertiesService.getScriptProperties().setProperty('PATROL_CONFIG', JSON.stringify(clean));
+  return { status: 'ok', config: clean };
+}
+
+/** action: sendTest：寄測試信＋發測試站內通知，回報兩條管道各自成不成功 */
+function patrolSendTest_() {
+  var out = { status: 'ok', mail: false, notice: false, msg: '' };
+  try { patrolSendMail_('【天鷹保全巡檢】測試信', '<div>這是測試信，收到代表 Email 通知管道正常。</div>'); out.mail = true; }
+  catch (e) { out.msg = 'Email 失敗：' + e.message; }
+  out.notice = patrolPostNotice_('🔔 數據巡檢測試通知', '這是測試通知，收到代表站內通知管道正常。');
+  return out;
+}
+
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  try {
+    if (p.action === 'getOverview') {
+      var user = requirePatrolUser_(p.token, false);
+      if (!user) return authFailRes_();
+      return jsonRes_(patrolOverview_(user));
+    }
+    return jsonRes_({ status: 'ok', msg: '天鷹保全 數據巡檢 API 正常 ✓' });
+  } catch (err) { return jsonRes_({ status: 'error', msg: err.message }); }
+}
+
+function doPost(e) {
+  try {
+    var p = (e && e.parameter) || {};
+    var action = p.action || '';
+    var data = {};
+    try { data = JSON.parse(p.data || '{}'); } catch (x) { data = {}; }
+    var needEdit = (action === 'saveConfig' || action === 'sendTest');
+    var user = requirePatrolUser_(p.token, needEdit);
+    if (!user) return authFailRes_();
+    if (action === 'runNow') return jsonRes_(patrolRunNow_());
+    if (action === 'saveConfig') return jsonRes_(patrolSaveConfig_(data));
+    if (action === 'sendTest') return jsonRes_(patrolSendTest_());
+    return jsonRes_({ status: 'error', msg: '未知動作: ' + action });
+  } catch (err) { return jsonRes_({ status: 'error', msg: err.message }); }
+}
+
 // 讓 node 能單獨測純函式（GAS 環境沒有 module，用防禦寫法）
 try {
   module.exports = {
@@ -535,6 +834,8 @@ try {
     patrolRunOne_: patrolRunOne_, patrolRunKeys_: patrolRunKeys_, patrolSendDailySummary_: patrolSendDailySummary_,
     巡檢_0600: 巡檢_0600, 巡檢_2200: 巡檢_2200, 回測近30天: 回測近30天, 設定每日巡檢觸發器: 設定每日巡檢觸發器,
     patrolSaveResults_: patrolSaveResults_, patrolLoadResults_: patrolLoadResults_,
-    patrolNotifyIssues_: patrolNotifyIssues_, patrolResultsHtml_: patrolResultsHtml_
+    patrolNotifyIssues_: patrolNotifyIssues_, patrolResultsHtml_: patrolResultsHtml_,
+    patrolGetConfig_: patrolGetConfig_, patrolSanitizeConfig_: patrolSanitizeConfig_, patrolOverview_: patrolOverview_,
+    doGet: doGet, doPost: doPost, patrolRunNow_: patrolRunNow_, PATROL_ORDER: PATROL_ORDER
   };
 } catch (e) { /* GAS 環境：忽略 */ }
