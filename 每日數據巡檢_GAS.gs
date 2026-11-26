@@ -480,14 +480,65 @@ function patrolResultsHtml_(results) {
 }
 
 /** 寄 Email；沒設收件人要明講，不能靜默 */
-function patrolSendMail_(subject, bodyHtml) {
+function patrolSendMail_(subject, bodyHtml, inlineImages) {
   var to = patrolEmails_();
   if (!to) throw new Error('收件人未設定：請在指令碼屬性新增 PATROL_EMAILS');
-  MailApp.sendEmail({
+  var opt = {
     to: to, subject: subject, name: '天鷹保全 數據巡檢',
     htmlBody: '<div style="font-family:Microsoft JhengHei,Noto Sans TC,sans-serif;max-width:560px;">' + bodyHtml
       + '<div style="margin-top:16px;font-size:11px;color:#999;">此信由「每日數據巡檢」自動寄出，只讀資料、不會修改任何登記內容。</div></div>'
-  });
+  };
+  if (inlineImages && Object.keys(inlineImages).length) opt.inlineImages = inlineImages;
+  MailApp.sendEmail(opt);
+}
+
+/**
+ * 總結信附的數據圖：每項近 30 天長條圖（用 Apps Script 內建 Charts 服務畫成 PNG，內嵌在信裡；
+ * Gmail 不吃 SVG，所以不能用前端那套）。圖裡只放數字與日期，中文標題寫在信的文字裡（避免圖上中文字型問題）。
+ * 任何一步失敗都回傳空的 { html:'', images:{} }：圖是加分項，不能害總結信寄不出去。
+ */
+function patrolChartMailParts_() {
+  var out = { html: '', images: {} };
+  try {
+    var data = patrolChartData_(true);
+    var h = '<div style="font-size:15px;font-weight:bold;margin:18px 0 6px;">📊 近 30 天數據圖</div>'
+      + '<div style="font-size:11px;color:#888;margin-bottom:8px;">每根柱子＝一天；最右邊是今天（施工單含明後天已排的）。</div>';
+    var n = 0;
+    data.charts.forEach(function (c, idx) {
+      var dt = Charts.newDataTable().addColumn(Charts.ColumnType.STRING, 'date');
+      var colors;
+      if (c.cats) {
+        PATROL_CHART_CATS.forEach(function (cat, i) { dt.addColumn(Charts.ColumnType.NUMBER, ['1.9t', '3.5t', '8t+'][i]); });
+        colors = ['#D4A800', '#818CF8', '#4ADE80'];
+      } else {
+        dt.addColumn(Charts.ColumnType.NUMBER, 'n');
+        colors = ['#D4A800'];
+      }
+      c.days.forEach(function (d, i) {
+        var row = [d.slice(5).replace('-', '/')];
+        if (c.cats) PATROL_CHART_CATS.forEach(function (cat) { row.push(c.cats[cat][i]); });
+        else row.push(c.vals[i]);
+        dt.addRow(row);
+      });
+      var chart = Charts.newColumnChart().setDataTable(dt.build()).setDimensions(520, 190).setColors(colors)
+        .setXAxisTextStyle(Charts.newTextStyle().setFontSize(8).build());
+      if (c.cats) chart.setStacked().setLegendPosition(Charts.Position.BOTTOM); else chart.setLegendPosition(Charts.Position.NONE);
+      var cid = 'chart' + idx;
+      out.images[cid] = chart.build().getAs('image/png').setName(cid + '.png');
+      var avg = c.avgs ? c.avgs[c.avgs.length - 1] : null;
+      h += '<div style="margin:10px 0 2px;font-size:13px;font-weight:bold;">' + patrolEscape_(c.label)
+        + '<span style="font-weight:normal;color:#888;font-size:11px;">　' + patrolEscape_(c.metric)
+        + (avg !== null ? '；近 14 天平均 ' + avg + ' ' + c.unit : '') + '</span></div>'
+        + '<img src="cid:' + cid + '" width="520" style="max-width:100%;height:auto;display:block;" alt="' + patrolEscape_(c.label) + '">';
+      n++;
+    });
+    if (n) out.html = h;
+    else out.images = {};
+  } catch (e) {
+    console.error('總結信數據圖產生失敗（照常寄文字總結）：' + e.toString());
+    out = { html: '', images: {} };
+  }
+  return out;
 }
 
 /** 最近一次發站內通知的結果（給工具「寄測試通知」顯示原因用；不是業務資料） */
@@ -560,8 +611,10 @@ function patrolSendDailySummary_(D) {
   var red = list.filter(function (r) { return r.status === 'RED'; }).length;
   var orange = list.filter(function (r) { return r.status === 'ORANGE'; }).length;
   var head = red ? ('🔴 ' + red + ' 項異常') : (orange ? ('🟠 ' + orange + ' 項注意') : '🟢 全部正常');
+  var charts = patrolChartMailParts_();
   patrolSendMail_('【天鷹保全巡檢】今日總結 ' + D + '｜' + head,
-    '<div style="font-size:17px;font-weight:bold;margin-bottom:12px;">' + D + ' 今日巡檢總結：' + head + '</div>' + patrolResultsHtml_(list));
+    '<div style="font-size:17px;font-weight:bold;margin-bottom:12px;">' + D + ' 今日巡檢總結：' + head + '</div>' + patrolResultsHtml_(list) + charts.html,
+    charts.images);
 }
 
 // ───────────────────────────────────────────────────────────────
